@@ -39,17 +39,9 @@ impl<'a> Normalizer<'a> {
         random_patterns: &[String],
     ) -> anyhow::Result<Self> {
         let re_uuid = Regex::new(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")?;
-        let mut known: HashSet<String> = re_uuid
-            .find_iter(known_text)
-            .map(|m| m.as_str().to_string())
-            .collect();
-        let re_time =
-            Regex::new(r"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?")?;
-        known.extend(
-            re_time
-                .find_iter(known_text)
-                .map(|m| m.as_str().to_string()),
-        );
+        let mut known: HashSet<String> = re_uuid.find_iter(known_text).map(|m| m.as_str().to_string()).collect();
+        let re_time = Regex::new(r"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?")?;
+        known.extend(re_time.find_iter(known_text).map(|m| m.as_str().to_string()));
         Ok(Normalizer {
             enc,
             known,
@@ -57,10 +49,7 @@ impl<'a> Normalizer<'a> {
             end,
             subs: IndexMap::new(),
             counters: IndexMap::new(),
-            random_patterns: random_patterns
-                .iter()
-                .map(|p| Regex::new(p))
-                .collect::<Result<_, _>>()?,
+            random_patterns: random_patterns.iter().map(|p| Regex::new(p)).collect::<Result<_, _>>()?,
             re_uuid,
             re_time,
             // base64 of `{"iv":` possibly with JSON-escaped slashes.
@@ -73,11 +62,7 @@ impl<'a> Normalizer<'a> {
     fn placeholder(&mut self, kind: &'static str, extra: &str) -> String {
         let n = self.counters.entry(kind).or_insert(0);
         *n += 1;
-        if extra.is_empty() {
-            format!("<{kind}#{n}>")
-        } else {
-            format!("<{kind}#{n}:{extra}>")
-        }
+        if extra.is_empty() { format!("<{kind}#{n}>") } else { format!("<{kind}#{n}:{extra}>") }
     }
 
     fn register(&mut self, value: &str, kind: &'static str, extra: &str) {
@@ -101,12 +86,7 @@ impl<'a> Normalizer<'a> {
 
     /// Scan an artifact and register every dynamic value found in it.
     pub fn scan(&mut self, text: &str) {
-        for m in self
-            .re_enc
-            .find_iter(text)
-            .map(|m| m.as_str().to_string())
-            .collect::<Vec<_>>()
-        {
+        for m in self.re_enc.find_iter(text).map(|m| m.as_str().to_string()).collect::<Vec<_>>() {
             let raw = m.replace("\\/", "/");
             match self.enc.decrypt_string_lenient(&raw) {
                 Ok(plain) => {
@@ -119,48 +99,24 @@ impl<'a> Normalizer<'a> {
                 Err(_) => self.register(&m, "enc-invalid", ""),
             }
         }
-        for m in self
-            .re_jwt
-            .find_iter(text)
-            .map(|m| m.as_str().to_string())
-            .collect::<Vec<_>>()
-        {
+        for m in self.re_jwt.find_iter(text).map(|m| m.as_str().to_string()).collect::<Vec<_>>() {
             let claims = m
                 .split('.')
                 .nth(1)
-                .and_then(|p| {
-                    base64::engine::general_purpose::URL_SAFE_NO_PAD
-                        .decode(p)
-                        .ok()
-                })
+                .and_then(|p| base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(p).ok())
                 .and_then(|b| String::from_utf8(b).ok())
                 .unwrap_or_default();
             self.scan(&claims);
             let c = self.apply(&claims);
             self.register(&m, "jwt", &c);
         }
-        for m in self
-            .re_bcrypt
-            .find_iter(text)
-            .map(|m| m.as_str().to_string())
-            .collect::<Vec<_>>()
-        {
+        for m in self.re_bcrypt.find_iter(text).map(|m| m.as_str().to_string()).collect::<Vec<_>>() {
             self.register(&m.replace("\\/", "/"), "bcrypt", "");
         }
-        for m in self
-            .re_uuid
-            .find_iter(text)
-            .map(|m| m.as_str().to_string())
-            .collect::<Vec<_>>()
-        {
+        for m in self.re_uuid.find_iter(text).map(|m| m.as_str().to_string()).collect::<Vec<_>>() {
             self.register(&m, "uuid", "");
         }
-        for m in self
-            .re_time
-            .find_iter(text)
-            .map(|m| m.as_str().to_string())
-            .collect::<Vec<_>>()
-        {
+        for m in self.re_time.find_iter(text).map(|m| m.as_str().to_string()).collect::<Vec<_>>() {
             if let Some(label) = self.time_label(&m) {
                 if !self.known.contains(&m) && !self.subs.contains_key(&m) {
                     self.subs.insert(m.clone(), label);
@@ -169,11 +125,7 @@ impl<'a> Normalizer<'a> {
         }
         let pats = self.random_patterns.clone();
         for re in &pats {
-            for m in re
-                .find_iter(text)
-                .map(|m| m.as_str().to_string())
-                .collect::<Vec<_>>()
-            {
+            for m in re.find_iter(text).map(|m| m.as_str().to_string()).collect::<Vec<_>>() {
                 self.register_random(&m);
             }
         }
@@ -213,12 +165,7 @@ fn parse_time(s: &str) -> Option<NaiveDateTime> {
     if let Ok(d) = DateTime::parse_from_rfc3339(s) {
         return Some(d.with_timezone(&Utc).naive_utc());
     }
-    for f in [
-        "%Y-%m-%d %H:%M:%S%.f",
-        "%Y-%m-%dT%H:%M:%S%.f",
-        "%Y-%m-%d %H:%M:%S%z",
-        "%Y-%m-%dT%H:%M:%S%.f%z",
-    ] {
+    for f in ["%Y-%m-%d %H:%M:%S%.f", "%Y-%m-%dT%H:%M:%S%.f", "%Y-%m-%d %H:%M:%S%z", "%Y-%m-%dT%H:%M:%S%.f%z"] {
         if let Ok(d) = NaiveDateTime::parse_from_str(s, f) {
             return Some(d);
         }

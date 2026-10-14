@@ -9,6 +9,9 @@ description = "HTTP layer of pelican-rs: remote, client and application APIs"
 pelican-core = { path = "../pelican-core" }
 pelican-db = { path = "../pelican-db" }
 laravel-compat = { path = "../laravel-compat" }
+pelican-wings = { path = "../pelican-wings" }
+base64.workspace = true
+sha2 = "0.10"
 sea-orm.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -23,3 +26,5 @@ http-body-util = "0.1"
 bytes = "1"
 md-5 = "0.10"
 hex = "0.4"
+fancy-regex = "0.14"
+regex = "1"

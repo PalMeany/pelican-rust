@@ -126,8 +126,7 @@ pub fn load_scenarios(dir: &Path, filter: Option<&str>) -> Result<Vec<Scenario>>
         let text = std::fs::read_to_string(&f)?;
         // A file may hold several scenarios separated by `---`.
         for doc in serde_yaml::Deserializer::from_str(&text) {
-            let mut s =
-                Scenario::deserialize(doc).with_context(|| format!("parsing {}", f.display()))?;
+            let mut s = Scenario::deserialize(doc).with_context(|| format!("parsing {}", f.display()))?;
             s.file = f.clone();
             if filter.is_none_or(|flt| s.name.contains(flt)) {
                 out.push(s);
@@ -152,7 +151,6 @@ fn walk_yaml(dir: &Path) -> Result<Vec<PathBuf>> {
 
 pub fn load_fixture(dir: &Path, name: &str) -> Result<Rows> {
     let p = dir.join(format!("{name}.yaml"));
-    let text =
-        std::fs::read_to_string(&p).with_context(|| format!("reading fixture {}", p.display()))?;
+    let text = std::fs::read_to_string(&p).with_context(|| format!("reading fixture {}", p.display()))?;
     serde_yaml::from_str(&text).with_context(|| format!("parsing fixture {}", p.display()))
 }

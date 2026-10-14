@@ -7,8 +7,7 @@ use serde::Serialize;
 
 /// `ApiResource::formatTimestamp`: `Y-m-d H:i:s` re-parsed as UTC → ATOM.
 pub fn format_timestamp(t: Option<&Timestamp>) -> String {
-    t.map(|t| pelican_core::time::atom(&t.0))
-        .unwrap_or_default()
+    t.map(|t| pelican_core::time::atom(&t.0)).unwrap_or_default()
 }
 
 /// Carbon `toAtomString()` of a nullable model date.
@@ -33,10 +32,7 @@ pub struct UserData {
 }
 
 pub fn gravatar(email: &str) -> String {
-    format!(
-        "https://gravatar.com/avatar/{}",
-        hex::encode(Md5::digest(email.to_lowercase().as_bytes()))
-    )
+    format!("https://gravatar.com/avatar/{}", hex::encode(Md5::digest(email.to_lowercase().as_bytes())))
 }
 
 pub fn user_data(u: &AuthUser) -> UserData {
@@ -50,10 +46,7 @@ pub fn user_data(u: &AuthUser) -> UserData {
         admin: u.is_root_admin(),
         root_admin: u.is_root_admin(),
         // filled($model->mfa_app_secret): column non-empty (decrypted value non-blank).
-        two_factor_enabled: m
-            .mfa_app_secret
-            .as_deref()
-            .is_some_and(|s| !s.trim().is_empty()),
+        two_factor_enabled: m.mfa_app_secret.as_deref().is_some_and(|s| !s.trim().is_empty()),
         created_at: format_timestamp(m.created_at.as_ref()),
         updated_at: format_timestamp(m.updated_at.as_ref()),
     }

@@ -4,9 +4,13 @@
 pub mod binding;
 pub mod client;
 pub mod error;
+pub mod input;
 pub mod json;
+pub mod paginate;
 pub mod pipeline;
+pub mod remote;
 pub mod resources;
+pub mod validation;
 
 use axum::Router;
 use axum::http::Method;
@@ -17,15 +21,16 @@ use crate::error::ApiError;
 
 /// The full API router (state applied).
 pub fn router(state: AppState) -> Router {
-    let client = client::routes().route_layer(axum::middleware::from_fn_with_state(
-        state.clone(),
-        pipeline::client,
-    ));
-    Router::new()
+    let client = client::routes(&state);
+    let remote = remote::routes(&state);
+    let inner = Router::new()
         .nest("/api/client", client)
+        .nest("/api/remote", remote)
         .fallback(route_not_found)
-        .layer(axum::middleware::from_fn(pipeline::negotiate_errors))
-        .with_state(state)
+        .with_state(state);
+    // Error negotiation must see responses after axum finalised them (e.g. the
+    // `Allow` header of 405s is added at the inner router's top level).
+    Router::new().fallback_service(inner).layer(axum::middleware::from_fn(pipeline::negotiate_errors))
 }
 
 /// Laravel `NotFoundHttpException("The route <path> could not be found.")`.

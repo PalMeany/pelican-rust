@@ -10,5 +10,4 @@ pub const ENCRYPT_ARRAY: &str = "eyJpdiI6Ii8yOVlMclhqVUVpRFRaSkZVMlZFaHc9PSIsInZ
 pub const BCRYPT_PASSWORD: &str = "$2y$12$bveDJMs40uE0PK2eM/j2.OdGEdD/2lPbSKfCcs.RIh4LfvA7zOARy";
 /// serialize(["a"=>1,"b"=>[true,null,1.5],"u"=>"ü"])
 pub const SERIALIZED: &[u8] =
-    "a:3:{s:1:\"a\";i:1;s:1:\"b\";a:3:{i:0;b:1;i:1;N;i:2;d:1.5;}s:1:\"u\";s:2:\"\u{fc}\";}"
-        .as_bytes();
+    "a:3:{s:1:\"a\";i:1;s:1:\"b\";a:3:{i:0;b:1;i:1;N;i:2;d:1.5;}s:1:\"u\";s:2:\"\u{fc}\";}".as_bytes();

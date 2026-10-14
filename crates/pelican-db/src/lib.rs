@@ -8,6 +8,8 @@ pub use types::{Bool, Int, Json, SmallBool, Timestamp};
 pub mod column_order;
 pub mod connect;
 pub mod install;
+pub mod raw;
+pub mod write;
 
 pub use connect::{DbConfig, Driver, connect};
 pub mod entities;

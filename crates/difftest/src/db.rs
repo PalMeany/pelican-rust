@@ -7,28 +7,19 @@ use indexmap::IndexMap;
 use laravel_compat::Encrypter;
 use pelican_db::{DbConfig, Driver};
 use sea_orm::{
-    ConnectionTrait, DatabaseConnection, DbBackend, FromQueryResult, JsonValue, Statement,
-    TransactionTrait,
+    ConnectionTrait, DatabaseConnection, DbBackend, FromQueryResult, JsonValue, Statement, TransactionTrait,
 };
 
 use crate::scenario::Rows;
 
-pub const SQLITE_PATH: &str =
-    "/Users/tazik/Desktop/Code/claude/pelican/.difftest/sqlite/database.sqlite";
+pub const SQLITE_PATH: &str = "/Users/tazik/Desktop/Code/claude/pelican/.difftest/sqlite/database.sqlite";
 
 /// Connection settings for the database panel-orig uses (see scripts/difftest).
 pub fn config_for(backend: &str) -> Result<DbConfig> {
     let (driver, host, port, user, pass, db) = match backend {
         "mariadb" => (Driver::Mariadb, "mariadb", 3306, "root", "root", "panel"),
         "mysql" => (Driver::Mysql, "mysql", 3306, "root", "root", "panel"),
-        "pgsql" => (
-            Driver::Pgsql,
-            "postgres",
-            5432,
-            "pelican",
-            "pelican",
-            "panel",
-        ),
+        "pgsql" => (Driver::Pgsql, "postgres", 5432, "pelican", "pelican", "panel"),
         "sqlite" => (Driver::Sqlite, "", 0, "", "", SQLITE_PATH),
         other => return Err(anyhow!("unknown backend {other}")),
     };
@@ -73,19 +64,10 @@ impl TestDb {
                 "SELECT table_name AS t FROM information_schema.tables WHERE table_schema = current_schema() ORDER BY table_name"
             }
         };
-        let rows = db
-            .query_all_raw(Statement::from_string(backend, sql))
-            .await?;
-        let tables = rows
-            .iter()
-            .filter_map(|r| r.try_get::<String>("", "t").ok())
-            .filter(|t| t != "migrations")
-            .collect();
-        Ok(TestDb {
-            db,
-            backend,
-            tables,
-        })
+        let rows = db.query_all_raw(Statement::from_string(backend, sql)).await?;
+        let tables =
+            rows.iter().filter_map(|r| r.try_get::<String>("", "t").ok()).filter(|t| t != "migrations").collect();
+        Ok(TestDb { db, backend, tables })
     }
 
     fn q(&self, ident: &str) -> String {
@@ -102,30 +84,20 @@ impl TestDb {
             DbBackend::MySql => {
                 txn.execute_unprepared("SET FOREIGN_KEY_CHECKS=0").await?;
                 for t in &self.tables {
-                    txn.execute_unprepared(&format!("TRUNCATE TABLE {}", self.q(t)))
-                        .await?;
+                    txn.execute_unprepared(&format!("TRUNCATE TABLE {}", self.q(t))).await?;
                 }
                 txn.execute_unprepared("SET FOREIGN_KEY_CHECKS=1").await?;
             }
             DbBackend::Postgres => {
-                let list = self
-                    .tables
-                    .iter()
-                    .map(|t| self.q(t))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                txn.execute_unprepared(&format!("TRUNCATE {list} RESTART IDENTITY CASCADE"))
-                    .await?;
+                let list = self.tables.iter().map(|t| self.q(t)).collect::<Vec<_>>().join(", ");
+                txn.execute_unprepared(&format!("TRUNCATE {list} RESTART IDENTITY CASCADE")).await?;
             }
             _ => {
-                txn.execute_unprepared("PRAGMA defer_foreign_keys = ON")
-                    .await?;
+                txn.execute_unprepared("PRAGMA defer_foreign_keys = ON").await?;
                 for t in &self.tables {
-                    txn.execute_unprepared(&format!("DELETE FROM {}", self.q(t)))
-                        .await?;
+                    txn.execute_unprepared(&format!("DELETE FROM {}", self.q(t))).await?;
                 }
-                txn.execute_unprepared("DELETE FROM sqlite_sequence")
-                    .await?;
+                txn.execute_unprepared("DELETE FROM sqlite_sequence").await?;
             }
         }
         txn.commit().await?;
@@ -133,39 +105,29 @@ impl TestDb {
     }
 
     /// Insert fixture rows with literal SQL (untyped literals coerce on every backend).
-    pub async fn load(
-        &self,
-        rows: &Rows,
-        enc: &Encrypter,
-        now: chrono::NaiveDateTime,
-    ) -> Result<()> {
+    pub async fn load(&self, rows: &Rows, enc: &Encrypter, now: chrono::NaiveDateTime) -> Result<()> {
         let txn = self.db.begin().await?;
         if self.backend == DbBackend::MySql {
             txn.execute_unprepared("SET FOREIGN_KEY_CHECKS=0").await?;
+        } else if self.backend == DbBackend::Postgres {
+            // Circular FKs (servers <-> allocations): skip FK triggers while loading.
+            txn.execute_unprepared("SET LOCAL session_replication_role = replica").await?;
         } else if self.backend == DbBackend::Sqlite {
-            txn.execute_unprepared("PRAGMA defer_foreign_keys = ON")
-                .await?;
+            txn.execute_unprepared("PRAGMA defer_foreign_keys = ON").await?;
         }
         for (table, list) in rows {
             for row in list {
                 let cols = row.keys().map(|c| self.q(c)).collect::<Vec<_>>().join(", ");
                 let mut vals = Vec::with_capacity(row.len());
                 for (col, v) in row {
-                    let lit =
-                        fixture_value(v, enc, now).with_context(|| format!("{table}.{col}"))?;
+                    let lit = fixture_value(v, enc, now).with_context(|| format!("{table}.{col}"))?;
                     vals.push(match lit {
                         None => "NULL".to_string(),
                         Some(s) => self.literal(&s),
                     });
                 }
-                let sql = format!(
-                    "INSERT INTO {} ({cols}) VALUES ({})",
-                    self.q(table),
-                    vals.join(", ")
-                );
-                txn.execute_unprepared(&sql)
-                    .await
-                    .with_context(|| sql.clone())?;
+                let sql = format!("INSERT INTO {} ({cols}) VALUES ({})", self.q(table), vals.join(", "));
+                txn.execute_unprepared(&sql).await.with_context(|| sql.clone())?;
             }
         }
         if self.backend == DbBackend::MySql {
@@ -182,9 +144,7 @@ impl TestDb {
                      WHERE pg_get_serial_sequence('{table}', 'id') IS NOT NULL",
                     self.q(table)
                 );
-                txn.execute_unprepared(&sql)
-                    .await
-                    .with_context(|| sql.clone())?;
+                txn.execute_unprepared(&sql).await.with_context(|| sql.clone())?;
             }
         }
         txn.commit().await?;
@@ -221,14 +181,27 @@ impl TestDb {
                     _ => Row::new(),
                 })
                 .collect();
-            rows.sort_by_key(row_key);
+            rows.sort_by_key(sort_key);
             out.insert(t.clone(), rows);
         }
         Ok(out)
     }
 }
 
-/// Primary-key-ish sort/identity key: `id` if present, otherwise all columns.
+/// Deterministic ordering: numeric ids ascending; rows whose `id` is a random
+/// string (uuid keys such as `notifications.id`) are ordered by their content.
+pub fn sort_key(r: &Row) -> String {
+    match r.get("id") {
+        Some(serde_json::Value::String(id)) => {
+            let mut rest = r.clone();
+            rest.shift_remove("id");
+            format!("{}|{id}", serde_json::to_string(&rest).unwrap_or_default())
+        }
+        _ => row_key(r),
+    }
+}
+
+/// Primary-key-ish identity key: `id` if present, otherwise all columns.
 pub fn row_key(r: &Row) -> String {
     match r.get("id") {
         Some(serde_json::Value::Number(n)) => format!("{:>20}", n),
@@ -238,11 +211,7 @@ pub fn row_key(r: &Row) -> String {
 }
 
 /// Resolve a fixture value to the literal text to insert (None = NULL).
-pub fn fixture_value(
-    v: &serde_yaml::Value,
-    enc: &Encrypter,
-    now: chrono::NaiveDateTime,
-) -> Result<Option<String>> {
+pub fn fixture_value(v: &serde_yaml::Value, enc: &Encrypter, now: chrono::NaiveDateTime) -> Result<Option<String>> {
     use serde_yaml::Value as Y;
     Ok(match v {
         Y::Null => None,
@@ -263,10 +232,7 @@ fn directive(s: &str, enc: &Encrypter, now: chrono::NaiveDateTime) -> Result<Str
         return Ok(enc.encrypt_string(p));
     }
     if let Some(p) = s.strip_prefix("@bcrypt:") {
-        return Ok(laravel_compat::hashing::make(
-            p,
-            laravel_compat::hashing::DEFAULT_ROUNDS,
-        )?);
+        return Ok(laravel_compat::hashing::make(p, laravel_compat::hashing::DEFAULT_ROUNDS)?);
     }
     if s == "@now" {
         return Ok(fmt(now));
@@ -283,19 +249,9 @@ fn directive(s: &str, enc: &Encrypter, now: chrono::NaiveDateTime) -> Result<Str
 /// A row-level change between two dumps.
 #[derive(Debug, Clone)]
 pub enum Change {
-    Insert {
-        table: String,
-        row: Row,
-    },
-    Delete {
-        table: String,
-        row: Row,
-    },
-    Update {
-        table: String,
-        key: String,
-        cols: IndexMap<String, (serde_json::Value, serde_json::Value)>,
-    },
+    Insert { table: String, row: Row },
+    Delete { table: String, row: Row },
+    Update { table: String, key: String, cols: IndexMap<String, (serde_json::Value, serde_json::Value)> },
 }
 
 pub fn diff(before: &Dump, after: &Dump) -> Vec<Change> {
@@ -307,10 +263,7 @@ pub fn diff(before: &Dump, after: &Dump) -> Vec<Change> {
         let a: IndexMap<String, &Row> = rows_after.iter().map(|r| (row_key(r), r)).collect();
         for (k, ra) in &a {
             match b.get(k) {
-                None => out.push(Change::Insert {
-                    table: table.clone(),
-                    row: (*ra).clone(),
-                }),
+                None => out.push(Change::Insert { table: table.clone(), row: (*ra).clone() }),
                 Some(rb) => {
                     let mut cols = IndexMap::new();
                     for (c, va) in ra.iter() {
@@ -320,21 +273,14 @@ pub fn diff(before: &Dump, after: &Dump) -> Vec<Change> {
                         }
                     }
                     if !cols.is_empty() {
-                        out.push(Change::Update {
-                            table: table.clone(),
-                            key: k.trim().to_string(),
-                            cols,
-                        });
+                        out.push(Change::Update { table: table.clone(), key: k.trim().to_string(), cols });
                     }
                 }
             }
         }
         for (k, rb) in &b {
             if !a.contains_key(k) {
-                out.push(Change::Delete {
-                    table: table.clone(),
-                    row: (*rb).clone(),
-                });
+                out.push(Change::Delete { table: table.clone(), row: (*rb).clone() });
             }
         }
     }

@@ -62,26 +62,12 @@ impl MockWings {
     }
 }
 
-async fn handle(
-    State(w): State<MockWings>,
-    method: Method,
-    uri: Uri,
-    headers: HeaderMap,
-    body: Bytes,
-) -> Response {
-    let h = |k: &str| {
-        headers
-            .get(k)
-            .and_then(|v| v.to_str().ok())
-            .map(str::to_string)
-    };
+async fn handle(State(w): State<MockWings>, method: Method, uri: Uri, headers: HeaderMap, body: Bytes) -> Response {
+    let h = |k: &str| headers.get(k).and_then(|v| v.to_str().ok()).map(str::to_string);
     let path = uri.path().to_string();
     let call = WingsCall {
         method: method.to_string(),
-        path_and_query: uri
-            .path_and_query()
-            .map(|p| p.to_string())
-            .unwrap_or_else(|| path.clone()),
+        path_and_query: uri.path_and_query().map(|p| p.to_string()).unwrap_or_else(|| path.clone()),
         authorization: h("authorization"),
         content_type: h("content-type"),
         accept: h("accept"),
@@ -93,9 +79,7 @@ async fn handle(
         g.responses
             .iter()
             .find(|r| {
-                r.method
-                    .as_deref()
-                    .is_none_or(|m| m.eq_ignore_ascii_case(method.as_str()))
+                r.method.as_deref().is_none_or(|m| m.eq_ignore_ascii_case(method.as_str()))
                     && path_matches(&r.path, &path)
             })
             .cloned()
@@ -104,20 +88,13 @@ async fn handle(
     match resp {
         None => (StatusCode::NO_CONTENT, [("user-agent", ua)]).into_response(),
         Some(r) => {
-            let status =
-                StatusCode::from_u16(r.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            let status = StatusCode::from_u16(r.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
             let (ctype, body) = match (&r.json, &r.body) {
-                (Some(j), _) => (
-                    "application/json",
-                    serde_json::to_vec(j).unwrap_or_default(),
-                ),
+                (Some(j), _) => ("application/json", serde_json::to_vec(j).unwrap_or_default()),
                 (None, Some(b)) => ("text/plain", b.clone().into_bytes()),
                 (None, None) => ("text/plain", Vec::new()),
             };
-            let mut builder = Response::builder()
-                .status(status)
-                .header("content-type", ctype)
-                .header("user-agent", ua);
+            let mut builder = Response::builder().status(status).header("content-type", ctype).header("user-agent", ua);
             for (k, v) in &r.headers {
                 builder = builder.header(k.as_str(), v.as_str());
             }

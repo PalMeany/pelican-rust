@@ -103,9 +103,7 @@ pub fn php_intval(s: &str) -> i64 {
         Some(b'+') => (false, &t[1..]),
         _ => (false, t),
     };
-    let end = digits
-        .find(|c: char| !c.is_ascii_digit())
-        .unwrap_or(digits.len());
+    let end = digits.find(|c: char| !c.is_ascii_digit()).unwrap_or(digits.len());
     let v: i64 = digits[..end].parse().unwrap_or(0);
     if neg { -v } else { v }
 }

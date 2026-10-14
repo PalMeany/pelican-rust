@@ -20,6 +20,11 @@ Eloquent) с собственными типами колонок в `pelican-db
 при `DB_STRICT_MODE`), **без** `time_zone` (sqlx по умолчанию ставит `+00:00` — отключено), без
 `PIPES_AS_CONCAT`; PG `search_path=DB_SCHEMA`; SQLite `foreign_keys` по `DB_FOREIGN_KEYS`, journal_mode файла не меняем.
 
-**Последствия.** Проверено тестом на SQLite, MariaDB 11.4, MySQL 8.4, PostgreSQL 17. JSON в PG хранится в
-нормализованном виде (`{"a": 1}`), в MySQL/SQLite — компактный serde-вывод: семантически идентично,
-диф-тесты сравнивают JSON-колонки семантически. Риск: «нулевые» даты MySQL `0000-00-00` в старых БД (QUESTIONS Q5).
+**Запись (уточнено).** INSERT/UPDATE идут через `pelican_db::write`, а не через `ActiveModel::insert`:
+JSON кодируется как PHP `json_encode` (флаги 0: `\/`, `\uXXXX`) и биндится текстом; на PostgreSQL —
+`CAST($1 AS json)`, чтобы колонки `json` хранили текст как есть (SeaORM биндит `jsonb`, который
+переупорядочивает ключи — это всплыло бы и в ответах API). Итог: байты в БД совпадают с Laravel на
+MariaDB/SQLite/PG; на MySQL `JSON` нормализует сам сервер (одинаково для обеих панелей).
+
+**Последствия.** Проверено на SQLite, MariaDB 11.4, MySQL 8.4, PostgreSQL 17; диф-тесты сравнивают
+JSON-текст побайтно. Риск: «нулевые» даты MySQL `0000-00-00` в старых БД (QUESTIONS Q5).

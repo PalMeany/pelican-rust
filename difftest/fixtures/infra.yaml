@@ -1,0 +1,208 @@
+# Node wings.test:8080 (mock Wings), an egg with config placeholders, servers.
+# Daemon credentials: Authorization: Bearer difftestTokenId0.<token below>
+#   token = NodeDaemonToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL (64)
+# Second node (id 2) token id `otherNodeToken01`, token = OtherNodeToken...(64)
+nodes:
+  - id: 1
+    uuid: 2a1b3c4d-0000-4000-8000-000000000001
+    public: 1
+    name: Node One
+    description: primary
+    fqdn: wings.test
+    scheme: http
+    behind_proxy: 0
+    maintenance_mode: 0
+    memory: 16384
+    memory_overallocate: 0
+    disk: 102400
+    disk_overallocate: 0
+    cpu: 0
+    cpu_overallocate: 0
+    upload_size: 100
+    daemon_token_id: difftestTokenId0
+    daemon_token: "@encrypt:NodeDaemonToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL"
+    daemon_listen: 8080
+    daemon_sftp: 2022
+    daemon_base: /var/lib/pelican/volumes
+    daemon_connect: 8080
+    tags: ["eu", "test"]
+    created_at: "2026-01-01 00:00:00"
+    updated_at: "2026-01-01 00:00:00"
+  - id: 2
+    uuid: 2a1b3c4d-0000-4000-8000-000000000002
+    public: 1
+    name: Node Two
+    fqdn: wings.test
+    scheme: http
+    behind_proxy: 0
+    maintenance_mode: 1
+    memory: 8192
+    memory_overallocate: 0
+    disk: 51200
+    disk_overallocate: 0
+    cpu: 0
+    cpu_overallocate: 0
+    upload_size: 100
+    daemon_token_id: otherNodeToken01
+    daemon_token: "@encrypt:OtherNodeToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJK"
+    daemon_listen: 8080
+    daemon_sftp: 2022
+    daemon_base: /var/lib/pelican/volumes
+    daemon_connect: 8080
+    tags: []
+    created_at: "2026-01-01 00:00:00"
+    updated_at: "2026-01-01 00:00:00"
+eggs:
+  - id: 1
+    uuid: 5b1d4a0c-1111-4abc-9def-000000000001
+    name: Paper
+    author: panel@example.com
+    description: "Paper is a Minecraft server — fast/forked"
+    features: ["eula", "java_version", "unknown_feature"]
+    docker_images: { "Java 21": "ghcr.io/parkervcp/yolks:java_21", "Java 17": "ghcr.io/parkervcp/yolks:java_17" }
+    file_denylist: ["*.secret", "config/locked.yml"]
+    update_url: null
+    tags: ["minecraft"]
+    startup_commands: { "Default": "java -Xms128M -jar {{SERVER_JARFILE}}" }
+    config_files: '{"server.properties":{"parser":"properties","find":{"server-ip":"{{server.allocations.default.ip}}","server-port":"{{server.allocations.default.port}}","query.port":"{{server.allocations.default.port}}","motd":"{{env.MOTD}} on {{server.uuid}} / {{config.docker.interface}}","max-players":"{{env.MAX_PLAYERS}}","enable-query":true,"online-mode":{"true":"{{env.ONLINE}}","false":"off"}}},"config/paper.yml":{"parser":"yaml","find":{"settings.velocity.secret":"{{server.environment.SECRET}}","memory":"{{server.build.memory_limit}}","legacy":"{{server.build.default.port}}","nested":{"a":"{{env.MOTD}}"}}},"ignored.txt":{"parser":"file"}}'
+    config_startup: '{"done":")! For help, type ","strip_ansi":false}'
+    config_logs: '{}'
+    config_stop: stop
+    config_from: null
+    script_install: "#!/bin/ash\n# install script with / slashes and ünicode\ncurl -o server.jar https://example.com/paper.jar\n"
+    script_is_privileged: 1
+    script_entry: ash
+    script_container: ghcr.io/parkervcp/installers:alpine
+    copy_script_from: null
+    force_outgoing_ip: 0
+    created_at: "2026-01-01 00:00:00"
+    updated_at: "2026-01-01 00:00:00"
+  - id: 2
+    uuid: 5b1d4a0c-2222-4abc-9def-000000000002
+    name: Paper Child
+    author: panel@example.com
+    description: inherits config and script
+    features: null
+    docker_images: { "Java 21": "ghcr.io/parkervcp/yolks:java_21" }
+    file_denylist: ["child-only.txt"]
+    tags: []
+    startup_commands: { "Default": "./start.sh" }
+    config_files: null
+    config_startup: null
+    config_logs: null
+    config_stop: "^C"
+    config_from: 1
+    script_install: null
+    script_is_privileged: 1
+    script_entry: ""
+    script_container: ""
+    copy_script_from: 1
+    force_outgoing_ip: 1
+    created_at: "2026-01-01 00:00:00"
+    updated_at: "2026-01-01 00:00:00"
+egg_variables:
+  - { id: 1, egg_id: 1, name: Server Jar File, description: jar, env_variable: SERVER_JARFILE, default_value: server.jar, user_viewable: 1, user_editable: 1, rules: ["required", "regex:/^([\\w\\d._-]+)(\\.jar)$/"], sort: 1, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+  - { id: 2, egg_id: 1, name: MOTD, description: motd, env_variable: MOTD, default_value: "A Pelican/Server", user_viewable: 1, user_editable: 1, rules: ["nullable", "string"], sort: 2, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+  - { id: 3, egg_id: 1, name: Max Players, description: max, env_variable: MAX_PLAYERS, default_value: "20", user_viewable: 1, user_editable: 0, rules: ["required", "integer"], sort: 3, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+  - { id: 4, egg_id: 1, name: Secret, description: secret, env_variable: SECRET, default_value: "", user_viewable: 0, user_editable: 0, rules: ["nullable"], sort: 4, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+  - { id: 5, egg_id: 1, name: Online, description: online, env_variable: ONLINE, default_value: "true", user_viewable: 1, user_editable: 1, rules: ["in:true,false"], sort: 5, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+  - { id: 6, egg_id: 2, name: Child Var, description: c, env_variable: CHILD, default_value: "x", user_viewable: 1, user_editable: 1, rules: ["string"], sort: null, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+allocations:
+  - { id: 1, node_id: 1, ip: 0.0.0.0, port: 25565, ip_alias: mc.example.com, server_id: 1, notes: primary, is_locked: 1, show_port: 1, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+  - { id: 2, node_id: 1, ip: 0.0.0.0, port: 25566, server_id: 1, is_locked: 0, show_port: 1, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+  - { id: 3, node_id: 1, ip: 10.0.0.5, port: 25567, server_id: 1, is_locked: 0, show_port: 1, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+  - { id: 4, node_id: 1, ip: 0.0.0.0, port: 25570, server_id: null, is_locked: 0, show_port: 1, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+  - { id: 5, node_id: 2, ip: 0.0.0.0, port: 30000, server_id: 3, is_locked: 0, show_port: 1, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+servers:
+  - id: 1
+    uuid: 0b5c6a0e-3f0e-4c1e-9d55-6c1d7c0a2d11
+    uuid_short: 0b5c6a0e
+    node_id: 1
+    name: Survival
+    description: "Main / survival"
+    status: null
+    skip_scripts: 0
+    owner_id: 2
+    memory: 2048
+    swap: -1
+    disk: 10240
+    io: 500
+    cpu: 200
+    threads: "0-1"
+    oom_killer: 0
+    allocation_id: 1
+    egg_id: 1
+    startup: "java -Xms128M -XX:MaxRAMPercentage=95.0 -jar {{SERVER_JARFILE}}"
+    image: ghcr.io/parkervcp/yolks:java_21
+    allocation_limit: 5
+    database_limit: 2
+    backup_limit: 3
+    docker_labels: { "com.example/team": "red", "tier": "gold" }
+    installed_at: "2026-01-01 00:10:00"
+    created_at: "2026-01-01 00:00:00"
+    updated_at: "2026-01-01 00:00:00"
+  - id: 2
+    uuid: 1c6d7b1f-4a1f-4d2e-8e66-7d2e8d1b3e22
+    uuid_short: 1c6d7b1f
+    node_id: 1
+    name: Child Egg Server
+    description: null
+    status: installing
+    skip_scripts: 1
+    owner_id: 1
+    memory: 1000
+    swap: 0
+    disk: 0
+    io: 500
+    cpu: 0
+    threads: null
+    oom_killer: 1
+    allocation_id: null
+    egg_id: 2
+    startup: ./start.sh
+    image: ghcr.io/parkervcp/yolks:java_21
+    allocation_limit: null
+    database_limit: 0
+    backup_limit: 0
+    docker_labels: { "1": "a", "5": "b" }
+    installed_at: null
+    created_at: "2026-01-01 00:00:00"
+    updated_at: "2026-01-01 00:00:00"
+  - id: 3
+    uuid: 2d7e8c2a-5b2a-4e3f-9f77-8e3f9e2c4f33
+    uuid_short: 2d7e8c2a
+    node_id: 2
+    name: Other Node Server
+    description: ""
+    status: suspended
+    skip_scripts: 0
+    owner_id: 2
+    memory: 512
+    swap: 0
+    disk: 1024
+    io: 500
+    cpu: 100
+    oom_killer: 0
+    allocation_id: 5
+    egg_id: 1
+    startup: java -jar server.jar
+    image: ghcr.io/parkervcp/yolks:java_17
+    allocation_limit: 0
+    database_limit: 0
+    backup_limit: 0
+    docker_labels: []
+    installed_at: "2026-01-01 00:10:00"
+    created_at: "2026-01-01 00:00:00"
+    updated_at: "2026-01-01 00:00:00"
+server_variables:
+  - { id: 1, server_id: 1, variable_id: 1, variable_value: paper.jar, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+  - { id: 2, server_id: 1, variable_id: 3, variable_value: "", created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+  - { id: 3, server_id: 1, variable_id: 5, variable_value: "false", created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+mounts:
+  - { id: 1, uuid: 7a7a7a7a-0000-4000-8000-000000000001, name: shared, description: shared data, source: /mnt/shared, target: /home/container/shared, read_only: 1, user_mountable: 1 }
+  - { id: 2, uuid: 7a7a7a7a-0000-4000-8000-000000000002, name: egg-mount, source: /mnt/egg, target: /egg, read_only: 0, user_mountable: 0 }
+mountables:
+  - { mount_id: 1, mountable_type: server, mountable_id: 1 }
+  - { mount_id: 2, mountable_type: egg, mountable_id: 1 }
+subusers:
+  - { id: 1, user_id: 1, server_id: 1, permissions: ["websocket.connect", "control.console", "file.sftp"], created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }

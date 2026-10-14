@@ -8,6 +8,7 @@ description = "Domain logic of pelican-rs: config, auth, permissions, services"
 [dependencies]
 pelican-db = { path = "../pelican-db" }
 laravel-compat = { path = "../laravel-compat" }
+pelican-wings = { path = "../pelican-wings" }
 sea-orm.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -25,6 +26,8 @@ sha1 = "0.10"
 sha2 = "0.10"
 hex = "0.4"
 indexmap = { version = "2", features = ["serde"] }
+regex = "1"
+base64.workspace = true
 
 [dev-dependencies]
 pelican-db = { path = "../pelican-db", features = ["testing"] }

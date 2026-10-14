@@ -67,6 +67,8 @@ pub struct Config {
     pub wings_connect_timeout: u64,
     /// `SESSION_COOKIE` (config/session.php), default `pelican_session`.
     pub session_cookie: String,
+    /// `PANEL_USE_BINARY_PREFIX` (config/panel.php), default true.
+    pub use_binary_prefix: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -83,10 +85,7 @@ pub enum ConfigError {
 
 impl Config {
     pub fn from_env(env: Env, base_path: &Path) -> Result<(Config, Encrypter), ConfigError> {
-        let key = env
-            .string("APP_KEY")
-            .filter(|k| !k.is_empty())
-            .ok_or(ConfigError::MissingKey)?;
+        let key = env.string("APP_KEY").filter(|k| !k.is_empty()).ok_or(ConfigError::MissingKey)?;
         let enc = Encrypter::from_env_values(&key, env.string("APP_PREVIOUS_KEYS").as_deref())?;
         if env.string("DB_PREFIX").is_some_and(|p| !p.is_empty()) {
             return Err(ConfigError::DbPrefix);
@@ -107,19 +106,12 @@ impl Config {
         let trusted_proxies = match env.string("TRUSTED_PROXIES") {
             None => Vec::new(),
             Some(s) if s == "*" || s == "**" => vec![s],
-            Some(s) => s
-                .split(',')
-                .map(|p| p.trim().to_string())
-                .filter(|p| !p.is_empty())
-                .collect(),
+            Some(s) => s.split(',').map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).collect(),
         };
         let cfg = Config {
             base_path: base_path.to_path_buf(),
             app_name: env.string_or("APP_NAME", "Pelican"),
-            app_url: env
-                .string_or("APP_URL", "http://localhost")
-                .trim_end_matches('/')
-                .to_string(),
+            app_url: env.string_or("APP_URL", "http://localhost").trim_end_matches('/').to_string(),
             app_env: env.string_or("APP_ENV", "production"),
             app_debug: env.bool_or("APP_DEBUG", false),
             app_installed: env.bool_or("APP_INSTALLED", true),
@@ -131,6 +123,7 @@ impl Config {
             wings_timeout: env.int_or("GUZZLE_TIMEOUT", 15).max(0) as u64,
             wings_connect_timeout: env.int_or("GUZZLE_CONNECT_TIMEOUT", 5).max(0) as u64,
             session_cookie: env.string_or("SESSION_COOKIE", "pelican_session"),
+            use_binary_prefix: env.bool_or("PANEL_USE_BINARY_PREFIX", true),
             env,
         };
         Ok((cfg, enc))

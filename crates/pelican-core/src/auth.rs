@@ -4,8 +4,7 @@ use std::collections::HashSet;
 
 use laravel_compat::Encrypter;
 use pelican_db::entities::{
-    api_keys, model_has_permissions, model_has_roles, node_role, permissions, role_has_permissions,
-    roles, users,
+    api_keys, model_has_permissions, model_has_roles, node_role, permissions, role_has_permissions, roles, users,
 };
 use pelican_db::{Int, Timestamp};
 use sea_orm::{ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter, QuerySelect};
@@ -30,9 +29,7 @@ pub fn is_valid_bearer_token(token: &str) -> bool {
         return false;
     }
     match token.split_once('|') {
-        Some((id, rest)) => {
-            !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()) && !rest.is_empty()
-        }
+        Some((id, rest)) => !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()) && !rest.is_empty(),
         None => true,
     }
 }
@@ -61,11 +58,7 @@ pub async fn find_api_key<C: ConnectionTrait>(
     let split = bytes.len().min(16);
     let identifier = String::from_utf8_lossy(&bytes[..split]).into_owned();
     let secret = String::from_utf8_lossy(&bytes[split..]).into_owned();
-    let Some(key) = api_keys::Entity::find()
-        .filter(api_keys::Column::Identifier.eq(identifier))
-        .one(db)
-        .await?
-    else {
+    let Some(key) = api_keys::Entity::find().filter(api_keys::Column::Identifier.eq(identifier)).one(db).await? else {
         return Ok(None);
     };
     let stored = enc.decrypt_string_lenient(&key.token)?;
@@ -89,14 +82,8 @@ pub async fn touch_last_used<C: ConnectionTrait>(
         return Ok(false);
     }
     api_keys::Entity::update_many()
-        .col_expr(
-            api_keys::Column::LastUsedAt,
-            sea_orm::sea_query::Expr::value(Timestamp(now)),
-        )
-        .col_expr(
-            api_keys::Column::UpdatedAt,
-            sea_orm::sea_query::Expr::value(Timestamp(now)),
-        )
+        .col_expr(api_keys::Column::LastUsedAt, sea_orm::sea_query::Expr::value(Timestamp(now)))
+        .col_expr(api_keys::Column::UpdatedAt, sea_orm::sea_query::Expr::value(Timestamp(now)))
         .filter(api_keys::Column::Id.eq(key.id))
         .exec(db)
         .await?;
@@ -142,10 +129,7 @@ impl AuthUser {
         let role_rows = if role_ids.is_empty() {
             Vec::new()
         } else {
-            roles::Entity::find()
-                .filter(roles::Column::Id.is_in(role_ids.clone()))
-                .all(db)
-                .await?
+            roles::Entity::find().filter(roles::Column::Id.is_in(role_ids.clone())).all(db).await?
         };
         let mut perm_ids: Vec<Int> = if role_ids.is_empty() {
             Vec::new()
@@ -170,10 +154,7 @@ impl AuthUser {
         let perms = if perm_ids.is_empty() {
             Vec::new()
         } else {
-            permissions::Entity::find()
-                .filter(permissions::Column::Id.is_in(perm_ids))
-                .all(db)
-                .await?
+            permissions::Entity::find().filter(permissions::Column::Id.is_in(perm_ids)).all(db).await?
         };
         let role_names: Vec<String> = role_rows.iter().map(|r| r.name.clone()).collect();
         let is_root = role_names.iter().any(|n| n == ROOT_ADMIN_ROLE);
@@ -194,11 +175,7 @@ impl AuthUser {
             credential,
             role_names,
             permissions: perms.iter().map(|p| p.name.clone()).collect(),
-            web_permissions: perms
-                .iter()
-                .filter(|p| p.guard_name == "web")
-                .map(|p| p.name.clone())
-                .collect(),
+            web_permissions: perms.iter().filter(|p| p.guard_name == "web").map(|p| p.name.clone()).collect(),
             node_ids,
         })
     }
@@ -231,10 +208,19 @@ impl AuthUser {
 
     /// `canTarget(Node)`.
     pub fn can_target_node(&self, node_id: i64) -> bool {
-        self.is_root_admin()
-            || self
-                .node_ids
-                .as_ref()
-                .is_none_or(|ids| ids.contains(&node_id))
+        self.is_root_admin() || self.node_ids.as_ref().is_none_or(|ids| ids.contains(&node_id))
+    }
+}
+
+impl AuthUser {
+    /// `$user->can('update', $server)` / `canned('update', ...)`: root admin, or
+    /// `update server` with the server's node targetable (ServerPolicy::before).
+    pub fn can_update_server(&self, node_id: i64) -> bool {
+        self.is_root_admin() || (self.can_target_node(node_id) && self.web_permissions.contains("update server"))
+    }
+
+    /// `$user->can('view', $server)`.
+    pub fn can_view_server(&self, node_id: i64) -> bool {
+        self.is_root_admin() || (self.can_target_node(node_id) && self.web_permissions.contains("view server"))
     }
 }

@@ -6,9 +6,7 @@ use crate::connect::Driver;
 pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
     match driver {
         Driver::Mysql => match table {
-            "activity_log_subjects" => {
-                Some(&["id", "activity_log_id", "subject_type", "subject_id"])
-            }
+            "activity_log_subjects" => Some(&["id", "activity_log_id", "subject_type", "subject_id"]),
             "activity_logs" => Some(&[
                 "id",
                 "event",
@@ -62,14 +60,7 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "updated_at",
             ]),
             "backup_host_node" => Some(&["node_id", "backup_host_id", "created_at", "updated_at"]),
-            "backup_hosts" => Some(&[
-                "id",
-                "name",
-                "schema",
-                "configuration",
-                "created_at",
-                "updated_at",
-            ]),
+            "backup_hosts" => Some(&["id", "name", "schema", "configuration", "created_at", "updated_at"]),
             "backups" => Some(&[
                 "id",
                 "server_id",
@@ -87,13 +78,7 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "created_at",
                 "updated_at",
             ]),
-            "database_host_node" => Some(&[
-                "id",
-                "node_id",
-                "database_host_id",
-                "created_at",
-                "updated_at",
-            ]),
+            "database_host_node" => Some(&["id", "node_id", "database_host_id", "created_at", "updated_at"]),
             "database_hosts" => Some(&[
                 "id",
                 "name",
@@ -157,38 +142,13 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "force_outgoing_ip",
                 "tags",
             ]),
-            "failed_jobs" => Some(&[
-                "id",
-                "uuid",
-                "connection",
-                "queue",
-                "payload",
-                "failed_at",
-                "exception",
-            ]),
-            "jobs" => Some(&[
-                "id",
-                "queue",
-                "payload",
-                "attempts",
-                "reserved_at",
-                "available_at",
-                "created_at",
-            ]),
+            "failed_jobs" => Some(&["id", "uuid", "connection", "queue", "payload", "failed_at", "exception"]),
+            "jobs" => Some(&["id", "queue", "payload", "attempts", "reserved_at", "available_at", "created_at"]),
             "migrations" => Some(&["id", "migration", "batch"]),
             "model_has_permissions" => Some(&["permission_id", "model_type", "model_id"]),
             "model_has_roles" => Some(&["role_id", "model_type", "model_id"]),
             "mountables" => Some(&["mount_id", "mountable_type", "mountable_id"]),
-            "mounts" => Some(&[
-                "id",
-                "uuid",
-                "name",
-                "description",
-                "source",
-                "target",
-                "read_only",
-                "user_mountable",
-            ]),
+            "mounts" => Some(&["id", "uuid", "name", "description", "source", "target", "read_only", "user_mountable"]),
             "node_role" => Some(&["node_id", "role_id"]),
             "nodes" => Some(&[
                 "id",
@@ -218,16 +178,9 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "tags",
                 "daemon_connect",
             ]),
-            "notifications" => Some(&[
-                "id",
-                "type",
-                "notifiable_type",
-                "notifiable_id",
-                "data",
-                "read_at",
-                "created_at",
-                "updated_at",
-            ]),
+            "notifications" => {
+                Some(&["id", "type", "notifiable_type", "notifiable_id", "data", "read_at", "created_at", "updated_at"])
+            }
             "passkeys" => Some(&[
                 "id",
                 "user_id",
@@ -274,22 +227,10 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "created_at",
                 "updated_at",
             ]),
-            "server_user_settings" => Some(&[
-                "id",
-                "user_id",
-                "server_id",
-                "settings",
-                "created_at",
-                "updated_at",
-            ]),
-            "server_variables" => Some(&[
-                "id",
-                "server_id",
-                "variable_id",
-                "variable_value",
-                "created_at",
-                "updated_at",
-            ]),
+            "server_user_settings" => Some(&["id", "user_id", "server_id", "settings", "created_at", "updated_at"]),
+            "server_variables" => {
+                Some(&["id", "server_id", "variable_id", "variable_value", "created_at", "updated_at"])
+            }
             "servers" => Some(&[
                 "id",
                 "external_id",
@@ -320,23 +261,9 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "installed_at",
                 "docker_labels",
             ]),
-            "sessions" => Some(&[
-                "id",
-                "user_id",
-                "ip_address",
-                "user_agent",
-                "payload",
-                "last_activity",
-            ]),
+            "sessions" => Some(&["id", "user_id", "ip_address", "user_agent", "payload", "last_activity"]),
             "settings" => Some(&["id", "key", "value"]),
-            "subusers" => Some(&[
-                "id",
-                "user_id",
-                "server_id",
-                "permissions",
-                "created_at",
-                "updated_at",
-            ]),
+            "subusers" => Some(&["id", "user_id", "server_id", "permissions", "created_at", "updated_at"]),
             "tasks" => Some(&[
                 "id",
                 "schedule_id",
@@ -349,25 +276,10 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "created_at",
                 "updated_at",
             ]),
-            "tasks_log" => Some(&[
-                "id",
-                "task_id",
-                "run_time",
-                "run_status",
-                "response",
-                "created_at",
-                "updated_at",
-            ]),
-            "user_ssh_keys" => Some(&[
-                "id",
-                "user_id",
-                "name",
-                "fingerprint",
-                "public_key",
-                "created_at",
-                "updated_at",
-                "deleted_at",
-            ]),
+            "tasks_log" => Some(&["id", "task_id", "run_time", "run_status", "response", "created_at", "updated_at"]),
+            "user_ssh_keys" => {
+                Some(&["id", "user_id", "name", "fingerprint", "public_key", "created_at", "updated_at", "deleted_at"])
+            }
             "users" => Some(&[
                 "id",
                 "external_id",
@@ -415,9 +327,7 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
             _ => None,
         },
         Driver::Mariadb => match table {
-            "activity_log_subjects" => {
-                Some(&["id", "activity_log_id", "subject_type", "subject_id"])
-            }
+            "activity_log_subjects" => Some(&["id", "activity_log_id", "subject_type", "subject_id"]),
             "activity_logs" => Some(&[
                 "id",
                 "event",
@@ -471,14 +381,7 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "updated_at",
             ]),
             "backup_host_node" => Some(&["node_id", "backup_host_id", "created_at", "updated_at"]),
-            "backup_hosts" => Some(&[
-                "id",
-                "name",
-                "schema",
-                "configuration",
-                "created_at",
-                "updated_at",
-            ]),
+            "backup_hosts" => Some(&["id", "name", "schema", "configuration", "created_at", "updated_at"]),
             "backups" => Some(&[
                 "id",
                 "server_id",
@@ -496,13 +399,7 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "created_at",
                 "updated_at",
             ]),
-            "database_host_node" => Some(&[
-                "id",
-                "node_id",
-                "database_host_id",
-                "created_at",
-                "updated_at",
-            ]),
+            "database_host_node" => Some(&["id", "node_id", "database_host_id", "created_at", "updated_at"]),
             "database_hosts" => Some(&[
                 "id",
                 "name",
@@ -566,38 +463,13 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "force_outgoing_ip",
                 "tags",
             ]),
-            "failed_jobs" => Some(&[
-                "id",
-                "uuid",
-                "connection",
-                "queue",
-                "payload",
-                "failed_at",
-                "exception",
-            ]),
-            "jobs" => Some(&[
-                "id",
-                "queue",
-                "payload",
-                "attempts",
-                "reserved_at",
-                "available_at",
-                "created_at",
-            ]),
+            "failed_jobs" => Some(&["id", "uuid", "connection", "queue", "payload", "failed_at", "exception"]),
+            "jobs" => Some(&["id", "queue", "payload", "attempts", "reserved_at", "available_at", "created_at"]),
             "migrations" => Some(&["id", "migration", "batch"]),
             "model_has_permissions" => Some(&["permission_id", "model_type", "model_id"]),
             "model_has_roles" => Some(&["role_id", "model_type", "model_id"]),
             "mountables" => Some(&["mount_id", "mountable_type", "mountable_id"]),
-            "mounts" => Some(&[
-                "id",
-                "uuid",
-                "name",
-                "description",
-                "source",
-                "target",
-                "read_only",
-                "user_mountable",
-            ]),
+            "mounts" => Some(&["id", "uuid", "name", "description", "source", "target", "read_only", "user_mountable"]),
             "node_role" => Some(&["node_id", "role_id"]),
             "nodes" => Some(&[
                 "id",
@@ -627,16 +499,9 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "tags",
                 "daemon_connect",
             ]),
-            "notifications" => Some(&[
-                "id",
-                "type",
-                "notifiable_type",
-                "notifiable_id",
-                "data",
-                "read_at",
-                "created_at",
-                "updated_at",
-            ]),
+            "notifications" => {
+                Some(&["id", "type", "notifiable_type", "notifiable_id", "data", "read_at", "created_at", "updated_at"])
+            }
             "passkeys" => Some(&[
                 "id",
                 "user_id",
@@ -683,22 +548,10 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "created_at",
                 "updated_at",
             ]),
-            "server_user_settings" => Some(&[
-                "id",
-                "user_id",
-                "server_id",
-                "settings",
-                "created_at",
-                "updated_at",
-            ]),
-            "server_variables" => Some(&[
-                "id",
-                "server_id",
-                "variable_id",
-                "variable_value",
-                "created_at",
-                "updated_at",
-            ]),
+            "server_user_settings" => Some(&["id", "user_id", "server_id", "settings", "created_at", "updated_at"]),
+            "server_variables" => {
+                Some(&["id", "server_id", "variable_id", "variable_value", "created_at", "updated_at"])
+            }
             "servers" => Some(&[
                 "id",
                 "external_id",
@@ -729,23 +582,9 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "installed_at",
                 "docker_labels",
             ]),
-            "sessions" => Some(&[
-                "id",
-                "user_id",
-                "ip_address",
-                "user_agent",
-                "payload",
-                "last_activity",
-            ]),
+            "sessions" => Some(&["id", "user_id", "ip_address", "user_agent", "payload", "last_activity"]),
             "settings" => Some(&["id", "key", "value"]),
-            "subusers" => Some(&[
-                "id",
-                "user_id",
-                "server_id",
-                "permissions",
-                "created_at",
-                "updated_at",
-            ]),
+            "subusers" => Some(&["id", "user_id", "server_id", "permissions", "created_at", "updated_at"]),
             "tasks" => Some(&[
                 "id",
                 "schedule_id",
@@ -758,25 +597,10 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "created_at",
                 "updated_at",
             ]),
-            "tasks_log" => Some(&[
-                "id",
-                "task_id",
-                "run_time",
-                "run_status",
-                "response",
-                "created_at",
-                "updated_at",
-            ]),
-            "user_ssh_keys" => Some(&[
-                "id",
-                "user_id",
-                "name",
-                "fingerprint",
-                "public_key",
-                "created_at",
-                "updated_at",
-                "deleted_at",
-            ]),
+            "tasks_log" => Some(&["id", "task_id", "run_time", "run_status", "response", "created_at", "updated_at"]),
+            "user_ssh_keys" => {
+                Some(&["id", "user_id", "name", "fingerprint", "public_key", "created_at", "updated_at", "deleted_at"])
+            }
             "users" => Some(&[
                 "id",
                 "external_id",
@@ -824,9 +648,7 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
             _ => None,
         },
         Driver::Pgsql => match table {
-            "activity_log_subjects" => {
-                Some(&["id", "activity_log_id", "subject_type", "subject_id"])
-            }
+            "activity_log_subjects" => Some(&["id", "activity_log_id", "subject_type", "subject_id"]),
             "activity_logs" => Some(&[
                 "id",
                 "event",
@@ -880,14 +702,7 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "updated_at",
             ]),
             "backup_host_node" => Some(&["node_id", "backup_host_id", "created_at", "updated_at"]),
-            "backup_hosts" => Some(&[
-                "id",
-                "name",
-                "schema",
-                "configuration",
-                "created_at",
-                "updated_at",
-            ]),
+            "backup_hosts" => Some(&["id", "name", "schema", "configuration", "created_at", "updated_at"]),
             "backups" => Some(&[
                 "id",
                 "server_id",
@@ -905,13 +720,7 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "backup_host_id",
                 "is_scheduled",
             ]),
-            "database_host_node" => Some(&[
-                "id",
-                "node_id",
-                "database_host_id",
-                "created_at",
-                "updated_at",
-            ]),
+            "database_host_node" => Some(&["id", "node_id", "database_host_id", "created_at", "updated_at"]),
             "database_hosts" => Some(&[
                 "id",
                 "name",
@@ -975,38 +784,13 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "tags",
                 "startup_commands",
             ]),
-            "failed_jobs" => Some(&[
-                "id",
-                "connection",
-                "queue",
-                "payload",
-                "failed_at",
-                "exception",
-                "uuid",
-            ]),
-            "jobs" => Some(&[
-                "id",
-                "queue",
-                "payload",
-                "attempts",
-                "reserved_at",
-                "available_at",
-                "created_at",
-            ]),
+            "failed_jobs" => Some(&["id", "connection", "queue", "payload", "failed_at", "exception", "uuid"]),
+            "jobs" => Some(&["id", "queue", "payload", "attempts", "reserved_at", "available_at", "created_at"]),
             "migrations" => Some(&["id", "migration", "batch"]),
             "model_has_permissions" => Some(&["permission_id", "model_type", "model_id"]),
             "model_has_roles" => Some(&["role_id", "model_type", "model_id"]),
             "mountables" => Some(&["mount_id", "mountable_type", "mountable_id"]),
-            "mounts" => Some(&[
-                "id",
-                "uuid",
-                "name",
-                "description",
-                "source",
-                "target",
-                "read_only",
-                "user_mountable",
-            ]),
+            "mounts" => Some(&["id", "uuid", "name", "description", "source", "target", "read_only", "user_mountable"]),
             "node_role" => Some(&["node_id", "role_id"]),
             "nodes" => Some(&[
                 "id",
@@ -1036,16 +820,9 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "daemon_sftp_alias",
                 "daemon_connect",
             ]),
-            "notifications" => Some(&[
-                "id",
-                "type",
-                "notifiable_type",
-                "notifiable_id",
-                "data",
-                "read_at",
-                "created_at",
-                "updated_at",
-            ]),
+            "notifications" => {
+                Some(&["id", "type", "notifiable_type", "notifiable_id", "data", "read_at", "created_at", "updated_at"])
+            }
             "passkeys" => Some(&[
                 "id",
                 "user_id",
@@ -1092,22 +869,10 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "updated_at",
                 "archived",
             ]),
-            "server_user_settings" => Some(&[
-                "id",
-                "user_id",
-                "server_id",
-                "settings",
-                "created_at",
-                "updated_at",
-            ]),
-            "server_variables" => Some(&[
-                "id",
-                "server_id",
-                "variable_id",
-                "variable_value",
-                "created_at",
-                "updated_at",
-            ]),
+            "server_user_settings" => Some(&["id", "user_id", "server_id", "settings", "created_at", "updated_at"]),
+            "server_variables" => {
+                Some(&["id", "server_id", "variable_id", "variable_value", "created_at", "updated_at"])
+            }
             "servers" => Some(&[
                 "id",
                 "uuid",
@@ -1138,23 +903,9 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "oom_killer",
                 "docker_labels",
             ]),
-            "sessions" => Some(&[
-                "id",
-                "user_id",
-                "ip_address",
-                "user_agent",
-                "payload",
-                "last_activity",
-            ]),
+            "sessions" => Some(&["id", "user_id", "ip_address", "user_agent", "payload", "last_activity"]),
             "settings" => Some(&["id", "key", "value"]),
-            "subusers" => Some(&[
-                "id",
-                "user_id",
-                "server_id",
-                "created_at",
-                "updated_at",
-                "permissions",
-            ]),
+            "subusers" => Some(&["id", "user_id", "server_id", "created_at", "updated_at", "permissions"]),
             "tasks" => Some(&[
                 "id",
                 "schedule_id",
@@ -1167,25 +918,10 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "updated_at",
                 "continue_on_failure",
             ]),
-            "tasks_log" => Some(&[
-                "id",
-                "task_id",
-                "run_time",
-                "run_status",
-                "response",
-                "created_at",
-                "updated_at",
-            ]),
-            "user_ssh_keys" => Some(&[
-                "id",
-                "user_id",
-                "name",
-                "fingerprint",
-                "public_key",
-                "created_at",
-                "updated_at",
-                "deleted_at",
-            ]),
+            "tasks_log" => Some(&["id", "task_id", "run_time", "run_status", "response", "created_at", "updated_at"]),
+            "user_ssh_keys" => {
+                Some(&["id", "user_id", "name", "fingerprint", "public_key", "created_at", "updated_at", "deleted_at"])
+            }
             "users" => Some(&[
                 "id",
                 "uuid",
@@ -1233,9 +969,7 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
             _ => None,
         },
         Driver::Sqlite => match table {
-            "activity_log_subjects" => {
-                Some(&["id", "activity_log_id", "subject_type", "subject_id"])
-            }
+            "activity_log_subjects" => Some(&["id", "activity_log_id", "subject_type", "subject_id"]),
             "activity_logs" => Some(&[
                 "id",
                 "event",
@@ -1288,14 +1022,7 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "updated_at",
             ]),
             "backup_host_node" => Some(&["node_id", "backup_host_id", "created_at", "updated_at"]),
-            "backup_hosts" => Some(&[
-                "id",
-                "name",
-                "schema",
-                "configuration",
-                "created_at",
-                "updated_at",
-            ]),
+            "backup_hosts" => Some(&["id", "name", "schema", "configuration", "created_at", "updated_at"]),
             "backups" => Some(&[
                 "id",
                 "server_id",
@@ -1313,13 +1040,7 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "backup_host_id",
                 "is_scheduled",
             ]),
-            "database_host_node" => Some(&[
-                "id",
-                "node_id",
-                "database_host_id",
-                "created_at",
-                "updated_at",
-            ]),
+            "database_host_node" => Some(&["id", "node_id", "database_host_id", "created_at", "updated_at"]),
             "database_hosts" => Some(&[
                 "id",
                 "name",
@@ -1383,38 +1104,13 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "tags",
                 "startup_commands",
             ]),
-            "failed_jobs" => Some(&[
-                "id",
-                "connection",
-                "queue",
-                "payload",
-                "failed_at",
-                "exception",
-                "uuid",
-            ]),
-            "jobs" => Some(&[
-                "id",
-                "queue",
-                "payload",
-                "attempts",
-                "reserved_at",
-                "available_at",
-                "created_at",
-            ]),
+            "failed_jobs" => Some(&["id", "connection", "queue", "payload", "failed_at", "exception", "uuid"]),
+            "jobs" => Some(&["id", "queue", "payload", "attempts", "reserved_at", "available_at", "created_at"]),
             "migrations" => Some(&["id", "migration", "batch"]),
             "model_has_permissions" => Some(&["permission_id", "model_type", "model_id"]),
             "model_has_roles" => Some(&["role_id", "model_type", "model_id"]),
             "mountables" => Some(&["mount_id", "mountable_type", "mountable_id"]),
-            "mounts" => Some(&[
-                "id",
-                "uuid",
-                "name",
-                "description",
-                "source",
-                "target",
-                "read_only",
-                "user_mountable",
-            ]),
+            "mounts" => Some(&["id", "uuid", "name", "description", "source", "target", "read_only", "user_mountable"]),
             "node_role" => Some(&["node_id", "role_id"]),
             "nodes" => Some(&[
                 "id",
@@ -1444,16 +1140,9 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "daemon_sftp_alias",
                 "daemon_connect",
             ]),
-            "notifications" => Some(&[
-                "id",
-                "type",
-                "notifiable_type",
-                "notifiable_id",
-                "data",
-                "read_at",
-                "created_at",
-                "updated_at",
-            ]),
+            "notifications" => {
+                Some(&["id", "type", "notifiable_type", "notifiable_id", "data", "read_at", "created_at", "updated_at"])
+            }
             "passkeys" => Some(&[
                 "id",
                 "user_id",
@@ -1500,22 +1189,10 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "updated_at",
                 "archived",
             ]),
-            "server_user_settings" => Some(&[
-                "id",
-                "user_id",
-                "server_id",
-                "settings",
-                "created_at",
-                "updated_at",
-            ]),
-            "server_variables" => Some(&[
-                "id",
-                "server_id",
-                "variable_id",
-                "variable_value",
-                "created_at",
-                "updated_at",
-            ]),
+            "server_user_settings" => Some(&["id", "user_id", "server_id", "settings", "created_at", "updated_at"]),
+            "server_variables" => {
+                Some(&["id", "server_id", "variable_id", "variable_value", "created_at", "updated_at"])
+            }
             "servers" => Some(&[
                 "id",
                 "uuid",
@@ -1546,23 +1223,9 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "oom_killer",
                 "docker_labels",
             ]),
-            "sessions" => Some(&[
-                "id",
-                "user_id",
-                "ip_address",
-                "user_agent",
-                "payload",
-                "last_activity",
-            ]),
+            "sessions" => Some(&["id", "user_id", "ip_address", "user_agent", "payload", "last_activity"]),
             "settings" => Some(&["id", "key", "value"]),
-            "subusers" => Some(&[
-                "id",
-                "user_id",
-                "server_id",
-                "created_at",
-                "updated_at",
-                "permissions",
-            ]),
+            "subusers" => Some(&["id", "user_id", "server_id", "created_at", "updated_at", "permissions"]),
             "tasks" => Some(&[
                 "id",
                 "schedule_id",
@@ -1575,25 +1238,10 @@ pub fn columns(driver: Driver, table: &str) -> Option<&'static [&'static str]> {
                 "updated_at",
                 "continue_on_failure",
             ]),
-            "tasks_log" => Some(&[
-                "id",
-                "task_id",
-                "run_time",
-                "run_status",
-                "response",
-                "created_at",
-                "updated_at",
-            ]),
-            "user_ssh_keys" => Some(&[
-                "id",
-                "user_id",
-                "name",
-                "fingerprint",
-                "public_key",
-                "created_at",
-                "updated_at",
-                "deleted_at",
-            ]),
+            "tasks_log" => Some(&["id", "task_id", "run_time", "run_status", "response", "created_at", "updated_at"]),
+            "user_ssh_keys" => {
+                Some(&["id", "user_id", "name", "fingerprint", "public_key", "created_at", "updated_at", "deleted_at"])
+            }
             "users" => Some(&[
                 "id",
                 "uuid",

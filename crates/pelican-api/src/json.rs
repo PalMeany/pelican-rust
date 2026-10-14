@@ -14,28 +14,16 @@ pub struct PhpJson<T> {
 
 impl<T: Serialize> PhpJson<T> {
     pub fn ok(value: T) -> Self {
-        PhpJson {
-            status: StatusCode::OK,
-            flags: 0,
-            value,
-        }
+        PhpJson { status: StatusCode::OK, flags: 0, value }
     }
 
     pub fn with_status(status: StatusCode, value: T) -> Self {
-        PhpJson {
-            status,
-            flags: 0,
-            value,
-        }
+        PhpJson { status, flags: 0, value }
     }
 
     /// Laravel's exception handler `prepareJsonResponse` encoding.
     pub fn pretty(status: StatusCode, value: T) -> Self {
-        PhpJson {
-            status,
-            flags: JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
-            value,
-        }
+        PhpJson { status, flags: JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES, value }
     }
 }
 
@@ -44,10 +32,7 @@ impl<T: Serialize> IntoResponse for PhpJson<T> {
         match json::to_string_with_flags(&self.value, self.flags) {
             Ok(body) => {
                 let mut r = (self.status, body).into_response();
-                r.headers_mut().insert(
-                    header::CONTENT_TYPE,
-                    HeaderValue::from_static("application/json"),
-                );
+                r.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("application/json"));
                 r
             }
             Err(e) => {

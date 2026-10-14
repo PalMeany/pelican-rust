@@ -452,6 +452,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "bit-set"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08807e080ed7f9d5433fa9b275196cfc35414f66a0c79d864dc51a0d825231a3"
+dependencies = [
+ "bit-vec",
+]
+
+[[package]]
+name = "bit-vec"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
+
+[[package]]
 name = "bitflags"
 version = "2.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -874,6 +889,7 @@ dependencies = [
  "serde_yaml",
  "similar",
  "tokio",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -958,6 +974,17 @@ checksum = "5a23add41df1562121a9393cb065eab5146a1242410f23a644851e90cfd669d2"
 dependencies = [
  "parking",
  "pin-project-lite",
+]
+
+[[package]]
+name = "fancy-regex"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e24cb5a94bcae1e5408b0effca5cd7172ea3c5755049c5f3af4cd283a165298"
+dependencies = [
+ "bit-set",
+ "regex-automata",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -1873,8 +1900,10 @@ name = "pelican-api"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "base64 0.22.1",
  "bytes",
  "chrono",
+ "fancy-regex",
  "hex",
  "http-body-util",
  "indexmap",
@@ -1882,9 +1911,12 @@ dependencies = [
  "md-5 0.10.6",
  "pelican-core",
  "pelican-db",
+ "pelican-wings",
+ "regex",
  "sea-orm",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "thiserror",
  "tokio",
  "tower",
@@ -1896,6 +1928,7 @@ name = "pelican-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "chrono",
  "dotenvy",
  "hex",
@@ -1904,7 +1937,9 @@ dependencies = [
  "md-5 0.10.6",
  "parking_lot",
  "pelican-db",
+ "pelican-wings",
  "rand 0.9.5",
+ "regex",
  "sea-orm",
  "serde",
  "serde_json",
@@ -1922,10 +1957,30 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "laravel-compat",
  "pelican-db",
  "sea-orm",
  "serde",
  "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "pelican-wings"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "hex",
+ "hmac 0.12.1",
+ "laravel-compat",
+ "rand 0.9.5",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
  "thiserror",
  "tokio",
  "tracing",

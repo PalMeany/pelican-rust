@@ -1,0 +1,39 @@
+name: remote/auth-errors
+description: DaemonAuthenticate precedence (remote-api.md §1.2-1.3).
+fixtures: [base, infra]
+steps:
+  - { path: /api/remote/servers }
+  - { path: /api/remote/servers, headers: { Authorization: "Bearer " } }
+  - { path: /api/remote/servers, bearer: "a.b.c" }
+  - { path: /api/remote/servers, bearer: "nope.secret" }
+  - { path: /api/remote/servers, bearer: "difftestTokenId0.wrong" }
+  - { path: /api/remote/servers/00000000-0000-0000-0000-000000000000 }
+  - { path: /api/remote/servers/0b5c6a0e }
+  - { method: DELETE, path: /api/remote/servers }
+---
+name: remote/server-config
+description: R5 full configuration document incl. placeholders, inheritance, labels, mounts.
+fixtures: [base, infra]
+steps:
+  - { path: /api/remote/servers/0b5c6a0e-3f0e-4c1e-9d55-6c1d7c0a2d11, bearer: difftestTokenId0.NodeDaemonToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL, expect_status: 200 }
+  - { path: /api/remote/servers/0b5c6a0e, bearer: difftestTokenId0.NodeDaemonToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL }
+  - { path: /api/remote/servers/1c6d7b1f-4a1f-4d2e-8e66-7d2e8d1b3e22, bearer: difftestTokenId0.NodeDaemonToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL }
+  - { path: /api/remote/servers/2d7e8c2a-5b2a-4e3f-9f77-8e3f9e2c4f33, bearer: difftestTokenId0.NodeDaemonToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL }
+  - { path: /api/remote/servers/2d7e8c2a-5b2a-4e3f-9f77-8e3f9e2c4f33, bearer: otherNodeToken01.OtherNodeToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJK }
+---
+name: remote/server-list
+fixtures: [base, infra]
+steps:
+  - { path: "/api/remote/servers?page=0&per_page=50", bearer: difftestTokenId0.NodeDaemonToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL, expect_status: 200 }
+  - { path: "/api/remote/servers?page=2&per_page=1", bearer: difftestTokenId0.NodeDaemonToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL }
+  - { path: "/api/remote/servers?per_page=abc", bearer: difftestTokenId0.NodeDaemonToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL }
+  - { path: "/api/remote/servers?page=5", bearer: otherNodeToken01.OtherNodeToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJK }
+---
+name: remote/install
+fixtures: [base, infra]
+steps:
+  - { path: /api/remote/servers/0b5c6a0e-3f0e-4c1e-9d55-6c1d7c0a2d11/install, bearer: difftestTokenId0.NodeDaemonToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL }
+  - { path: /api/remote/servers/1c6d7b1f-4a1f-4d2e-8e66-7d2e8d1b3e22/install, bearer: difftestTokenId0.NodeDaemonToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL }
+  - { method: POST, path: /api/remote/servers/1c6d7b1f-4a1f-4d2e-8e66-7d2e8d1b3e22/install, bearer: difftestTokenId0.NodeDaemonToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL, json: { successful: "yes" } }
+  - { method: POST, path: /api/remote/servers/1c6d7b1f-4a1f-4d2e-8e66-7d2e8d1b3e22/install, bearer: difftestTokenId0.NodeDaemonToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL, json: { successful: true, reinstall: false } }
+  - { method: POST, path: /api/remote/servers/0b5c6a0e-3f0e-4c1e-9d55-6c1d7c0a2d11/install, bearer: difftestTokenId0.NodeDaemonToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL, json: { successful: false, reinstall: true } }

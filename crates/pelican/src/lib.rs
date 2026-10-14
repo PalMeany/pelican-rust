@@ -12,16 +12,11 @@ use pelican_db::install::{SchemaState, schema_state};
 /// Load config, connect and verify the database schema (ADR-0003).
 pub async fn boot(env: Env, base: &Path) -> Result<AppState> {
     let (config, enc) = Config::from_env(env, base)?;
-    let db = pelican_db::connect(&config.db)
-        .await
-        .context("connecting to the database")?;
+    let db = pelican_db::connect(&config.db).await.context("connecting to the database")?;
     match schema_state(&db).await? {
         SchemaState::Ready { unknown } => {
             if !unknown.is_empty() {
-                tracing::warn!(
-                    "database has migrations unknown to this build: {}",
-                    unknown.join(", ")
-                );
+                tracing::warn!("database has migrations unknown to this build: {}", unknown.join(", "));
             }
         }
         SchemaState::Empty => {
@@ -40,10 +35,6 @@ pub async fn boot(env: Env, base: &Path) -> Result<AppState> {
 /// Serve the panel on an already bound listener.
 pub async fn serve(state: AppState, listener: tokio::net::TcpListener) -> Result<()> {
     let app = pelican_api::router(state);
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await?;
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
     Ok(())
 }

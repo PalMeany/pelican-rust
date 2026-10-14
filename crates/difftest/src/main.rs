@@ -41,26 +41,20 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "warn".into()))
+        .with_writer(std::io::stderr)
+        .init();
     let args = Args::parse();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../difftest");
     let enc = Encrypter::from_env_values(APP_KEY, None)?;
-    let db = TestDb::connect(&config_for(&args.backend)?)
-        .await
-        .context("connecting to difftest DB")?;
-    let wings = MockWings::start()
-        .await
-        .context("starting mock wings on :8080")?;
+    let db = TestDb::connect(&config_for(&args.backend)?).await.context("connecting to difftest DB")?;
+    let wings = MockWings::start().await.context("starting mock wings on :8080")?;
     let http = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(60))
         .build()?;
-    let ctx = Ctx {
-        db: &db,
-        wings: &wings,
-        enc: &enc,
-        http,
-        fixtures_dir: root.join("fixtures"),
-    };
+    let ctx = Ctx { db: &db, wings: &wings, enc: &enc, http, fixtures_dir: root.join("fixtures") };
 
     let second_url = if args.self_check {
         ORIG_URL.to_string()
@@ -78,19 +72,12 @@ async fn main() -> Result<()> {
             skip += 1;
             continue;
         }
-        if s.backends
-            .as_ref()
-            .is_some_and(|b| !b.iter().any(|x| x == &args.backend))
-        {
+        if s.backends.as_ref().is_some_and(|b| !b.iter().any(|x| x == &args.backend)) {
             continue;
         }
         let rows_text = serde_yaml::to_string(&runner::merged_rows(&ctx, s)?)?;
-        let a = runner::run(&ctx, s, ORIG_URL)
-            .await
-            .with_context(|| format!("{}: original", s.name));
-        let b = runner::run(&ctx, s, &second_url)
-            .await
-            .with_context(|| format!("{}: second", s.name));
+        let a = runner::run(&ctx, s, ORIG_URL).await.with_context(|| format!("{}: original", s.name));
+        let b = runner::run(&ctx, s, &second_url).await.with_context(|| format!("{}: second", s.name));
         let (a, b) = match (a, b) {
             (Ok(a), Ok(b)) => (a, b),
             (a, b) => {
@@ -118,22 +105,14 @@ async fn main() -> Result<()> {
             let diff = similar::TextDiff::from_lines(&ra, &rb);
             print!(
                 "{}",
-                diff.unified_diff().context_radius(3).header(
-                    "original",
-                    if args.self_check {
-                        "original#2"
-                    } else {
-                        "pelican-rs"
-                    }
-                )
+                diff.unified_diff()
+                    .context_radius(3)
+                    .header("original", if args.self_check { "original#2" } else { "pelican-rs" })
             );
             fail += 1;
         }
     }
-    println!(
-        "\n{pass} passed, {fail} failed, {skip} skipped [{}]",
-        args.backend
-    );
+    println!("\n{pass} passed, {fail} failed, {skip} skipped [{}]", args.backend);
     if fail > 0 {
         std::process::exit(1);
     }

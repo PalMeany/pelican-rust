@@ -40,9 +40,7 @@ fn null_err<I: ColIdx>(idx: I) -> TryGetError {
 
 macro_rules! via {
     ($t:ty, $map:expr) => {
-        |res: &QueryResult, idx| {
-            <Option<$t> as TryGetable>::try_get_by(res, idx).map(|o| o.map($map))
-        }
+        |res: &QueryResult, idx| <Option<$t> as TryGetable>::try_get_by(res, idx).map(|o| o.map($map))
     };
 }
 
@@ -67,9 +65,7 @@ fn decode_i64<I: ColIdx>(res: &QueryResult, idx: I) -> Result<Option<i64>, TryGe
 
 macro_rules! impl_value_type_common {
     ($name:ident, $inner:ty, $array:expr, $col:expr) => {
-        impl_value_type_common!($name, $inner, $array, $col, |v| {
-            <$inner as ValueType>::try_from(v)
-        });
+        impl_value_type_common!($name, $inner, $array, $col, |v| { <$inner as ValueType>::try_from(v) });
     };
     ($name:ident, $inner:ty, $array:expr, $col:expr, $try_from:expr) => {
         impl ValueType for $name {
@@ -115,9 +111,7 @@ macro_rules! impl_value_type_common {
 
 /// Any integer column. Always bound as BIGINT: PostgreSQL applies an assignment
 /// cast to `int4`/`int2` columns and has cross-type comparison operators.
-#[derive(
-    Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
-)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Int(pub i64);
 
@@ -141,9 +135,7 @@ impl Nullable for Int {
 
 impl TryFromU64 for Int {
     fn try_from_u64(n: u64) -> Result<Self, DbErr> {
-        <i64 as std::convert::TryFrom<u64>>::try_from(n)
-            .map(Int)
-            .map_err(|e| DbErr::Type(e.to_string()))
+        <i64 as std::convert::TryFrom<u64>>::try_from(n).map(Int).map_err(|e| DbErr::Type(e.to_string()))
     }
 }
 
@@ -177,9 +169,7 @@ macro_rules! impl_bool {
                 let v = decode_first(
                     res,
                     idx,
-                    &[via!(bool, |v| v), |res, idx| {
-                        decode_i64(res, idx).map(|o| o.map(|v| v != 0))
-                    }],
+                    &[via!(bool, |v| v), |res, idx| decode_i64(res, idx).map(|o| o.map(|v| v != 0))],
                 )?;
                 v.map($name).ok_or_else(|| null_err(idx))
             }
@@ -197,26 +187,16 @@ macro_rules! impl_bool {
             }
         }
 
-        impl_value_type_common!(
-            $name,
-            bool,
-            ArrayType::Bool,
-            ColumnType::Boolean,
-            |v| match v {
-                Value::Bool(Some(b)) => Ok(b),
-                Value::BigInt(Some(i)) => Ok(i != 0),
-                _ => Err(ValueTypeErr),
-            }
-        );
+        impl_value_type_common!($name, bool, ArrayType::Bool, ColumnType::Boolean, |v| match v {
+            Value::Bool(Some(b)) => Ok(b),
+            Value::BigInt(Some(i)) => Ok(i != 0),
+            _ => Err(ValueTypeErr),
+        });
     };
 }
 
 impl_bool!(Bool, |b: bool| Value::Bool(Some(b)), Value::Bool(None));
-impl_bool!(
-    SmallBool,
-    |b: bool| Value::BigInt(Some(i64::from(b))),
-    Value::BigInt(None)
-);
+impl_bool!(SmallBool, |b: bool| Value::BigInt(Some(i64::from(b))), Value::BigInt(None));
 
 // ---------------------------------------------------------------------------
 // Json
@@ -238,9 +218,9 @@ impl TryGetable for Json {
             &[
                 |res, idx| match <Option<String> as TryGetable>::try_get_by(res, idx)? {
                     None => Ok(None),
-                    Some(s) => serde_json::from_str(&s)
-                        .map(Some)
-                        .map_err(|e| TryGetError::DbErr(DbErr::Json(e.to_string()))),
+                    Some(s) => {
+                        serde_json::from_str(&s).map(Some).map_err(|e| TryGetError::DbErr(DbErr::Json(e.to_string())))
+                    }
                 },
                 via!(serde_json::Value, |v| v),
             ],
@@ -293,9 +273,9 @@ impl TryGetable for Timestamp {
                 via!(chrono::DateTime<chrono::Utc>, |v| v.naive_utc()),
                 |res, idx| match <Option<String> as TryGetable>::try_get_by(res, idx)? {
                     None => Ok(None),
-                    Some(s) => parse_laravel_datetime(&s).map(Some).ok_or_else(|| {
-                        TryGetError::DbErr(DbErr::Type(format!("bad datetime `{s}`")))
-                    }),
+                    Some(s) => parse_laravel_datetime(&s)
+                        .map(Some)
+                        .ok_or_else(|| TryGetError::DbErr(DbErr::Type(format!("bad datetime `{s}`")))),
                 },
             ],
         )?;
@@ -305,21 +285,15 @@ impl TryGetable for Timestamp {
 
 /// Parse the textual forms found in SQLite databases written by Laravel.
 pub fn parse_laravel_datetime(s: &str) -> Option<chrono::NaiveDateTime> {
-    const FORMATS: &[&str] = &[
-        "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%d %H:%M:%S%.f",
-        "%Y-%m-%dT%H:%M:%S%.f",
-        "%Y-%m-%dT%H:%M:%S",
-    ];
+    const FORMATS: &[&str] =
+        &["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S%.f", "%Y-%m-%dT%H:%M:%S%.f", "%Y-%m-%dT%H:%M:%S"];
     let s = s.trim();
     for f in FORMATS {
         if let Ok(v) = chrono::NaiveDateTime::parse_from_str(s, f) {
             return Some(v);
         }
     }
-    chrono::DateTime::parse_from_rfc3339(s)
-        .ok()
-        .map(|d| d.naive_local())
+    chrono::DateTime::parse_from_rfc3339(s).ok().map(|d| d.naive_local())
 }
 
 impl From<Timestamp> for Value {
@@ -334,9 +308,4 @@ impl Nullable for Timestamp {
     }
 }
 
-impl_value_type_common!(
-    Timestamp,
-    chrono::NaiveDateTime,
-    ArrayType::ChronoDateTime,
-    ColumnType::DateTime
-);
+impl_value_type_common!(Timestamp, chrono::NaiveDateTime, ArrayType::ChronoDateTime, ColumnType::DateTime);

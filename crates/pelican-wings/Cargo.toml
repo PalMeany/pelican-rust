@@ -1,0 +1,21 @@
+[package]
+name = "pelican-wings"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "HTTP client and JWTs for Pelican Wings, byte-compatible with the original panel"
+
+[dependencies]
+laravel-compat = { path = "../laravel-compat" }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+base64.workspace = true
+rand.workspace = true
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+regex = "1"
+tokio.workspace = true

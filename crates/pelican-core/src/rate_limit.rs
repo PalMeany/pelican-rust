@@ -22,11 +22,7 @@ pub enum Throttle {
     /// Allowed; `remaining` for the `X-RateLimit-Remaining` header.
     Allowed { limit: u32, remaining: i64 },
     /// Too many attempts: `retry_after` seconds, `reset_at` unix time.
-    Exceeded {
-        limit: u32,
-        retry_after: i64,
-        reset_at: i64,
-    },
+    Exceeded { limit: u32, retry_after: i64, reset_at: i64 },
 }
 
 impl RateLimiter {
@@ -53,23 +49,13 @@ impl RateLimiter {
         if attempts >= i64::from(max) {
             if let Some(available_at) = Self::get(&mut map, &timer_key, now) {
                 let retry_after = (available_at - now).max(0);
-                return Throttle::Exceeded {
-                    limit: max,
-                    retry_after,
-                    reset_at: now + retry_after,
-                };
+                return Throttle::Exceeded { limit: max, retry_after, reset_at: now + retry_after };
             }
             map.remove(key);
         }
         // hit(): add timer (if absent), add counter 0 (if absent), increment.
         if Self::get(&mut map, &timer_key, now).is_none() {
-            map.insert(
-                timer_key,
-                Entry {
-                    value: now + decay_seconds,
-                    expires_at: now + decay_seconds,
-                },
-            );
+            map.insert(timer_key, Entry { value: now + decay_seconds, expires_at: now + decay_seconds });
         }
         let hits = match map.get_mut(key) {
             Some(e) if e.expires_at > now => {
@@ -77,19 +63,44 @@ impl RateLimiter {
                 e.value
             }
             _ => {
-                map.insert(
-                    key.to_string(),
-                    Entry {
-                        value: 1,
-                        expires_at: now + decay_seconds,
-                    },
-                );
+                map.insert(key.to_string(), Entry { value: 1, expires_at: now + decay_seconds });
                 1
             }
         };
-        Throttle::Allowed {
-            limit: max,
-            remaining: i64::from(max) - hits,
+        Throttle::Allowed { limit: max, remaining: i64::from(max) - hits }
+    }
+
+    /// `RateLimiter::tooManyAttempts`: Some(available_in) when blocked; resets
+    /// the counter if the window expired.
+    pub fn too_many_attempts(&self, key: &str, max: u32, now: i64) -> Option<i64> {
+        let mut map = self.inner.lock();
+        let attempts = Self::get(&mut map, key, now).unwrap_or(0);
+        if attempts >= i64::from(max) {
+            let timer_key = format!("{key}:timer");
+            if let Some(available_at) = Self::get(&mut map, &timer_key, now) {
+                return Some((available_at - now).max(0));
+            }
+            map.remove(key);
+        }
+        None
+    }
+
+    /// `RateLimiter::hit($key, $decay)`.
+    pub fn hit(&self, key: &str, decay_seconds: i64, now: i64) -> i64 {
+        let mut map = self.inner.lock();
+        let timer_key = format!("{key}:timer");
+        if Self::get(&mut map, &timer_key, now).is_none() {
+            map.insert(timer_key, Entry { value: now + decay_seconds, expires_at: now + decay_seconds });
+        }
+        match map.get_mut(key) {
+            Some(e) if e.expires_at > now => {
+                e.value += 1;
+                e.value
+            }
+            _ => {
+                map.insert(key.to_string(), Entry { value: 1, expires_at: now + decay_seconds });
+                1
+            }
         }
     }
 
@@ -111,34 +122,9 @@ mod tests {
     #[test]
     fn limits_and_resets() {
         let rl = RateLimiter::default();
-        assert_eq!(
-            rl.attempt("k", 2, 60, 1000),
-            Throttle::Allowed {
-                limit: 2,
-                remaining: 1
-            }
-        );
-        assert_eq!(
-            rl.attempt("k", 2, 60, 1001),
-            Throttle::Allowed {
-                limit: 2,
-                remaining: 0
-            }
-        );
-        assert_eq!(
-            rl.attempt("k", 2, 60, 1002),
-            Throttle::Exceeded {
-                limit: 2,
-                retry_after: 58,
-                reset_at: 1060
-            }
-        );
-        assert_eq!(
-            rl.attempt("k", 2, 60, 1060),
-            Throttle::Allowed {
-                limit: 2,
-                remaining: 1
-            }
-        );
+        assert_eq!(rl.attempt("k", 2, 60, 1000), Throttle::Allowed { limit: 2, remaining: 1 });
+        assert_eq!(rl.attempt("k", 2, 60, 1001), Throttle::Allowed { limit: 2, remaining: 0 });
+        assert_eq!(rl.attempt("k", 2, 60, 1002), Throttle::Exceeded { limit: 2, retry_after: 58, reset_at: 1060 });
+        assert_eq!(rl.attempt("k", 2, 60, 1060), Throttle::Allowed { limit: 2, remaining: 1 });
     }
 }

@@ -9,19 +9,10 @@ use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, Quer
 #[tokio::test]
 async fn fresh_install_and_roundtrip() -> anyhow::Result<()> {
     for driver in drivers_under_test() {
-        let t = fresh(driver)
-            .await
-            .map_err(|e| anyhow::anyhow!("{driver:?}: {e}"))?;
-        assert_eq!(
-            schema_state(&t.db).await?,
-            SchemaState::Ready { unknown: vec![] },
-            "{driver:?}"
-        );
+        let t = fresh(driver).await.map_err(|e| anyhow::anyhow!("{driver:?}: {e}"))?;
+        assert_eq!(schema_state(&t.db).await?, SchemaState::Ready { unknown: vec![] }, "{driver:?}");
 
-        let now = chrono::NaiveDate::from_ymd_opt(2026, 10, 14)
-            .unwrap()
-            .and_hms_opt(12, 30, 5)
-            .unwrap();
+        let now = chrono::NaiveDate::from_ymd_opt(2026, 10, 14).unwrap().and_hms_opt(12, 30, 5).unwrap();
         let am = nodes::ActiveModel {
             uuid: Set(Some("0b9a3d0e-2c39-4b0e-8f41-3a0f1d9f0c11".into())),
             public: Set(SmallBool(true)),
@@ -48,10 +39,7 @@ async fn fresh_install_and_roundtrip() -> anyhow::Result<()> {
             updated_at: Set(Some(Timestamp(now))),
             ..Default::default()
         };
-        let inserted = am
-            .insert(&t.db)
-            .await
-            .map_err(|e| anyhow::anyhow!("{driver:?} insert: {e}"))?;
+        let inserted = am.insert(&t.db).await.map_err(|e| anyhow::anyhow!("{driver:?} insert: {e}"))?;
         assert_eq!(inserted.id, Int(1), "{driver:?}");
 
         let found = nodes::Entity::find()
@@ -72,10 +60,7 @@ async fn fresh_install_and_roundtrip() -> anyhow::Result<()> {
         let mut am: nodes::ActiveModel = found.into();
         am.public = Set(SmallBool(false));
         am.tags = Set(None);
-        let updated = am
-            .update(&t.db)
-            .await
-            .map_err(|e| anyhow::anyhow!("{driver:?} update: {e}"))?;
+        let updated = am.update(&t.db).await.map_err(|e| anyhow::anyhow!("{driver:?} update: {e}"))?;
         assert_eq!(updated.public, SmallBool(false));
         assert_eq!(updated.tags, None);
         eprintln!("{driver:?}: ok");
@@ -89,10 +74,7 @@ async fn all_entities_select() -> anyhow::Result<()> {
     use pelican_db::entities::*;
     use sea_orm::DatabaseConnection;
     async fn sel<E: EntityTrait>(db: &DatabaseConnection, name: &str) -> anyhow::Result<()> {
-        E::find()
-            .all(db)
-            .await
-            .map_err(|e| anyhow::anyhow!("{name}: {e}"))?;
+        E::find().all(db).await.map_err(|e| anyhow::anyhow!("{name}: {e}"))?;
         Ok(())
     }
     for driver in drivers_under_test() {

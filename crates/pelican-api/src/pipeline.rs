@@ -66,26 +66,16 @@ pub enum Group {
 }
 
 fn request_root(headers: &HeaderMap, trusted_peer: bool) -> String {
-    let host = headers
-        .get(header::HOST)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("localhost");
+    let host = headers.get(header::HOST).and_then(|v| v.to_str().ok()).unwrap_or("localhost");
     let proto = trusted_peer
-        .then(|| {
-            headers
-                .get("x-forwarded-proto")
-                .and_then(|v| v.to_str().ok())
-        })
+        .then(|| headers.get("x-forwarded-proto").and_then(|v| v.to_str().ok()))
         .flatten()
         .unwrap_or("http");
     format!("{proto}://{host}")
 }
 
 fn peer_ip(req: &Request) -> IpAddr {
-    req.extensions()
-        .get::<ConnectInfo<SocketAddr>>()
-        .map(|c| c.0.ip())
-        .unwrap_or(IpAddr::from([127, 0, 0, 1]))
+    req.extensions().get::<ConnectInfo<SocketAddr>>().map(|c| c.0.ip()).unwrap_or(IpAddr::from([127, 0, 0, 1]))
 }
 
 pub async fn client(
@@ -126,10 +116,7 @@ async fn run(
     req: Request,
     next: Next,
 ) -> Response {
-    let template = mp
-        .as_ref()
-        .map(|m| m.as_str().to_string())
-        .unwrap_or_default();
+    let template = mp.as_ref().map(|m| m.as_str().to_string()).unwrap_or_default();
     match pipeline(&st, group, &template, params, req, next).await {
         Ok(r) => r,
         Err(e) => e.into_response(),
@@ -145,19 +132,9 @@ async fn pipeline(
     next: Next,
 ) -> ApiResult<Response> {
     let peer = peer_ip(&req);
-    let ip = client_ip(
-        peer,
-        req.headers()
-            .get("x-forwarded-for")
-            .and_then(|v| v.to_str().ok()),
-        &st.config.trusted_proxies,
-    );
-    let trusted_peer = ip != peer
-        || st
-            .config
-            .trusted_proxies
-            .iter()
-            .any(|t| t == "*" || t == "**");
+    let ip =
+        client_ip(peer, req.headers().get("x-forwarded-for").and_then(|v| v.to_str().ok()), &st.config.trusted_proxies);
+    let trusted_peer = ip != peer || st.config.trusted_proxies.iter().any(|t| t == "*" || t == "**");
     let root = request_root(req.headers(), trusted_peer);
     let now = pelican_core::time::now();
 
@@ -166,22 +143,12 @@ async fn pipeline(
 
     if group == Group::Remote {
         let node = daemon_authenticate(st, req.headers()).await?;
-        req.extensions_mut().insert(Ctx {
-            ip,
-            user: None,
-            bound: Arc::new(bound),
-            node: Some(Arc::new(node)),
-            root,
-        });
+        req.extensions_mut().insert(Ctx { ip, user: None, bound: Arc::new(bound), node: Some(Arc::new(node)), root });
         return Ok(next.run(req).await);
     }
 
     // 2-3. auth:sanctum (session support arrives with the web UI, ADR-0009).
-    let token = req
-        .headers()
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(auth::bearer_token);
+    let token = req.headers().get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(auth::bearer_token);
     let Some(token) = token else {
         return Err(ApiError::unauthenticated());
     };
@@ -202,10 +169,7 @@ async fn pipeline(
 
     // 6. AuthenticateIPAccess
     let allowed: Vec<String> = match &key.allowed_ips.0 {
-        serde_json::Value::Array(a) => a
-            .iter()
-            .filter_map(|v| v.as_str().map(str::to_string))
-            .collect(),
+        serde_json::Value::Array(a) => a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
         _ => Vec::new(),
     };
     if !allowed.is_empty() {
@@ -228,10 +192,7 @@ async fn pipeline(
                 .subject(morph::API_KEY, key.id.0)
                 .property(
                     "identifier",
-                    key.identifier
-                        .clone()
-                        .map(serde_json::Value::String)
-                        .unwrap_or(serde_json::Value::Null),
+                    key.identifier.clone().map(serde_json::Value::String).unwrap_or(serde_json::Value::Null),
                 )
                 .save(&st.db)
                 .await?;
@@ -249,9 +210,7 @@ async fn pipeline(
             ));
         }
         Group::Application if !user.is_admin() => {
-            return Err(ApiError::access_denied(
-                "This account does not have permission to access the API.",
-            ));
+            return Err(ApiError::access_denied("This account does not have permission to access the API."));
         }
         _ => {}
     }
@@ -262,29 +221,13 @@ async fn pipeline(
         _ => ("api.application", st.config.rate_limits.application),
     };
     let unix = chrono::Utc::now().timestamp();
-    let throttle = st.limiter.attempt(
-        &format!("{name}|{}", user.user.uuid),
-        limit.max,
-        limit.decay_seconds(),
-        unix,
-    );
-    if let Throttle::Exceeded {
-        limit,
-        retry_after,
-        reset_at,
-    } = throttle
-    {
+    let throttle = st.limiter.attempt(&format!("{name}|{}", user.user.uuid), limit.max, limit.decay_seconds(), unix);
+    if let Throttle::Exceeded { limit, retry_after, reset_at } = throttle {
         return Err(too_many(limit, retry_after, reset_at));
     }
 
     let mut req = req;
-    req.extensions_mut().insert(Ctx {
-        ip,
-        user: Some(Arc::new(user)),
-        bound: Arc::new(bound),
-        node: None,
-        root,
-    });
+    req.extensions_mut().insert(Ctx { ip, user: Some(Arc::new(user)), bound: Arc::new(bound), node: None, root });
     let _ = template;
     let mut resp = next.run(req).await;
     if let Throttle::Allowed { limit, remaining } = throttle {
@@ -294,25 +237,18 @@ async fn pipeline(
 }
 
 pub fn too_many(limit: u32, retry_after: i64, reset_at: i64) -> ApiError {
-    ApiError::new(
-        429,
-        "ThrottleRequestsException",
-        "Too Many Attempts.",
-        crate::error::Style::Pretty,
-    )
-    .with_header("x-ratelimit-limit", limit)
-    .with_header("x-ratelimit-remaining", 0)
-    .with_header("retry-after", retry_after)
-    .with_header("x-ratelimit-reset", reset_at)
+    ApiError::new(429, "ThrottleRequestsException", "Too Many Attempts.", crate::error::Style::Pretty)
+        .with_header("x-ratelimit-limit", limit)
+        .with_header("x-ratelimit-remaining", 0)
+        .with_header("retry-after", retry_after)
+        .with_header("x-ratelimit-reset", reset_at)
 }
 
 /// `ThrottleRequests::addHeaders`: an outer limiter does not overwrite a more
 /// restrictive (or equal) remaining count already set by an inner one.
 pub fn add_rate_limit_headers(h: &mut HeaderMap, limit: u32, remaining: i64) {
-    if let Some(existing) = h
-        .get("x-ratelimit-remaining")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.parse::<i64>().ok())
+    if let Some(existing) =
+        h.get("x-ratelimit-remaining").and_then(|v| v.to_str().ok()).and_then(|v| v.parse::<i64>().ok())
     {
         if existing <= remaining {
             return;
@@ -333,11 +269,7 @@ async fn valid_json(req: Request) -> ApiResult<Request> {
         return Ok(req);
     }
     let (parts, body) = req.into_parts();
-    let bytes: Bytes = body
-        .collect()
-        .await
-        .map_err(|_| ApiError::bad_request("Invalid request body."))?
-        .to_bytes();
+    let bytes: Bytes = body.collect().await.map_err(|_| ApiError::bad_request("Invalid request body."))?.to_bytes();
     if !(bytes.is_empty() || bytes.as_ref() == b"0") {
         if let Err(msg) = php_json_decode_check(&bytes) {
             return Err(ApiError::bad_request(format!(
@@ -369,43 +301,28 @@ fn php_json_decode_check(bytes: &[u8]) -> Result<(), &'static str> {
 }
 
 /// `DaemonAuthenticate` (remote-api.md §1).
-async fn daemon_authenticate(
-    st: &AppState,
-    headers: &HeaderMap,
-) -> ApiResult<pelican_db::entities::nodes::Model> {
+async fn daemon_authenticate(st: &AppState, headers: &HeaderMap) -> ApiResult<pelican_db::entities::nodes::Model> {
     use pelican_db::entities::nodes;
     use sea_orm::{ColumnTrait, QueryFilter};
-    let token = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(auth::bearer_token);
+    let token = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(auth::bearer_token);
     let Some(token) = token else {
-        return Err(ApiError::http(
-            401,
-            "Access to this endpoint must include an Authorization header.",
-        )
-        .with_header("www-authenticate", "Bearer"));
+        return Err(ApiError::http(401, "Access to this endpoint must include an Authorization header.")
+            .with_header("www-authenticate", "Bearer"));
     };
     let parts: Vec<&str> = token.split('.').collect();
     // PHP empty(): "" and "0" are empty.
     if parts.len() != 2 || parts.iter().any(|p| p.is_empty() || *p == "0") {
-        return Err(ApiError::bad_request(
-            "The Authorization header provided was not in a valid format.",
-        ));
+        return Err(ApiError::bad_request("The Authorization header provided was not in a valid format."));
     }
     let node = nodes::Entity::find()
         .filter(nodes::Column::DaemonTokenId.eq(parts[0]))
         .one(&st.db)
         .await?
         .ok_or_else(ApiError::model_not_found)?;
-    let secret = st
-        .enc
-        .decrypt_string_lenient(&node.daemon_token)
-        .map_err(|_| ApiError::internal("DecryptException"))?;
+    let secret =
+        st.enc.decrypt_string_lenient(&node.daemon_token).map_err(|_| ApiError::internal("DecryptException"))?;
     if !laravel_compat::hashing::constant_time_eq(secret.as_bytes(), parts[1].as_bytes()) {
-        return Err(ApiError::access_denied(
-            "You are not authorized to access this resource.",
-        ));
+        return Err(ApiError::access_denied("You are not authorized to access this resource."));
     }
     Ok(node)
 }
@@ -415,13 +332,27 @@ async fn daemon_authenticate(
 pub async fn negotiate_errors(req: Request, next: Next) -> Response {
     let expects_json = expects_json(req.headers());
     let root = request_root(req.headers(), true);
-    let referer = req
-        .headers()
-        .get(header::REFERER)
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_string);
+    let referer = req.headers().get(header::REFERER).and_then(|v| v.to_str().ok()).map(str::to_string);
     let is_head = req.method() == Method::HEAD;
+    let method = req.method().clone();
+    let path = req.uri().path().trim_matches('/').to_string();
     let mut resp = next.run(req).await;
+    // axum's bare 405 → Laravel MethodNotAllowedHttpException (before any middleware).
+    if resp.status() == axum::http::StatusCode::METHOD_NOT_ALLOWED && !resp.extensions().get::<Kind>().is_some() {
+        let allow = resp.headers().get(header::ALLOW).and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+        let mut methods: Vec<String> =
+            allow.split(',').map(|m| m.trim().to_ascii_uppercase()).filter(|m| !m.is_empty()).collect();
+        methods.sort_by_key(|m| {
+            ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"].iter().position(|x| x == m).unwrap_or(99)
+        });
+        let detail = format!(
+            "The {method} method is not supported for route {path}. Supported methods: {}.",
+            methods.join(", ")
+        );
+        resp = ApiError::new(405, "MethodNotAllowedHttpException", detail, crate::error::Style::Pretty)
+            .with_header("allow", methods.join(", "))
+            .into_response();
+    }
     if !expects_json {
         if let Some(kind) = resp.extensions().get::<Kind>().cloned() {
             match kind {
@@ -439,18 +370,8 @@ pub async fn negotiate_errors(req: Request, next: Next) -> Response {
 
 /// `expectsJson()` = (ajax && !pjax && acceptsAnyContentType) || wantsJson.
 pub fn expects_json(h: &HeaderMap) -> bool {
-    let accept = h
-        .get(header::ACCEPT)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    let first = accept
-        .split(',')
-        .next()
-        .unwrap_or("")
-        .split(';')
-        .next()
-        .unwrap_or("")
-        .trim();
+    let accept = h.get(header::ACCEPT).and_then(|v| v.to_str().ok()).unwrap_or("");
+    let first = accept.split(',').next().unwrap_or("").split(';').next().unwrap_or("").trim();
     let wants_json = first.contains("/json") || first.contains("+json");
     let ajax = h.get("x-requested-with").and_then(|v| v.to_str().ok()) == Some("XMLHttpRequest");
     let pjax = h.contains_key("x-pjax");
@@ -470,10 +391,7 @@ pub fn redirect(url: &str) -> Response {
         "<!DOCTYPE html>\n<html>\n    <head>\n        <meta charset=\"UTF-8\" />\n        <meta http-equiv=\"refresh\" content=\"0;url='{esc}'\" />\n\n        <title>Redirecting to {esc}</title>\n    </head>\n    <body>\n        Redirecting to <a href=\"{esc}\">{esc}</a>.\n    </body>\n</html>"
     );
     let mut r = (axum::http::StatusCode::FOUND, body).into_response();
-    r.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("text/html; charset=utf-8"),
-    );
+    r.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/html; charset=utf-8"));
     if let Ok(v) = HeaderValue::from_str(url) {
         r.headers_mut().insert(header::LOCATION, v);
     }

@@ -48,8 +48,7 @@ pub enum Kind {
     Other,
 }
 
-pub const GENERIC_500: &str =
-    "An unexpected error was encountered while processing this request, please try again.";
+pub const GENERIC_500: &str = "An unexpected error was encountered while processing this request, please try again.";
 
 impl ApiError {
     pub fn new(status: u16, code: &str, detail: impl Into<String>, style: Style) -> Self {
@@ -70,12 +69,7 @@ impl ApiError {
 
     /// `AuthenticationException('Unauthenticated.')` — compact.
     pub fn unauthenticated() -> Self {
-        let mut e = Self::new(
-            401,
-            "AuthenticationException",
-            "Unauthenticated.",
-            Style::Compact,
-        );
+        let mut e = Self::new(401, "AuthenticationException", "Unauthenticated.", Style::Compact);
         e.kind = Kind::Unauthenticated;
         e
     }
@@ -129,10 +123,7 @@ impl ApiError {
                 code: "ValidationException".into(),
                 status: "422".into(),
                 detail: message,
-                meta: Some(ValidationMeta {
-                    source_field: field,
-                    rule,
-                }),
+                meta: Some(ValidationMeta { source_field: field, rule }),
             })
             .collect();
         ApiError {
@@ -159,9 +150,7 @@ struct Body<'a> {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let body = Body {
-            errors: &self.errors,
-        };
+        let body = Body { errors: &self.errors };
         let mut resp = match self.style {
             Style::Pretty => PhpJson::pretty(self.status, body).into_response(),
             Style::Compact => PhpJson::with_status(self.status, body).into_response(),

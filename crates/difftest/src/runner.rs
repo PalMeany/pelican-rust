@@ -43,9 +43,7 @@ pub fn merged_rows(ctx: &Ctx<'_>, s: &Scenario) -> Result<Rows> {
         }
     }
     for (t, list) in &s.rows {
-        rows.entry(t.clone())
-            .or_default()
-            .extend(list.iter().cloned());
+        rows.entry(t.clone()).or_default().extend(list.iter().cloned());
     }
     Ok(rows)
 }
@@ -58,10 +56,7 @@ pub async fn run(ctx: &Ctx<'_>, s: &Scenario, base_url: &str) -> Result<RunResul
     ctx.wings.reset(s.wings.responses.clone());
     ctx.db.reset().await.context("db reset")?;
     let rows = merged_rows(ctx, s)?;
-    ctx.db
-        .load(&rows, ctx.enc, now())
-        .await
-        .context("loading fixtures")?;
+    ctx.db.load(&rows, ctx.enc, now()).await.context("loading fixtures")?;
     let before = ctx.db.dump().await?;
     let _ = ctx.wings.take_calls();
 
@@ -73,11 +68,7 @@ pub async fn run(ctx: &Ctx<'_>, s: &Scenario, base_url: &str) -> Result<RunResul
         // Both panels trust all proxies (TRUSTED_PROXIES=0.0.0.0/0), so the
         // client IP is taken from X-Forwarded-For unless the step overrides it.
         let mut req = ctx.http.request(method, &url).header("Host", HOST);
-        if !st
-            .headers
-            .keys()
-            .any(|k| k.eq_ignore_ascii_case("x-forwarded-for"))
-        {
+        if !st.headers.keys().any(|k| k.eq_ignore_ascii_case("x-forwarded-for")) {
             req = req.header("X-Forwarded-For", "10.0.0.1");
         }
         if st.accept_json {
@@ -90,26 +81,16 @@ pub async fn run(ctx: &Ctx<'_>, s: &Scenario, base_url: &str) -> Result<RunResul
             req = req.header(k.as_str(), v.as_str());
         }
         if let Some(j) = &st.json {
-            req = req
-                .header("Content-Type", "application/json")
-                .body(serde_json::to_vec(j)?);
+            req = req.header("Content-Type", "application/json").body(serde_json::to_vec(j)?);
         } else if let Some(b) = &st.body {
             req = req.body(b.clone());
         }
-        let resp = req
-            .send()
-            .await
-            .with_context(|| format!("step {} {}", i + 1, url))?;
+        let resp = req.send().await.with_context(|| format!("step {} {}", i + 1, url))?;
         let status = resp.status().as_u16();
         let mut headers: Vec<(String, String)> = resp
             .headers()
             .iter()
-            .map(|(k, v)| {
-                (
-                    k.as_str().to_ascii_lowercase(),
-                    v.to_str().unwrap_or("<binary>").to_string(),
-                )
-            })
+            .map(|(k, v)| (k.as_str().to_ascii_lowercase(), v.to_str().unwrap_or("<binary>").to_string()))
             .collect();
         headers.sort();
         let body = resp.bytes().await?.to_vec();
@@ -121,61 +102,33 @@ pub async fn run(ctx: &Ctx<'_>, s: &Scenario, base_url: &str) -> Result<RunResul
                 String::from_utf8_lossy(&body)
             );
         }
-        steps.push(StepResult {
-            status,
-            headers,
-            body,
-            wings: ctx.wings.take_calls(),
-        });
+        steps.push(StepResult { status, headers, body, wings: ctx.wings.take_calls() });
     }
     let end = now();
     let after = ctx.db.dump().await?;
     let changes = db::diff(&before, &after)
         .into_iter()
-        .filter(|c| {
-            !s.normalize
-                .ignore_tables
-                .iter()
-                .any(|t| t == change_table(c))
-        })
+        .filter(|c| !s.normalize.ignore_tables.iter().any(|t| t == change_table(c)))
         .collect();
-    Ok(RunResult {
-        steps,
-        changes,
-        start,
-        end,
-    })
+    Ok(RunResult { steps, changes, start, end })
 }
 
 fn change_table(c: &Change) -> &str {
     match c {
-        Change::Insert { table, .. }
-        | Change::Delete { table, .. }
-        | Change::Update { table, .. } => table,
+        Change::Insert { table, .. } | Change::Delete { table, .. } | Change::Update { table, .. } => table,
     }
 }
 
 /// Headers compared by default.
 const COMPARED_HEADERS: &[&str] = &["content-type", "location", "content-disposition"];
 
-/// JSON strings stored in text columns are compared semantically (ADR-0004):
-/// re-encode them canonically with PHP json_encode.
+/// JSON text columns are compared byte-for-byte (pelican-rs writes PHP's exact
+/// encoding, ADR-0004). Values the driver already decoded (PostgreSQL `json`,
+/// MySQL `JSON`) are re-encoded in their decoded key order.
 fn canonical_value(v: &serde_json::Value) -> serde_json::Value {
     match v {
-        serde_json::Value::String(s) if s.starts_with('{') || s.starts_with('[') => {
-            match serde_json::from_str::<serde_json::Value>(s) {
-                Ok(j) => serde_json::Value::String(format!(
-                    "json:{}",
-                    laravel_compat::json::to_string(&j).unwrap_or_default()
-                )),
-                Err(_) => v.clone(),
-            }
-        }
         serde_json::Value::Object(_) | serde_json::Value::Array(_) => {
-            serde_json::Value::String(format!(
-                "json:{}",
-                laravel_compat::json::to_string(v).unwrap_or_default()
-            ))
+            serde_json::Value::String(format!("json:{}", laravel_compat::json::to_string(v).unwrap_or_default()))
         }
         _ => v.clone(),
     }
@@ -184,11 +137,7 @@ fn canonical_value(v: &serde_json::Value) -> serde_json::Value {
 fn render_row(table: &str, row: &db::Row, s: &Scenario) -> String {
     let mut m = serde_json::Map::new();
     for (k, v) in row {
-        if s.normalize
-            .ignore_columns
-            .iter()
-            .any(|c| c == &format!("{table}.{k}"))
-        {
+        if s.normalize.ignore_columns.iter().any(|c| c == &format!("{table}.{k}")) {
             continue;
         }
         m.insert(k.clone(), canonical_value(v));
@@ -204,12 +153,7 @@ pub fn report(enc: &Encrypter, s: &Scenario, rows_text: &str, r: &RunResult) -> 
         writeln!(raw, "### step {}: {} {}", i + 1, spec.method, spec.path)?;
         writeln!(raw, "status: {}", st.status)?;
         for (k, v) in &st.headers {
-            if COMPARED_HEADERS.contains(&k.as_str())
-                || s.normalize
-                    .headers
-                    .iter()
-                    .any(|h| h.eq_ignore_ascii_case(k))
-            {
+            if COMPARED_HEADERS.contains(&k.as_str()) || s.normalize.headers.iter().any(|h| h.eq_ignore_ascii_case(k)) {
                 writeln!(raw, "{k}: {v}")?;
             }
         }
@@ -219,16 +163,8 @@ pub fn report(enc: &Encrypter, s: &Scenario, rows_text: &str, r: &RunResult) -> 
         }
         for c in &st.wings {
             writeln!(raw, "--> wings {} {}", c.method, c.path_and_query)?;
-            writeln!(
-                raw,
-                "    authorization: {}",
-                c.authorization.as_deref().unwrap_or("-")
-            )?;
-            writeln!(
-                raw,
-                "    content-type: {}",
-                c.content_type.as_deref().unwrap_or("-")
-            )?;
+            writeln!(raw, "    authorization: {}", c.authorization.as_deref().unwrap_or("-"))?;
+            writeln!(raw, "    content-type: {}", c.content_type.as_deref().unwrap_or("-"))?;
             if !c.body.is_empty() {
                 writeln!(raw, "    {}", String::from_utf8_lossy(&c.body))?;
             }
@@ -243,18 +179,10 @@ pub fn report(enc: &Encrypter, s: &Scenario, rows_text: &str, r: &RunResult) -> 
             Change::Update { table, key, cols } => {
                 let mut parts = Vec::new();
                 for (col, (old, new)) in cols {
-                    if s.normalize
-                        .ignore_columns
-                        .iter()
-                        .any(|c| c == &format!("{table}.{col}"))
-                    {
+                    if s.normalize.ignore_columns.iter().any(|c| c == &format!("{table}.{col}")) {
                         continue;
                     }
-                    parts.push(format!(
-                        "{col}: {} -> {}",
-                        canonical_value(old),
-                        canonical_value(new)
-                    ));
+                    parts.push(format!("{col}: {} -> {}", canonical_value(old), canonical_value(new)));
                 }
                 if parts.is_empty() {
                     continue;
@@ -268,12 +196,7 @@ pub fn report(enc: &Encrypter, s: &Scenario, rows_text: &str, r: &RunResult) -> 
 
     let known = format!(
         "{rows_text}\n{}",
-        serde_yaml::to_string(
-            &s.steps
-                .iter()
-                .map(|st| (&st.path, &st.json))
-                .collect::<Vec<_>>()
-        )?
+        serde_yaml::to_string(&s.steps.iter().map(|st| (&st.path, &st.json)).collect::<Vec<_>>())?
     );
     let mut n = Normalizer::new(enc, &known, r.start, r.end, &s.normalize.random_patterns)?;
     for c in &r.changes {

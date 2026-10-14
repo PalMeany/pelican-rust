@@ -36,9 +36,7 @@ enum Cmd {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
+        .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .init();
     let cli = Cli::parse();
     let env = Env::load(&cli.path)?;
@@ -53,10 +51,7 @@ async fn main() -> Result<()> {
             let (config, _) = Config::from_env(env, &cli.path)?;
             let db = pelican_db::connect(&config.db).await?;
             pelican_db::install::install_fresh(&db, config.db.driver).await?;
-            println!(
-                "schema installed ({} migrations recorded)",
-                pelican_db::install::migration_names().len()
-            );
+            println!("schema installed ({} migrations recorded)", pelican_db::install::migration_names().len());
             Ok(())
         }
         Cmd::DbStatus => {

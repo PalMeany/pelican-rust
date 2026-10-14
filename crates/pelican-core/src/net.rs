@@ -39,10 +39,7 @@ fn network(ip: IpAddr, prefix: u32) -> Option<IpRange> {
             hi[byte] |= 1 << bit;
         }
     }
-    Some(IpRange {
-        first: from_bytes(&lo)?,
-        last: from_bytes(&hi)?,
-    })
+    Some(IpRange { first: from_bytes(&lo)?, last: from_bytes(&hi)? })
 }
 
 fn mask_prefix(mask: IpAddr) -> Option<u32> {
@@ -78,10 +75,7 @@ impl IpRange {
             return Some(IpRange { first, last });
         }
         let ip: IpAddr = s.parse().ok()?;
-        Some(IpRange {
-            first: ip,
-            last: ip,
-        })
+        Some(IpRange { first: ip, last: ip })
     }
 
     /// Byte-wise comparison of packed addresses (v4 never matches v6).
@@ -109,10 +103,9 @@ pub fn client_ip(remote: IpAddr, forwarded_for: Option<&str>, trusted: &[String]
         .filter_map(|p| {
             let p = p.trim();
             // Strip an optional port.
-            p.parse::<IpAddr>().ok().or_else(|| {
-                p.rsplit_once(':')
-                    .and_then(|(h, _)| h.trim_matches(['[', ']']).parse().ok())
-            })
+            p.parse::<IpAddr>()
+                .ok()
+                .or_else(|| p.rsplit_once(':').and_then(|(h, _)| h.trim_matches(['[', ']']).parse().ok()))
         })
         .collect();
     chain.push(remote);
@@ -128,11 +121,7 @@ pub fn client_ip(remote: IpAddr, forwarded_for: Option<&str>, trusted: &[String]
             }
         })
         .collect();
-    untrusted
-        .last()
-        .copied()
-        .or(first_trusted)
-        .unwrap_or(remote)
+    untrusted.last().copied().or(first_trusted).unwrap_or(remote)
 }
 
 #[cfg(test)]
@@ -144,31 +133,11 @@ mod tests {
         let r = IpRange::parse("192.168.1.0/24").unwrap();
         assert!(r.contains(&"192.168.1.77".parse().unwrap()));
         assert!(!r.contains(&"192.168.2.1".parse().unwrap()));
-        assert!(
-            IpRange::parse("10.0.0.0 255.0.0.0")
-                .unwrap()
-                .contains(&"10.9.9.9".parse().unwrap())
-        );
-        assert!(
-            IpRange::parse("10.1.*.*")
-                .unwrap()
-                .contains(&"10.1.200.3".parse().unwrap())
-        );
-        assert!(
-            IpRange::parse("10.0.0.5-10.0.0.9")
-                .unwrap()
-                .contains(&"10.0.0.7".parse().unwrap())
-        );
-        assert!(
-            IpRange::parse("::1")
-                .unwrap()
-                .contains(&"::1".parse().unwrap())
-        );
-        assert!(
-            !IpRange::parse("127.0.0.1")
-                .unwrap()
-                .contains(&"::1".parse().unwrap())
-        );
+        assert!(IpRange::parse("10.0.0.0 255.0.0.0").unwrap().contains(&"10.9.9.9".parse().unwrap()));
+        assert!(IpRange::parse("10.1.*.*").unwrap().contains(&"10.1.200.3".parse().unwrap()));
+        assert!(IpRange::parse("10.0.0.5-10.0.0.9").unwrap().contains(&"10.0.0.7".parse().unwrap()));
+        assert!(IpRange::parse("::1").unwrap().contains(&"::1".parse().unwrap()));
+        assert!(!IpRange::parse("127.0.0.1").unwrap().contains(&"::1".parse().unwrap()));
         assert!(IpRange::parse("nope").is_none());
     }
 
@@ -176,22 +145,10 @@ mod tests {
     fn forwarded() {
         let t = vec!["0.0.0.0/0".to_string()];
         let lo: IpAddr = "127.0.0.1".parse().unwrap();
-        assert_eq!(
-            client_ip(lo, Some("10.0.0.1"), &t),
-            "10.0.0.1".parse::<IpAddr>().unwrap()
-        );
-        assert_eq!(
-            client_ip(lo, Some("10.0.0.1, 172.18.0.5"), &t),
-            "10.0.0.1".parse::<IpAddr>().unwrap()
-        );
-        assert_eq!(
-            client_ip(lo, Some("2001:db8::1"), &t),
-            "2001:db8::1".parse::<IpAddr>().unwrap()
-        );
+        assert_eq!(client_ip(lo, Some("10.0.0.1"), &t), "10.0.0.1".parse::<IpAddr>().unwrap());
+        assert_eq!(client_ip(lo, Some("10.0.0.1, 172.18.0.5"), &t), "10.0.0.1".parse::<IpAddr>().unwrap());
+        assert_eq!(client_ip(lo, Some("2001:db8::1"), &t), "2001:db8::1".parse::<IpAddr>().unwrap());
         assert_eq!(client_ip(lo, Some("10.0.0.1"), &[]), lo);
-        assert_eq!(
-            client_ip(lo, Some("10.0.0.1, 8.8.8.8"), &["*".into()]),
-            "8.8.8.8".parse::<IpAddr>().unwrap()
-        );
+        assert_eq!(client_ip(lo, Some("10.0.0.1, 8.8.8.8"), &["*".into()]), "8.8.8.8".parse::<IpAddr>().unwrap());
     }
 }

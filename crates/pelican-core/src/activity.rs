@@ -1,12 +1,8 @@
 //! Activity log writer (`app/Services/Activity/ActivityLogService.php`).
 
-use indexmap::IndexMap;
 use pelican_db::entities::{activity_log_subjects, activity_logs};
 use pelican_db::{Int, Json, Timestamp};
-use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ConnectionTrait, DatabaseConnection, DbErr,
-    TransactionTrait,
-};
+use sea_orm::{ActiveValue::Set, ConnectionTrait, DatabaseConnection, DbErr, TransactionTrait};
 
 /// Morph-map keys (`AppServiceProvider::boot` enforceMorphMap).
 pub mod morph {
@@ -31,7 +27,8 @@ pub struct Activity {
     pub ip: String,
     pub actor: Option<(String, i64)>,
     pub api_key_id: Option<i64>,
-    pub properties: IndexMap<String, serde_json::Value>,
+    /// JSON of the properties collection (`[]` when empty, list or object).
+    pub properties: serde_json::Value,
     /// In insertion order, de-duplicated.
     pub subjects: Vec<(String, i64)>,
 }
@@ -44,7 +41,7 @@ impl Activity {
             ip: ip.into(),
             actor: None,
             api_key_id: None,
-            properties: IndexMap::new(),
+            properties: serde_json::Value::Array(vec![]),
             subjects: Vec::new(),
         }
     }
@@ -67,7 +64,22 @@ impl Activity {
     }
 
     pub fn property(mut self, key: &str, value: impl Into<serde_json::Value>) -> Self {
-        self.properties.insert(key.to_string(), value.into());
+        if !self.properties.is_object() {
+            self.properties = serde_json::Value::Object(serde_json::Map::new());
+        }
+        if let serde_json::Value::Object(m) = &mut self.properties {
+            m.insert(key.to_string(), value.into());
+        }
+        self
+    }
+
+    /// Replace the properties with an already PHP-normalised value.
+    pub fn properties(mut self, value: serde_json::Value) -> Self {
+        self.properties = match value {
+            serde_json::Value::Null => serde_json::Value::Array(vec![]),
+            serde_json::Value::Object(m) if m.is_empty() => serde_json::Value::Array(vec![]),
+            other => other,
+        };
         self
     }
 
@@ -81,11 +93,7 @@ impl Activity {
 
     /// Write inside an existing transaction (`Activity::transaction`).
     pub async fn save_in<C: ConnectionTrait>(&self, db: &C) -> Result<i64, DbErr> {
-        let props = if self.properties.is_empty() {
-            serde_json::Value::Array(vec![])
-        } else {
-            serde_json::Value::Object(self.properties.clone().into_iter().collect())
-        };
+        let props = self.properties.clone();
         let row = activity_logs::ActiveModel {
             event: Set(self.event.clone()),
             ip: Set(self.ip.clone()),
@@ -96,19 +104,17 @@ impl Activity {
             properties: Set(Json(props)),
             timestamp: Set(Timestamp(crate::time::now())),
             ..Default::default()
-        }
-        .insert(db)
-        .await?;
+        };
+        let id = pelican_db::write::insert_id(db, &row).await?.unwrap_or_default();
         for (kind, sid) in &self.subjects {
-            activity_log_subjects::ActiveModel {
-                activity_log_id: Set(row.id),
+            let subject = activity_log_subjects::ActiveModel {
+                activity_log_id: Set(Int(id)),
                 subject_type: Set(kind.clone()),
                 subject_id: Set(Int(*sid)),
                 ..Default::default()
-            }
-            .insert(db)
-            .await?;
+            };
+            pelican_db::write::insert_id(db, &subject).await?;
         }
-        Ok(row.id.0)
+        Ok(id)
     }
 }
