@@ -7,7 +7,7 @@ use axum::response::{IntoResponse, Response};
 use pelican_core::activity::morph;
 use pelican_core::databases::{HostConnection, HostError, random_password, str_random, unique_name};
 use pelican_core::state::AppState;
-use pelican_db::entities::{database_hosts, databases};
+use pelican_db::entities::{database_hosts, databases, servers};
 use pelican_db::{Int, Timestamp, raw};
 use rand::seq::IndexedRandom;
 use sea_orm::{
@@ -162,63 +162,8 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
     let pool = if node_hosts.is_empty() { &hosts } else { &node_hosts };
     let host = pool.choose(&mut rand::rng()).cloned().ok_or_else(no_host)?;
 
-    // DatabaseManagementService::create()
-    if !st.config.client_databases_enabled {
-        return Err(ApiError::internal("DatabaseClientFeatureNotEnabledException"));
-    }
-    if let Some(limit) = server.database_limit {
-        let count = databases::Entity::find().filter(databases::Column::ServerId.eq(server.id)).all(&txn).await?.len();
-        if count as i64 >= limit.0 {
-            return Err(ApiError::display(
-                "TooManyDatabasesException",
-                400,
-                "Operation aborted: creating a new database would put this server over the defined limit.",
-            ));
-        }
-    }
-    let database = unique_name(&name, server.id.0);
-    let exists = databases::Entity::find()
-        .filter(databases::Column::ServerId.eq(server.id))
-        .filter(databases::Column::Database.eq(database.clone()))
-        .one(&txn)
-        .await?
-        .is_some();
-    if exists {
-        return Err(ApiError::display(
-            "DuplicateDatabaseNameException",
-            400,
-            "A database with that name already exists for this server.",
-        ));
-    }
-    let password = random_password(24);
-    let now = Timestamp(pelican_core::time::now());
-    let am = databases::ActiveModel {
-        database_host_id: Set(host.id),
-        database: Set(database.clone()),
-        remote: Set(remote),
-        server_id: Set(server.id),
-        username: Set(format!("u{}_{}", server.id.0, str_random(10))),
-        password: Set(st.enc.encrypt_string(&password)),
-        created_at: Set(Some(now)),
-        updated_at: Set(Some(now)),
-        ..Default::default()
-    };
-    let mut created = pelican_db::write::insert(&txn, am).await?;
-    let conn = HostConnection::open(&host, &st.enc).await.map_err(host_err)?;
-    let ddl = async {
-        conn.create_database(&created).await?;
-        conn.create_user(&created, &password).await?;
-        conn.assign_user(&created).await?;
-        conn.flush_privileges().await
-    }
-    .await;
-    conn.close().await;
-    ddl.map_err(host_err)?;
-    ctx.activity("server:database.create")
-        .subject(morph::DATABASE, created.id.0)
-        .property("name", database)
-        .save_in(&txn)
-        .await?;
+    let mut created =
+        create_database_in(&st, &ctx, &txn, &server, &host, &unique_name(&name, server.id.0), &remote).await?;
     txn.commit().await?;
 
     // The response uses the in-memory model: `max_connections` was never set (the column default is 0).
@@ -232,26 +177,8 @@ pub async fn rotate_password(State(st): State<AppState>, Extension(ctx): Extensi
     ctx.authorize(&st, "database.update").await?;
     let db = ctx.bound.database.clone().ok_or_else(ApiError::model_not_found)?;
     let host = host_of(&st.db, db.database_host_id).await?;
-    let password = random_password(24);
-
     let txn = st.db.begin().await?;
-    let am = databases::ActiveModel {
-        id: sea_orm::ActiveValue::Unchanged(db.id),
-        password: Set(st.enc.encrypt_string(&password)),
-        updated_at: Set(Some(Timestamp(pelican_core::time::now()))),
-        ..Default::default()
-    };
-    pelican_db::write::update(&txn, &am).await?;
-    let conn = HostConnection::open(&host, &st.enc).await.map_err(host_err)?;
-    let ddl = async {
-        conn.drop_user(&db).await?;
-        conn.create_user(&db, &password).await?;
-        conn.assign_user(&db).await?;
-        conn.flush_privileges().await
-    }
-    .await;
-    conn.close().await;
-    ddl.map_err(host_err)?;
+    rotate_password_in(&st, &txn, &db).await?;
     ctx.activity("server:database.rotate-password")
         .subject(morph::DATABASE, db.id.0)
         .property("name", db.database.clone())
@@ -268,12 +195,132 @@ pub async fn rotate_password(State(st): State<AppState>, Extension(ctx): Extensi
 pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) -> ApiResult<Response> {
     ctx.authorize(&st, "database.delete").await?;
     let db = ctx.bound.database.clone().ok_or_else(ApiError::model_not_found)?;
-    let host = host_of(&st.db, db.database_host_id).await?;
     let txn = st.db.begin().await?;
+    delete_database_in(&st, &ctx, &txn, &db).await?;
+    txn.commit().await?;
+    Ok(no_content())
+}
+
+/// `DatabaseManagementService::create()` on the caller's transaction: feature
+/// flag, limit, duplicate name, insert, DDL on the host, activity.
+pub async fn create_database_in<C: ConnectionTrait>(
+    st: &AppState,
+    ctx: &Ctx,
+    txn: &C,
+    server: &servers::Model,
+    host: &database_hosts::Model,
+    database: &str,
+    remote: &str,
+) -> ApiResult<databases::Model> {
+    if !st.config.client_databases_enabled {
+        return Err(ApiError::internal("DatabaseClientFeatureNotEnabledException"));
+    }
+    if let Some(limit) = server.database_limit {
+        let count = databases::Entity::find().filter(databases::Column::ServerId.eq(server.id)).all(txn).await?.len();
+        if count as i64 >= limit.0 {
+            return Err(ApiError::display(
+                "TooManyDatabasesException",
+                400,
+                "Operation aborted: creating a new database would put this server over the defined limit.",
+            ));
+        }
+    }
+    let exists = databases::Entity::find()
+        .filter(databases::Column::ServerId.eq(server.id))
+        .filter(databases::Column::Database.eq(database.to_string()))
+        .one(txn)
+        .await?
+        .is_some();
+    if exists {
+        return Err(ApiError::display(
+            "DuplicateDatabaseNameException",
+            400,
+            "A database with that name already exists for this server.",
+        ));
+    }
+    let password = random_password(24);
+    let now = Timestamp(pelican_core::time::now());
+    let am = databases::ActiveModel {
+        database_host_id: Set(host.id),
+        database: Set(database.to_string()),
+        remote: Set(remote.to_string()),
+        server_id: Set(server.id),
+        username: Set(format!("u{}_{}", server.id.0, str_random(10))),
+        password: Set(st.enc.encrypt_string(&password)),
+        created_at: Set(Some(now)),
+        updated_at: Set(Some(now)),
+        ..Default::default()
+    };
+    let created = pelican_db::write::insert(txn, am).await?;
+    let conn = HostConnection::open(host, &st.enc).await.map_err(host_err)?;
+    let ddl = async {
+        conn.create_database(&created).await?;
+        conn.create_user(&created, &password).await?;
+        conn.assign_user(&created).await?;
+        conn.flush_privileges().await
+    }
+    .await;
+    conn.close().await;
+    ddl.map_err(host_err)?;
+    ctx.activity("server:database.create")
+        .subject(morph::DATABASE, created.id.0)
+        .property("name", database.to_string())
+        .save_in(txn)
+        .await?;
+    Ok(created)
+}
+
+/// `DatabaseManagementService::create()` in its own transaction.
+pub async fn create_database(
+    st: &AppState,
+    ctx: &Ctx,
+    server: &servers::Model,
+    host: &database_hosts::Model,
+    database: &str,
+    remote: &str,
+    _client: bool,
+) -> ApiResult<databases::Model> {
+    let txn = st.db.begin().await?;
+    let created = create_database_in(st, ctx, &txn, server, host, database, remote).await?;
+    txn.commit().await?;
+    Ok(created)
+}
+
+/// `DatabaseManagementService::rotatePassword()` (no activity).
+pub async fn rotate_password_in<C: ConnectionTrait>(st: &AppState, txn: &C, db: &databases::Model) -> ApiResult<()> {
+    let host = host_of(txn, db.database_host_id).await?;
+    let password = random_password(24);
+    let am = databases::ActiveModel {
+        id: sea_orm::ActiveValue::Unchanged(db.id),
+        password: Set(st.enc.encrypt_string(&password)),
+        updated_at: Set(Some(Timestamp(pelican_core::time::now()))),
+        ..Default::default()
+    };
+    pelican_db::write::update(txn, &am).await?;
     let conn = HostConnection::open(&host, &st.enc).await.map_err(host_err)?;
     let ddl = async {
-        conn.drop_database(&db).await?;
-        conn.drop_user(&db).await?;
+        conn.drop_user(db).await?;
+        conn.create_user(db, &password).await?;
+        conn.assign_user(db).await?;
+        conn.flush_privileges().await
+    }
+    .await;
+    conn.close().await;
+    ddl.map_err(host_err)
+}
+
+/// `DatabaseManagementService::delete()`: DDL, activity, row.
+pub async fn delete_database_in<C: ConnectionTrait>(
+    st: &AppState,
+    ctx: &Ctx,
+    txn: &C,
+    db: &databases::Model,
+) -> ApiResult<()> {
+    let host = host_of(txn, db.database_host_id).await?;
+    let conn = HostConnection::open(&host, &st.enc).await.map_err(host_err)?;
+    let ddl = async {
+        conn.drop_database(db).await?;
+        conn.drop_user(db).await?;
         conn.flush_privileges().await
     }
     .await;
@@ -282,9 +329,8 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
     ctx.activity("server:database.delete")
         .subject(morph::DATABASE, db.id.0)
         .property("name", db.database.clone())
-        .save_in(&txn)
+        .save_in(txn)
         .await?;
-    databases::Entity::delete_by_id(db.id).exec(&txn).await?;
-    txn.commit().await?;
-    Ok(no_content())
+    databases::Entity::delete_by_id(db.id).exec(txn).await?;
+    Ok(())
 }

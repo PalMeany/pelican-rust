@@ -4,14 +4,14 @@ mod account;
 mod activity;
 pub mod backups;
 pub mod data;
-mod databases;
+pub mod databases;
 mod files;
 mod network;
 mod schedules;
 mod servers;
 mod settings;
 mod startup;
-mod subusers;
+pub mod subusers;
 
 use axum::Router;
 use axum::routing::{MethodRouter, delete, get, post, put};

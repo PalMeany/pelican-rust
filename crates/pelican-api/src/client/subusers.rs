@@ -102,7 +102,12 @@ async fn service_permissions(
     Ok(out)
 }
 
-async fn revoke<C: ConnectionTrait>(st: &AppState, db: &C, server: &servers::Model, user_uuid: &str) -> ApiResult<()> {
+pub async fn revoke<C: ConnectionTrait>(
+    st: &AppState,
+    db: &C,
+    server: &servers::Model,
+    user_uuid: &str,
+) -> ApiResult<()> {
     let node =
         nodes::Entity::find_by_id(server.node_id).one(db).await?.ok_or_else(|| ApiError::internal("ErrorException"))?;
     let conn = st.node_conn(&node).map_err(|_| ApiError::internal("DecryptException"))?;
@@ -315,22 +320,35 @@ pub async fn delete_subuser(
     user: &users::Model,
 ) -> ApiResult<()> {
     let txn = st.db.begin().await?;
-    subusers::Entity::delete_by_id(sub.id).exec(&txn).await?;
+    delete_subuser_in(st, ctx, &txn, server, sub, user).await?;
+    txn.commit().await?;
+    Ok(())
+}
+
+/// `SubuserDeletionService::handle()` on the caller's transaction.
+pub async fn delete_subuser_in<C: ConnectionTrait>(
+    st: &AppState,
+    ctx: &Ctx,
+    txn: &C,
+    server: &servers::Model,
+    sub: &subusers::Model,
+    user: &users::Model,
+) -> ApiResult<()> {
+    subusers::Entity::delete_by_id(sub.id).exec(txn).await?;
     FilamentNotification {
         title: trans(&user.language, "notifications.user_removed.title", &[]),
         body: Some(trans(&user.language, "notifications.user_removed.body", &[("server", &server.name)])),
         status: None,
         actions: vec![],
     }
-    .send(&txn, user.id.0)
+    .send(txn, user.id.0)
     .await?;
-    revoke(st, &txn, server, &user.uuid).await?;
+    revoke(st, txn, server, &user.uuid).await?;
     ctx.activity("server:subuser.delete")
         .subject(morph::USER, user.id.0)
         .property("email", user.email.clone())
         .property("revoked", true)
-        .save_in(&txn)
+        .save_in(txn)
         .await?;
-    txn.commit().await?;
     Ok(())
 }

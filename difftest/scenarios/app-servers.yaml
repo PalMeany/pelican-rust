@@ -1,0 +1,48 @@
+name: app/servers-read
+fixtures: [base, infra, client-users, app-extra, databases]
+steps:
+  - { path: /api/application/servers, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 200 }
+  - { path: "/api/application/servers?filter[name]=SURV&sort=-id&per_page=1", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/servers?include=allocations,user,subusers,egg,variables,node,databases", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/servers?search[]=x", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/servers/1?include=variables.parent,subusers.user,egg.variables,databases.host,databases.password,allocations.node", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/servers/999, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/servers/external/none, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/servers/1?include=user,egg", bearer: papp_staffread01StaffReadSecret00000000000000001 }
+  - { path: "/api/application/users/2?include=servers", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/servers/1/databases?include=password,host", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/servers/1/databases/1, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/servers/2/databases/1, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+---
+name: app/servers-details
+fixtures: [base, infra, client-users, app-extra]
+steps:
+  - { method: PATCH, path: /api/application/servers/1/details, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: " Renamed ", user: 3, external_id: ext-1, description: null }, expect_status: 200 }
+  - { method: PATCH, path: /api/application/servers/2/details, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Two, user: 2, external_id: ext-1 } }
+  - { method: PATCH, path: /api/application/servers/2/details, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: "", user: 999 } }
+  - { method: PATCH, path: /api/application/servers/2/details, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Two, user: "2", description: "desc" } }
+  - { path: /api/application/servers/external/ext-1, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+---
+name: app/servers-manage
+fixtures: [base, infra, client-users, app-extra, databases]
+normalize:
+  random_patterns: ['u1_([A-Za-z0-9]{10})\b', '"password":"([A-Za-z0-9!@=.+^]{24})"', 'password\\":\\"([A-Za-z0-9!@=.+^]{24})']
+rows:
+  server_transfers:
+    - { id: 1, server_id: 3, old_node: 2, new_node: 1, successful: null, old_allocation: null, new_allocation: null, archived: false, created_at: "2026-01-05 00:00:00", updated_at: "2026-01-05 00:00:00" }
+steps:
+  - { method: POST, path: /api/application/servers/1/suspend, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 204 }
+  - { method: POST, path: /api/application/servers/1/suspend, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/servers/1/unsuspend, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/servers/3/unsuspend, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/servers/1/transfer/cancel, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/servers/3/transfer/cancel, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 204 }
+  - { method: POST, path: /api/application/servers/3/unsuspend, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/servers/1/reinstall, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 204 }
+  - { method: POST, path: /api/application/servers/1/databases, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { database: app, remote: "%", host: 1 }, expect_status: 201 }
+  - { method: POST, path: /api/application/servers/1/databases, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { database: "a b", remote: "bad!", host: 99 } }
+  - { method: POST, path: /api/application/servers/1/databases/1/reset-password, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 204 }
+  - { method: DELETE, path: /api/application/servers/1/databases/1, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 204 }
+  - { method: DELETE, path: /api/application/servers/2, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: DELETE, path: /api/application/servers/3/force, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: DELETE, path: /api/application/servers/1/whatever, bearer: papp_admin000001AdminAppSecret000000000000000001 }

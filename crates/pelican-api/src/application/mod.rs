@@ -5,10 +5,11 @@ mod database_hosts;
 mod mounts;
 mod nodes;
 mod roles;
+mod servers;
 mod users;
 
 use axum::Router;
-use axum::routing::{MethodRouter, delete, get, patch};
+use axum::routing::{MethodRouter, delete, get, patch, post};
 use pelican_core::state::AppState;
 use serde_json::{Map, Value, json};
 
@@ -136,6 +137,21 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route("/nodes/{node}/configuration", p(get(nodes::config)))
         .route("/nodes/{node}/allocations", p(get(nodes::allocations_index).post(nodes::allocations_store)))
         .route("/nodes/{node}/allocations/{allocation}", p(delete(nodes::allocations_delete)))
+        .route("/servers", p(get(servers::index)))
+        .route("/servers/external/{external_id}", p(get(servers::view_external)))
+        .route("/servers/{server}", p(get(servers::view).delete(servers::delete)))
+        .route("/servers/{server}/{force}", p(delete(servers::delete)))
+        .route("/servers/{server}/details", p(patch(servers::details)))
+        .route("/servers/{server}/suspend", p(post(servers::suspend)))
+        .route("/servers/{server}/unsuspend", p(post(servers::unsuspend)))
+        .route("/servers/{server}/reinstall", p(post(servers::reinstall)))
+        .route("/servers/{server}/transfer/cancel", p(post(servers::transfer_cancel)))
+        .route("/servers/{server}/databases", p(get(servers::databases_index).post(servers::databases_store)))
+        .route(
+            "/servers/{server}/databases/{database}",
+            p(get(servers::databases_view).delete(servers::databases_delete)),
+        )
+        .route("/servers/{server}/databases/{database}/reset-password", p(post(servers::databases_reset_password)))
         .route("/database-hosts", p(get(database_hosts::index).post(database_hosts::store)))
         .route(
             "/database-hosts/{database_host}",

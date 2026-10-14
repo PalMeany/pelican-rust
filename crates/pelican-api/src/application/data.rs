@@ -535,7 +535,8 @@ pub fn egg_item<'a>(st: &'a AppState, ctx: &'a Ctx, e: &'a eggs::Model, inc: &'a
         let startup = decode_assoc(inherit(&e.config_startup, |c| c.config_startup.clone())?.as_deref());
         let logs = decode_assoc(inherit(&e.config_logs, |c| c.config_logs.clone())?.as_deref());
         let stop = inherit(&e.config_stop, |c| c.config_stop.clone())?;
-        let denylist = if e.file_denylist.is_some() || e.config_from.is_none() {
+        // getInheritFileDenylistAttribute: always the parent's list when config_from is set.
+        let denylist = if e.config_from.is_none() {
             e.file_denylist.as_ref().map(|j| j.0.clone())
         } else {
             config_from.as_ref().and_then(|c| c.file_denylist.as_ref().map(|j| j.0.clone()))
