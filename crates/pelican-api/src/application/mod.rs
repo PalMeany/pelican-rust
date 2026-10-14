@@ -4,7 +4,7 @@ pub mod data;
 mod database_hosts;
 mod eggs;
 mod mounts;
-mod nodes;
+pub mod nodes;
 mod roles;
 pub mod servers;
 mod servers_write;

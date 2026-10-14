@@ -2,6 +2,7 @@
 //! resources. Permissions follow the spatie names (`viewList mount`, …).
 
 mod mounts;
+mod server_relations;
 mod servers;
 mod servers_create;
 
@@ -19,7 +20,11 @@ use crate::ctx::Authed;
 use crate::error::{WebError, WebResult};
 
 pub fn routes() -> Router<AppState> {
-    Router::new().merge(mounts::routes()).merge(servers_create::routes()).merge(servers::routes())
+    Router::new()
+        .merge(mounts::routes())
+        .merge(servers_create::routes())
+        .merge(servers::routes())
+        .merge(server_relations::routes())
 }
 
 /// A request to the admin panel (`canAccessPanel(admin)` = `isAdmin()`).

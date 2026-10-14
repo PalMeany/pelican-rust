@@ -223,6 +223,40 @@ pub async fn node_system_information(st: &AppState, node: &nodes::Model) -> Valu
     .await
 }
 
+/// `Node::ipAddresses()`: Wings-reported addresses (cached 1 h) + `0.0.0.0` and `::`.
+pub async fn node_ips(st: &AppState, node: &nodes::Model) -> Vec<String> {
+    let key = format!("nodes.{}.ips", node.id.0);
+    let v = crate::cache::remember(&key, Duration::from_secs(3600), || async {
+        let mut ips: Vec<String> = match wings_get(st, node, "/api/system/ips", 1, 1).await {
+            Some(v) => v
+                .get("ip_addresses")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(|i| i.as_str().map(String::from)).collect())
+                .unwrap_or_default(),
+            None => {
+                if node.fqdn.parse::<std::net::IpAddr>().is_ok() {
+                    vec![node.fqdn.clone()]
+                } else {
+                    Vec::new()
+                }
+            }
+        };
+        ips.retain(|i| i.parse::<std::net::IpAddr>().is_ok());
+        for extra in ["0.0.0.0", "::"] {
+            if !ips.iter().any(|i| i == extra) {
+                ips.push(extra.into());
+            }
+        }
+        json!(ips)
+    })
+    .await;
+    v.as_array().map(|a| a.iter().filter_map(|i| i.as_str().map(String::from)).collect()).unwrap_or_default()
+}
+
+pub fn forget_node_ips(node_id: i64) {
+    crate::cache::forget(&format!("nodes.{node_id}.ips"));
+}
+
 pub fn forget_details(uuid: &str) {
     crate::cache::forget(&format!("servers.{uuid}.details"));
 }

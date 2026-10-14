@@ -16,6 +16,7 @@ pub mod session;
 pub mod table;
 pub mod variables;
 pub mod views;
+pub mod words;
 
 mod admin;
 mod app;

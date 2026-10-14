@@ -158,4 +158,96 @@
 </dialog>
 {% endif %}
 </div>
+
+<div id="relations" class="stack" data-tabs-root>
+  <div><nav class="tabs">
+    <button type="button" data-tab="rel-allocations" class="active">{{ icon('network', 'icon-sm') }}{{ trans('admin/server.allocations') }}<span class="badge">{{ rel.allocations | length }}</span></button>
+    <button type="button" data-tab="rel-databases">{{ icon('database', 'icon-sm') }}{{ trans('admin/server.databases') }}<span class="badge">{{ rel.databases | length }}</span></button>
+  </nav></div>
+
+  <section class="card table-card" data-tab-panel="rel-allocations">
+    {% if not readonly %}
+    <div class="table-toolbar"><div class="spacer"></div>
+      <button type="button" class="btn btn-sm" data-modal-open="alloc-create" title="{{ trans('admin/server.create_allocation') }}">{{ icon('world-plus', 'icon-sm') }}</button>
+      <button type="button" class="btn btn-sm btn-gray" data-modal-open="alloc-associate">{{ trans('admin/server.add_allocation') }}</button></div>
+    {% endif %}
+    {% if rel.allocations %}
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>{{ trans('admin/server.ip_address') }}</th><th>{{ trans('admin/server.port') }}</th><th>{{ trans('admin/server.show_port') }}</th><th>{{ trans('admin/server.alias') }}</th><th>{{ trans('admin/server.notes') }}</th><th>{{ trans('admin/server.primary') }}</th><th>{{ trans('admin/server.locked') }}</th><th class="sr-only">{{ trans('admin/server.actions') }}</th></tr></thead>
+      <tbody>
+      {% for a in rel.allocations %}
+      {% set base = '/admin/servers/' ~ s.id ~ '/allocations/' ~ a.id %}
+      <tr>
+        <td class="mono">{{ a.ip }}</td><td class="mono">{{ a.port }}</td>
+        <td><form method="post" action="{{ base }}/show-port">{{ csrf_field() }}<input type="hidden" name="show_port" value="0">
+          <label class="toggle"><input type="checkbox" name="show_port" value="1"{% if a.show_port %} checked{% endif %}{% if readonly %} disabled{% endif %} onchange="this.form.requestSubmit()"><span class="track"></span></label></form></td>
+        <td><form method="post" action="{{ base }}/alias">{{ csrf_field() }}<input class="input" style="min-width:9rem" name="ip_alias" value="{{ a.alias }}" placeholder="{{ trans('admin/server.no_alias') }}"{% if readonly %} disabled{% endif %} onchange="this.form.requestSubmit()"></form></td>
+        <td><form method="post" action="{{ base }}/notes">{{ csrf_field() }}<input class="input" style="min-width:9rem" name="notes" value="{{ a.notes }}" placeholder="{{ trans('admin/server.no_notes') }}"{% if readonly %} disabled{% endif %} onchange="this.form.requestSubmit()"></form></td>
+        <td><span class="text-{{ 'warning' if a.primary else 'gray' }}" title="{{ trans('admin/server.already_primary' if a.primary else 'admin/server.make_primary') }}">{{ icon('star-filled' if a.primary else 'star', 'icon') }}</span></td>
+        <td title="{{ trans('admin/server.locked_helper') }}">{{ icon('lock' if a.locked else 'lock-open', 'icon-sm') }}</td>
+        <td class="actions">{% if not readonly %}
+          {% if not a.primary %}<form method="post" action="{{ base }}/primary" style="display:inline">{{ csrf_field() }}<button class="icon-btn" title="{{ trans('admin/server.make_primary') }}">{{ icon('star', 'icon-sm') }}</button></form>{% endif %}
+          <form method="post" action="{{ base }}/{{ 'unlock' if a.locked else 'lock' }}" style="display:inline">{{ csrf_field() }}<button class="icon-btn" title="{{ trans('admin/server.unlock' if a.locked else 'admin/server.lock') }}">{{ icon('lock-open' if a.locked else 'lock', 'icon-sm') }}</button></form>
+          <form method="post" action="{{ base }}/dissociate" style="display:inline" data-confirm="{{ trans('filament-actions::modal.confirmation') }}" data-confirm-title="{{ trans('admin/server.remove_allocation') }}">{{ csrf_field() }}<button class="icon-btn danger" title="{{ trans('admin/server.remove_allocation') }}">{{ icon('unlink', 'icon-sm') }}</button></form>
+        {% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody></table></div>
+    {% else %}<div class="empty"><div class="icon-wrap">{{ icon('network', 'icon-lg') }}</div><h3>{{ trans('admin/server.no_allocations') }}</h3></div>{% endif %}
+  </section>
+
+  <section class="card table-card" data-tab-panel="rel-databases" hidden>
+    {% if not readonly %}<div class="table-toolbar"><div class="spacer"></div>
+      <button type="button" class="btn btn-sm{% if not rel.any_db_host %} btn-danger{% endif %}" data-modal-open="db-create"{% if not rel.any_db_host %} disabled{% endif %} title="{{ trans('admin/server.create_database') if rel.any_db_host else trans('admin/server.no_db_hosts') }}">{{ icon('database-plus' if rel.any_db_host else 'database-x', 'icon-sm') }}</button></div>{% endif %}
+    {% if rel.databases %}
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Database</th><th>{{ trans('admin/databasehost.table.username') }}</th><th>{{ trans('admin/databasehost.table.remote') }}</th><th>{{ trans('admin/databasehost.table.max_connections') }}</th><th>{{ trans('admin/databasehost.table.created_at') }}</th><th class="sr-only">{{ trans('admin/server.actions') }}</th></tr></thead>
+      <tbody>{% for d in rel.databases %}
+      <tr><td class="mono">{{ d.database }}</td><td class="mono">{{ d.username }}</td><td>{{ d.remote }}</td><td>{{ d.max_connections }}</td><td>{{ d.created_at | datetime if d.created_at }}</td>
+        <td class="actions">
+          <button type="button" class="btn-link" data-modal-open="db-view-{{ d.id }}">{{ icon('eye', 'icon-sm') }}{{ trans('filament-actions::view.single.label') }}</button>
+          {% if not readonly %}<form method="post" action="/admin/servers/{{ s.id }}/databases/{{ d.id }}/delete" style="display:inline" data-confirm="{{ trans('filament-actions::modal.confirmation') }}" data-confirm-title="{{ trans('filament-actions::delete.single.modal.heading', label=d.database) }}">{{ csrf_field() }}<button class="btn-link danger">{{ icon('trash', 'icon-sm') }}{{ trans('filament-actions::delete.single.label') }}</button></form>{% endif %}
+        </td></tr>
+      <dialog id="db-view-{{ d.id }}" class="modal"><div class="modal-head"><h2>{{ d.database }}</h2></div>
+        <div class="modal-body">
+          <div class="field"><label>{{ trans('admin/databasehost.table.username') }}</label><input class="input copyable" readonly value="{{ d.username }}" data-copy="{{ d.username }}"></div>
+          <div class="field"><label>{{ trans('admin/databasehost.table.password') }}</label>
+            <div class="input-group"><input class="input" id="dbp-{{ d.id }}" type="password" readonly value="{{ d.password }}"><button type="button" class="addon icon-btn" style="width:auto;height:auto" data-reveal="dbp-{{ d.id }}">{{ icon('eye', 'icon-sm') }}</button></div>
+            {% if not readonly %}<form method="post" action="/admin/servers/{{ s.id }}/databases/{{ d.id }}/rotate">{{ csrf_field() }}<button class="btn-link">{{ icon('refresh', 'icon-sm') }}{{ trans('admin/databasehost.rotate') }}</button></form>{% endif %}</div>
+          <div class="field"><label>{{ trans('admin/databasehost.table.remote') }}</label><input class="input" readonly value="{{ d.remote }}"></div>
+          <div class="field"><label>{{ trans('admin/databasehost.table.connection_string') }}</label>
+            <div class="input-group"><input class="input" id="dbj-{{ d.id }}" type="password" readonly value="{{ d.jdbc }}"><button type="button" class="addon icon-btn" style="width:auto;height:auto" data-reveal="dbj-{{ d.id }}">{{ icon('eye', 'icon-sm') }}</button></div></div>
+        </div>
+        <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament::components/modal.actions.close.label') }}</button></div>
+      </dialog>
+      {% endfor %}</tbody></table></div>
+    {% else %}<div class="empty"><div class="icon-wrap">{{ icon('database', 'icon-lg') }}</div><h3>{{ trans('admin/server.no_databases') }}</h3></div>{% endif %}
+  </section>
+</div>
+
+{% if not readonly %}
+<dialog id="alloc-create" class="modal"><form method="post" action="/admin/servers/{{ s.id }}/allocations/create">{{ csrf_field() }}
+  <div class="modal-head"><h2>{{ trans('admin/server.create_allocation') }}</h2></div>
+  <div class="modal-body">
+    {{ f.select('allocation_ip', trans('admin/server.ip_address'), rel.node_ips, '', {}, required=true) }}
+    {{ f.text('allocation_alias', trans('admin/server.alias'), '', {}, hint=trans('admin/server.alias_helper')) }}
+    {{ f.text('allocation_ports', trans('admin/server.ports'), '', {}, required=true, placeholder='27015, 27017-27019') }}
+  </div>
+  <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button><button class="btn">{{ trans('filament-actions::create.single.modal.actions.create.label') }}</button></div>
+</form></dialog>
+<dialog id="alloc-associate" class="modal"><form method="post" action="/admin/servers/{{ s.id }}/allocations/associate">{{ csrf_field() }}
+  <div class="modal-head"><h2>{{ trans('admin/server.add_allocation') }}</h2></div>
+  <div class="modal-body">{{ f.select('allocations', trans('admin/server.allocations'), rel.free_allocations, [], {}, multiple=true) }}</div>
+  <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button><button class="btn">{{ trans('filament-actions::modal.actions.submit.label') }}</button></div>
+</form></dialog>
+<dialog id="db-create" class="modal"><form method="post" action="/admin/servers/{{ s.id }}/databases/create">{{ csrf_field() }}
+  <div class="modal-head"><h2>{{ trans('admin/server.create_database') }}</h2></div>
+  <div class="modal-body">
+    {{ f.select('database_host_id', trans('admin/databasehost.model_label'), rel.db_hosts, '', {}, required=true) }}
+    {{ f.text('database', trans('admin/server.name'), '', {}, prefix=rel.db_prefix, hint=trans('admin/databasehost.table.name_helper')) }}
+    {{ f.text('remote', trans('admin/databasehost.table.remote'), '%', {}, hint=trans('admin/databasehost.table.remote_helper')) }}
+  </div>
+  <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button><button class="btn">{{ trans('filament-actions::create.single.modal.actions.create.label') }}</button></div>
+</form></dialog>
+{% endif %}
 {% endblock %}

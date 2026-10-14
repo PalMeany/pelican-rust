@@ -499,6 +499,7 @@ async fn render_edit(admin: &Admin, c: Ctx<'_>, form: Option<&Form>, errors: &Er
                 can_transfer => accessible_nodes > 1,
                 binary => st.config.use_binary_prefix,
                 errors => Mj::from_serialize(errors),
+                rel => super::server_relations::context(admin, s, c.node).await?,
             },
         )
         .await

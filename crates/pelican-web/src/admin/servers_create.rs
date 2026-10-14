@@ -86,7 +86,10 @@ async fn render(admin: &Admin, form: &Form, errors: &Errors) -> WebResult {
     let get = |k: &str, d: &str| form.opt(k).map(String::from).unwrap_or_else(|| d.to_string());
     // A blank image/startup (fresh egg choice) falls back to the egg's first entry.
     let pick = |k: &str, opts: &[(String, String)]| {
-        form.opt(k).filter(|v| !v.trim().is_empty()).map(String::from).unwrap_or_else(|| opts.first().map(|o| o.0.clone()).unwrap_or_default())
+        form.opt(k)
+            .filter(|v| !v.trim().is_empty())
+            .map(String::from)
+            .unwrap_or_else(|| opts.first().map(|o| o.0.clone()).unwrap_or_default())
     };
     let image = pick("image", &images);
     let startup = pick("startup", &startups);

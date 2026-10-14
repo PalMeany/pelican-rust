@@ -685,6 +685,22 @@ pub async fn allocations_store(
         Some(Value::Object(m)) => m.values().cloned().collect(),
         _ => Vec::new(),
     };
+    assign_allocations(&st, n.id, &ip, &ports, alias, None, false).await?;
+    Ok(no_content())
+}
+
+/// `AssignmentService::handle()`: create allocations for every IP of `ip`
+/// (address or CIDR) × `ports` (single ports or `a-b` ranges). Returns the ids.
+pub async fn assign_allocations(
+    st: &AppState,
+    node_id: Int,
+    ip: &str,
+    ports: &[Value],
+    alias: Option<String>,
+    server_id: Option<Int>,
+    is_locked: bool,
+) -> ApiResult<Vec<i64>> {
+    let ip = ip.to_string();
     if let Some((_, mask)) = ip.split_once('/') {
         let bad = !(!mask.is_empty() && mask.chars().all(|c| c.is_ascii_digit()))
             || mask.parse::<i64>().map(|m| !(25..=32).contains(&m)).unwrap_or(true);
@@ -698,8 +714,9 @@ pub async fn allocations_store(
     let range_re = regex::Regex::new(r"^(\d{4,5})-(\d{4,5})$").map_err(|_| ApiError::internal("Error"))?;
     let txn = st.db.begin().await?;
     let now = Timestamp(pelican_core::time::now());
+    let mut ids = Vec::new();
     for addr in &ips {
-        for p in &ports {
+        for p in ports {
             let ps = pelican_core::php::string(p);
             let digit = !matches!(p, Value::Bool(_)) && !ps.is_empty() && ps.chars().all(|c| c.is_ascii_digit());
             let caps = range_re.captures(&ps);
@@ -731,15 +748,15 @@ pub async fn allocations_store(
                 vec![port]
             };
             for port in block {
-                pelican_db::write::insert_id(
+                let id = pelican_db::write::insert_id(
                     &txn,
                     &allocations::ActiveModel {
-                        node_id: Set(n.id),
+                        node_id: Set(node_id),
                         ip: Set(addr.clone()),
                         port: Set(Int(port)),
                         ip_alias: Set(alias.clone()),
-                        server_id: Set(None),
-                        is_locked: Set(Bool(false)),
+                        server_id: Set(server_id),
+                        is_locked: Set(Bool(is_locked)),
                         show_port: Set(Bool(true)),
                         created_at: Set(Some(now)),
                         updated_at: Set(Some(now)),
@@ -747,11 +764,12 @@ pub async fn allocations_store(
                     },
                 )
                 .await?;
+                ids.extend(id);
             }
         }
     }
     txn.commit().await?;
-    Ok(no_content())
+    Ok(ids)
 }
 
 fn port_range() -> ApiError {
