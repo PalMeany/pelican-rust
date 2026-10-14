@@ -240,12 +240,17 @@ pub async fn details(State(st): State<AppState>, Extension(ctx): Extension<Ctx>,
     Ok(PhpJson::ok(server_item(&st, &ctx, &s, &Includes::parse(&input)).await?).into_response())
 }
 
-/// `SuspensionService::handle()`.
 async fn toggle_suspension(st: &AppState, ctx: &Ctx, suspend: bool) -> ApiResult<Response> {
     ctx.acl("server", WRITE)?;
-    let mut s = bound(ctx)?;
+    let s = bound(ctx)?;
+    set_suspension(st, ctx, s, suspend).await?;
+    Ok(no_content())
+}
+
+/// `SuspensionService::handle()` (also used by the web UI).
+pub async fn set_suspension(st: &AppState, ctx: &Ctx, mut s: servers::Model, suspend: bool) -> ApiResult<()> {
     if suspend == (s.status.as_deref() == Some("suspended")) {
-        return Ok(no_content());
+        return Ok(());
     }
     if pelican_core::server_state::active_transfer(&st.db, s.id.0).await?.is_some() {
         return Err(ApiError::new(
@@ -270,7 +275,7 @@ async fn toggle_suspension(st: &AppState, ctx: &Ctx, suspend: bool) -> ApiResult
     crate::services::server_saved(st, ctx, &st.db, &s).await?;
     let conn = node_conn(st, &st.db, s.node_id).await?;
     st.wings.sync_server(&conn, &s.uuid).await.map_err(wings_err)?;
-    Ok(no_content())
+    Ok(())
 }
 
 /// `POST /servers/{server}/suspend`.
@@ -286,7 +291,14 @@ pub async fn unsuspend(State(st): State<AppState>, Extension(ctx): Extension<Ctx
 /// `POST /servers/{server}/reinstall` (`ReinstallServerService`).
 pub async fn reinstall(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) -> ApiResult<Response> {
     ctx.acl("server", WRITE)?;
-    let mut s = bound(&ctx)?;
+    let s = bound(&ctx)?;
+    reinstall_server(&st, &ctx, s).await?;
+    Ok(no_content())
+}
+
+/// `ReinstallServerService::handle()` (also used by the web UI).
+pub async fn reinstall_server(st: &AppState, ctx: &Ctx, mut s: servers::Model) -> ApiResult<()> {
+    let st = st.clone();
     let conn = node_conn(&st, &st.db, s.node_id).await?;
     let txn = st.db.begin().await?;
     if s.status.as_deref() != Some("installing") {
@@ -302,10 +314,10 @@ pub async fn reinstall(State(st): State<AppState>, Extension(ctx): Extension<Ctx
         .await?;
         s.status = Some("installing".into());
     }
-    crate::services::server_saved(&st, &ctx, &txn, &s).await?;
+    crate::services::server_saved(&st, ctx, &txn, &s).await?;
     st.wings.reinstall_server(&conn, &s.uuid).await.map_err(wings_err)?;
     txn.commit().await?;
-    Ok(no_content())
+    Ok(())
 }
 
 /// `POST /servers/{server}/transfer/cancel`.
@@ -357,8 +369,8 @@ pub(super) async fn force_delete(st: &AppState, ctx: &Ctx, s: &servers::Model) -
     delete_server(st, ctx, s, true).await
 }
 
-/// `ServerDeletionService::handle()`.
-async fn delete_server(st: &AppState, ctx: &Ctx, s: &servers::Model, force: bool) -> ApiResult<()> {
+/// `ServerDeletionService::handle()` (also used by the web UI).
+pub async fn delete_server(st: &AppState, ctx: &Ctx, s: &servers::Model, force: bool) -> ApiResult<()> {
     let conn = node_conn(st, &st.db, s.node_id).await?;
     match st.wings.delete_server(&conn, &s.uuid).await {
         Ok(()) => {}

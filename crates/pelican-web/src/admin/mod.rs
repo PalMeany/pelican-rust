@@ -2,6 +2,7 @@
 //! resources. Permissions follow the spatie names (`viewList mount`, …).
 
 mod mounts;
+mod servers;
 
 use axum::Router;
 use axum::extract::FromRequestParts;
@@ -17,7 +18,7 @@ use crate::ctx::Authed;
 use crate::error::{WebError, WebResult};
 
 pub fn routes() -> Router<AppState> {
-    Router::new().merge(mounts::routes())
+    Router::new().merge(mounts::routes()).merge(servers::routes())
 }
 
 /// A request to the admin panel (`canAccessPanel(admin)` = `isAdmin()`).
@@ -163,6 +164,19 @@ impl Admin {
             }
         }
         groups
+    }
+
+    /// API request context for calling Application API services as this user
+    /// (activity actor/ip, `Server::saved` hooks).
+    pub fn api_ctx(&self, bound: pelican_api::binding::Bound) -> pelican_api::pipeline::Ctx {
+        pelican_api::pipeline::Ctx {
+            ip: self.ip.parse().unwrap_or(std::net::IpAddr::from([127, 0, 0, 1])),
+            user: Some(std::sync::Arc::new(self.user.clone())),
+            bound: std::sync::Arc::new(bound),
+            node: None,
+            root: self.st.config.app_url.clone(),
+            subject: None,
+        }
     }
 
     /// Render an admin page with the sidebar and the "exit admin" menu item.

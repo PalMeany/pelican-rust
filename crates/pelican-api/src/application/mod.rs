@@ -6,7 +6,7 @@ mod eggs;
 mod mounts;
 mod nodes;
 mod roles;
-mod servers;
+pub mod servers;
 mod servers_write;
 mod users;
 pub(crate) mod webhooks;

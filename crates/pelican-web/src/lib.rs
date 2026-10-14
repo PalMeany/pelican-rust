@@ -14,6 +14,7 @@ pub mod models;
 pub mod server_info;
 pub mod session;
 pub mod table;
+pub mod variables;
 pub mod views;
 
 mod admin;

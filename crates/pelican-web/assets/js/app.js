@@ -152,6 +152,8 @@
     const root = b.closest('[data-tabs-root]') || document;
     root.querySelectorAll('[data-tab]').forEach((x) => x.classList.toggle('active', x === b));
     root.querySelectorAll('[data-tab-panel]').forEach((p) => { p.hidden = p.dataset.tabPanel !== b.dataset.tab; });
+    root.querySelectorAll('input[name="_tab"]').forEach((i) => { i.value = b.dataset.tab; });
+    try { const u = new URL(window.location.href); u.searchParams.set('tab', b.dataset.tab); history.replaceState(null, '', u); } catch (_) { /* ignore */ }
   }
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-tab]');
@@ -164,6 +166,39 @@
     const root = panel?.closest('[data-tabs-root]');
     const btn = root?.querySelector('[data-tab="' + panel.dataset.tabPanel + '"]');
     if (btn) showTab(btn);
+  });
+
+  // Conditional fields: [data-show-if="name=v1,v2"] visible when the control `name` has one of the values.
+  function controlValue(form, name) {
+    const els = (form || document).querySelectorAll('[name="' + name + '"]');
+    for (const el of els) {
+      if ((el.type === 'radio' || el.type === 'checkbox')) { if (el.checked) return el.value; continue; }
+      if (el.type !== 'hidden' || els.length === 1) return el.value;
+    }
+    return '';
+  }
+  function applyShowIf(root) {
+    (root || document).querySelectorAll('[data-show-if]').forEach((el) => {
+      const [name, values] = el.dataset.showIf.split('=');
+      const form = el.closest('form');
+      const show = values.split(',').includes(controlValue(form, name));
+      el.hidden = !show;
+      el.querySelectorAll('input,select,textarea').forEach((i) => { if (i.dataset.keepDisabled === undefined) i.disabled = !show && i.type !== 'hidden'; });
+    });
+  }
+  document.addEventListener('change', () => applyShowIf(document));
+  document.addEventListener('DOMContentLoaded', () => applyShowIf(document));
+
+  // Key/value repeaters: [data-kv] with rows [data-kv-row], add button [data-kv-add].
+  document.addEventListener('click', (e) => {
+    const add = e.target.closest('[data-kv-add]');
+    if (!add) return;
+    const list = add.closest('.field')?.querySelector('[data-kv]');
+    const row = list?.querySelector('[data-kv-row]:last-child');
+    if (!row) return;
+    const clone = row.cloneNode(true);
+    clone.querySelectorAll('input').forEach((i) => { i.value = ''; });
+    list.appendChild(clone);
   });
 
   // Reveal / hide password inputs.

@@ -1,7 +1,7 @@
 {# Generic list table (crate::table::Table). Links and the search/filter form are
    boosted: htmx fetches the page and swaps only this table (`hx-select`). #}
 
-{% macro cell(c) %}
+{% macro cell(c, csrf='', back='') %}
 {%- if c.type == 'text' -%}
   <div{% if c.tooltip %} title="{{ c.tooltip }}"{% endif %}{% if c.copy %} class="copyable" data-copy="{{ c.copy }}"{% endif %}>
     <span{% if c.mono %} class="mono"{% endif %}>{{ c.text }}</span>
@@ -17,6 +17,12 @@
   {% if c.value %}<span class="text-success">{{ icon('circle-check', 'icon') }}</span>{% else %}<span class="text-danger">{{ icon('circle-x', 'icon') }}</span>{% endif %}
 {%- elif c.type == 'progress' -%}
   <div><div class="progress {{ c.color }}"><span style="width:{{ [c.percent, 100] | min }}%"></span></div><div class="progress-label">{{ c.label }}</div></div>
+{%- elif c.type == 'select' -%}
+  <form method="post" action="{{ c.url }}" hx-boost="false" style="margin:0"><input type="hidden" name="_token" value="{{ csrf }}"><input type="hidden" name="_back" value="{{ back }}">
+    <select class="select" name="{{ c.field }}" style="width:auto;min-width:10rem" onchange="this.form.requestSubmit()"{% if c.disabled %} disabled{% endif %}>
+      {% if c.placeholder %}<option value="">{{ c.placeholder }}</option>{% endif %}
+      {% for o in c.options %}<option value="{{ o[0] }}"{% if o[0] == c.value %} selected{% endif %}>{{ o[1] }}</option>{% endfor %}
+    </select></form>
 {%- elif c.type == 'image' -%}
   {% if c.src %}<img class="server-icon" src="{{ c.src }}" alt="" loading="lazy">{% else %}<span class="server-icon" style="display:inline-block"></span>{% endif %}
 {%- endif -%}
@@ -77,9 +83,10 @@
         </tr></thead>
         <tbody>
           {% for r in t.rows %}
+          {% if r.heading %}<tr class="group-row"><td colspan="{{ t.columns | length + (1 if t.has_actions else 0) }}"><strong>{{ r.heading[0] }}</strong>{% if r.heading[1] %}<div class="desc">{{ r.heading[1] }}</div>{% endif %}</td></tr>{% endif %}
           <tr{% if r.url %} class="clickable" data-href="{{ r.url }}"{% endif %}>
             {% for c in t.columns %}
-            <td style="text-align:{{ c.align }}"{% if c.wide_only %} class="wide-only"{% endif %}>{{ cell(r.cells[c.key]) if r.cells[c.key] }}</td>
+            <td style="text-align:{{ c.align }}"{% if c.wide_only %} class="wide-only"{% endif %}>{{ cell(r.cells[c.key], csrf, t.current_url) if r.cells[c.key] }}</td>
             {% endfor %}
             {% if t.has_actions %}
             <td class="actions">

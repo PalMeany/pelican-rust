@@ -190,6 +190,16 @@ pub enum Cell {
     Image {
         src: String,
     },
+    /// Inline select that posts `field` to `url` on change (`SelectColumn`).
+    Select {
+        url: String,
+        field: String,
+        options: Vec<(String, String)>,
+        value: String,
+        disabled: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        placeholder: Option<String>,
+    },
     Empty,
 }
 
@@ -273,6 +283,9 @@ pub struct Row {
     pub group: Vec<Action>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub group_icon: Option<String>,
+    /// Group header shown before this row (`Table::groups`): title and description.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heading: Option<(String, Option<String>)>,
 }
 
 impl Row {

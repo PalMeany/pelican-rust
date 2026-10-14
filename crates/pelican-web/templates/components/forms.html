@@ -79,3 +79,40 @@
   {{ error(errors, name) }}
 </div>
 {% endmacro %}
+
+{# A startup variable (crate::variables::VariableField) named var_<id>. #}
+{% macro variable(v, errors={}, disabled=false) %}
+{% set name = 'var_' ~ v.id %}
+{% set off = disabled or not v.editable %}
+<div class="field{% if errors[name] %} has-error{% endif %}">
+  <label for="f-{{ name }}" class="row" style="justify-content:space-between">
+    <span>{{ v.name }}{% if v.required %}<span class="req">*</span>{% endif %}</span>
+    <span class="muted small mono" title="{{ v.rules | join('|') }}">{{ icon('code', 'icon-sm') }}</span>
+  </label>
+  {% if v.kind == 'select' %}
+    <select class="select" id="f-{{ name }}" name="{{ name }}"{% if off %} disabled{% endif %}>
+      {% if not v.required %}<option value=""></option>{% endif %}
+      {% for o in v.options %}<option value="{{ o }}"{% if o == v.value %} selected{% endif %}>{{ o }}</option>{% endfor %}
+    </select>
+  {% elif v.kind == 'toggle' %}
+    <input type="hidden" name="{{ name }}" value="0"{% if off %} disabled{% endif %}>
+    <label class="toggle"><input type="checkbox" id="f-{{ name }}" name="{{ name }}" value="1"{% if v.value in ['1', 'true', 'on', 'yes'] %} checked{% endif %}{% if off %} disabled{% endif %}><span class="track"></span></label>
+  {% else %}
+    <div class="input-group"><span class="addon mono small">{{ '{{' ~ v.env ~ '}}' }}</span>
+      <input class="input" id="f-{{ name }}" name="{{ name }}" type="{{ 'number' if v.kind == 'number' else 'text' }}" value="{{ v.value }}" placeholder="{{ v.default }}"
+        {%- if v.min is not none %} min="{{ v.min }}"{% endif %}{% if v.max is not none %} {{ 'max' if v.kind == 'number' else 'maxlength' }}="{{ v.max }}"{% endif %}{% if off %} disabled{% endif %}></div>
+  {% endif %}
+  {% if v.description %}<p class="hint">{{ v.description }}</p>{% endif %}
+  {{ error(errors, name) }}
+</div>
+{% endmacro %}
+
+{# Unlimited/limited switch + number field (Node/Server resource limits). #}
+{% macro limit(name, label, value, errors={}, suffix='', limit_label='', hint='', with_overallocate=false, over_value=0, over_label='') %}
+{% set unlimited = ((value or 0) | int) == 0 %}
+<div class="grid grid-3" style="gap:1rem;align-items:start">
+  {{ radios('unlimited_' ~ name, label, [['1', trans('admin/server.unlimited')], ['0', trans('admin/server.limited')]], '1' if unlimited else '0', errors, inline=true) }}
+  <div data-show-if="unlimited_{{ name }}=0"{% if unlimited %} hidden{% endif %}>{{ text(name, limit_label, value, errors, type='number', suffix=suffix, hint=hint, attrs='min="0"') }}</div>
+  {% if with_overallocate %}<div data-show-if="unlimited_{{ name }}=0"{% if unlimited %} hidden{% endif %}>{{ text(name ~ '_overallocate', over_label, over_value, errors, type='number', suffix='%', attrs='min="-1" max="100"') }}</div>{% endif %}
+</div>
+{% endmacro %}

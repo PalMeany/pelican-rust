@@ -10,7 +10,7 @@ use serde_json::Value;
 
 static STORE: LazyLock<Mutex<HashMap<String, (Instant, Value)>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
-fn get(key: &str) -> Option<Value> {
+pub fn get(key: &str) -> Option<Value> {
     let mut m = STORE.lock().unwrap_or_else(|p| p.into_inner());
     match m.get(key) {
         Some((exp, v)) if *exp > Instant::now() => Some(v.clone()),

@@ -1,0 +1,161 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% set S = 'admin/server' %}
+{% block content %}
+<div data-tabs-root class="stack">
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if can_delete %}
+      {% if can_force_delete %}
+      <form method="post" action="/admin/servers/{{ s.id }}/action" data-confirm="{{ trans('filament-actions::modal.confirmation') }}" data-confirm-title="{{ trans('filament-actions::force-delete.single.modal.heading', label=s.name) }}" data-confirm-ok="{{ trans('filament-actions::force-delete.single.label') }}">
+        {{ csrf_field() }}<input type="hidden" name="op" value="force-delete"><button class="btn btn-danger" type="submit">{{ trans('filament-actions::force-delete.single.label') }}</button></form>
+      {% else %}
+      <form method="post" action="/admin/servers/{{ s.id }}/action" data-confirm="{{ trans('filament-actions::modal.confirmation') }}" data-confirm-title="{{ trans('filament-actions::delete.single.modal.heading', label=s.name) }}" data-confirm-ok="{{ trans('filament-actions::delete.single.label') }}">
+        {{ csrf_field() }}<input type="hidden" name="op" value="delete"><button class="btn btn-danger" type="submit" title="{{ trans('filament-actions::delete.single.label') }}">{{ icon('trash', 'icon-sm') }}</button></form>
+      {% endif %}
+    {% endif %}
+    <a class="btn btn-gray" href="/server/{{ s.uuid_short }}" title="{{ trans(S ~ '.console') }}">{{ icon('terminal', 'icon-sm') }}</a>
+    {% if not readonly %}<button class="btn" type="submit" form="server-form" title="{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}">{{ icon('device-floppy', 'icon-sm') }}{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}</button>{% endif %}
+    {% if readonly and user %}<a class="btn" href="/admin/servers/{{ s.id }}/edit">{{ trans('filament-actions::edit.single.label') }}</a>{% endif %}
+  </div>
+</div>
+<div><nav class="tabs">
+  {% for t in [['information', 'info-circle', trans(S ~ '.tabs.information')], ['environment_configuration', 'brand-docker', trans(S ~ '.tabs.environment_configuration')], ['egg', 'egg', trans(S ~ '.egg')], ['mounts', 'layers-linked', trans(S ~ '.mounts')]] + ([] if readonly else [['actions', 'settings', trans(S ~ '.actions')]]) %}
+  <button type="button" data-tab="{{ t[0] }}" class="{{ 'active' if tab == t[0] }}">{{ icon(t[1], 'icon-sm') }}{{ t[2] }}</button>
+  {% endfor %}
+</nav></div>
+
+<form id="server-form" method="post" action="/admin/servers/{{ s.id }}/edit">
+{{ csrf_field() }}<input type="hidden" name="_tab" value="{{ tab }}">
+<fieldset style="border:0;padding:0;margin:0" {% if readonly %}disabled{% endif %}>
+
+<section class="card card-body" data-tab-panel="information"{% if tab != 'information' %} hidden{% endif %}>
+  <div class="grid" style="grid-template-columns: 10rem 1fr; gap:1.5rem">
+    <div>{% if s.icon %}<img src="{{ s.icon }}" alt="" style="width:150px;border-radius:var(--radius)">{% endif %}</div>
+    <div class="grid grid-3">
+      <div class="span-2">{{ f.text('name', trans(S ~ '.name'), s.name, errors, required=true, attrs='maxlength="255"') }}</div>
+      <div class="field"><span class="field-label">{{ trans(S ~ '.server_status') }}</span>
+        <span class="badge badge-{{ condition.color }}" style="align-self:flex-start">{{ icon(condition.icon, 'icon-sm') }}{{ condition.label }}</span></div>
+      <div class="span-2">{{ f.select('owner_id', trans(S ~ '.owner'), owners, s.owner_id, errors, required=true) }}</div>
+    </div>
+  </div>
+  <div class="form mt-4">
+    {{ f.textarea('description', trans(S ~ '.description'), s.description, errors) }}
+    <div class="grid grid-2">
+      <div class="field"><label>{{ trans(S ~ '.uuid') }}</label><input class="input copyable" readonly value="{{ s.uuid }}" data-copy="{{ s.uuid }}"></div>
+      <div class="field"><label>{{ trans(S ~ '.short_uuid') }}</label><input class="input copyable" readonly value="{{ s.uuid_short }}" data-copy="{{ s.uuid_short }}"></div>
+      {{ f.text('external_id', trans(S ~ '.external_id'), s.external_id, errors, attrs='maxlength="255"') }}
+      <div class="field"><label>{{ trans(S ~ '.node') }}</label><input class="input" disabled value="{{ s.node }}"></div>
+    </div>
+  </div>
+</section>
+
+<section class="stack" data-tab-panel="environment_configuration"{% if tab != 'environment_configuration' %} hidden{% endif %}>
+  <fieldset class="fieldset"><legend>{{ trans(S ~ '.resource_limits') }}</legend>
+    {{ f.limit('cpu', trans(S ~ '.cpu'), s.cpu, errors, suffix='%', limit_label=trans(S ~ '.cpu_limit'), hint=trans(S ~ '.cpu_helper')) }}
+    {{ f.limit('memory', trans(S ~ '.memory'), s.memory, errors, suffix='MiB' if binary else 'MB', limit_label=trans(S ~ '.memory_limit'), hint=trans(S ~ '.memory_helper')) }}
+    {{ f.limit('disk', trans(S ~ '.disk'), s.disk, errors, suffix='MiB' if binary else 'MB', limit_label=trans(S ~ '.disk_limit')) }}
+  </fieldset>
+  <fieldset class="fieldset"><legend>{{ trans(S ~ '.advanced_limits') }}</legend>
+    <div class="grid grid-2">
+      {{ f.radios('cpu_pinning', trans(S ~ '.cpu_pin'), [['0', trans(S ~ '.disabled')], ['1', trans(S ~ '.enabled')]], '1' if s.threads else '0', errors, inline=true) }}
+      <div data-show-if="cpu_pinning=1"{% if not s.threads %} hidden{% endif %}>{{ f.text('threads', trans(S ~ '.threads'), s.threads, errors, placeholder=trans(S ~ '.pin_help')) }}</div>
+    </div>
+    {% set swap_state = 'limited' if ((s.swap or 0) | int) > 0 else ('disabled' if ((s.swap or 0) | int) == 0 else 'unlimited') %}
+    <div class="grid grid-2">
+      {{ f.radios('swap_support', trans(S ~ '.swap'), [['unlimited', trans(S ~ '.unlimited')], ['limited', trans(S ~ '.limited')], ['disabled', trans(S ~ '.disabled')]], swap_state, errors, inline=true) }}
+      <div data-show-if="swap_support=limited"{% if swap_state != 'limited' %} hidden{% endif %}>{{ f.text('swap', trans(S ~ '.swap'), s.swap if swap_state == 'limited' else 128, errors, type='number', suffix='MiB' if binary else 'MB', attrs='min="-1"') }}</div>
+    </div>
+    {{ f.radios('oom_killer', trans(S ~ '.oom'), [['0', trans(S ~ '.disabled')], ['1', trans(S ~ '.enabled')]], s.oom_killer, errors, inline=true) }}
+  </fieldset>
+  <fieldset class="fieldset"><legend>{{ trans(S ~ '.feature_limits') }}</legend>
+    <div class="grid grid-3">
+      {{ f.text('allocation_limit', trans(S ~ '.allocations'), s.allocation_limit, errors, type='number', required=true, attrs='min="0"') }}
+      {{ f.text('database_limit', trans(S ~ '.databases'), s.database_limit, errors, type='number', required=true, attrs='min="0"') }}
+      {{ f.text('backup_limit', trans(S ~ '.backups'), s.backup_limit, errors, type='number', required=true, attrs='min="0"') }}
+    </div>
+  </fieldset>
+  <fieldset class="fieldset"><legend>{{ trans(S ~ '.docker_settings') }}</legend>
+    <div class="grid grid-2">
+      <div class="field"><label for="f-select_image">{{ trans(S ~ '.image_name') }}</label>
+        <select class="select" id="f-select_image" onchange="if(this.value!=='ghcr.io/custom-image'){document.getElementById('f-image').value=this.value}">
+          {% for i in images %}<option value="{{ i[0] }}"{% if i[0] == s.image %} selected{% endif %}>{{ i[1] }}</option>{% endfor %}
+          <option value="ghcr.io/custom-image"{% if image_custom %} selected{% endif %}>Custom Image</option>
+        </select></div>
+      {{ f.text('image', trans(S ~ '.image'), s.image, errors, required=true, placeholder=trans(S ~ '.image_placeholder')) }}
+    </div>
+    <div class="field"><span class="field-label">{{ trans(S ~ '.container_labels') }}</span>
+      <div class="stack" data-kv>
+        {% for l in labels + [['', '']] %}
+        <div class="grid grid-2" data-kv-row><input class="input" name="label_key[]" value="{{ l[0] }}" placeholder="{{ trans(S ~ '.title') }}"><input class="input" name="label_value[]" value="{{ l[1] }}" placeholder="{{ trans(S ~ '.description') }}"></div>
+        {% endfor %}
+      </div>
+      <div><button type="button" class="btn btn-sm btn-gray" data-kv-add>{{ icon('plus', 'icon-sm') }}</button></div>
+    </div>
+  </fieldset>
+</section>
+
+<section class="card card-body form" data-tab-panel="egg"{% if tab != 'egg' %} hidden{% endif %}>
+  <div class="grid grid-3">
+    <div class="field span-2"><label>{{ trans(S ~ '.name') }}</label>
+      <div class="row"><input class="input" disabled value="{{ s.egg }}" style="flex:1">{% if not readonly %}<button type="button" class="btn btn-gray" data-modal-open="change-egg">{{ trans(S ~ '.change_egg') }}</button>{% endif %}</div></div>
+    {{ f.radios('skip_scripts', trans(S ~ '.install_script'), [['0', trans(S ~ '.yes')], ['1', trans(S ~ '.skip')]], s.skip_scripts, errors, inline=true) }}
+  </div>
+  <div class="field"><label for="f-select_startup">{{ trans(S ~ '.startup_cmd') }}</label>
+    <select class="select" id="f-select_startup" onchange="if(this.value!=='custom'){document.getElementById('f-startup').value=this.value}">
+      {% for c in startups %}<option value="{{ c[0] }}"{% if c[0] == s.startup %} selected{% endif %}>{{ c[1] }}</option>{% endfor %}
+      <option value="custom"{% if startup_custom %} selected{% endif %}>Custom Startup</option>
+    </select></div>
+  {{ f.textarea('startup', '', s.startup, errors, required=true, rows=3, code=true) }}
+  <div class="grid grid-2">{% for v in variables %}{{ f.variable(v, errors) }}{% endfor %}</div>
+</section>
+
+<section class="card card-body" data-tab-panel="mounts"{% if tab != 'mounts' %} hidden{% endif %}>
+  {% for m in mounts %}
+  <label class="check" style="align-items:flex-start"><input type="checkbox" name="mounts[]" value="{{ m.id }}"{% if m.checked %} checked{% endif %}><span><strong>{{ m.name }}</strong><div class="muted small mono">{{ m.desc }}</div></span></label>
+  {% else %}<p class="muted">{{ trans(S ~ '.no_mounts') }}</p>{% endfor %}
+</section>
+</fieldset>
+</form>
+
+{% if not readonly %}
+<section class="card card-body" data-tab-panel="actions"{% if tab != 'actions' %} hidden{% endif %}>
+  <div class="grid grid-2">
+    <div class="stack">
+      <form method="post" action="/admin/servers/{{ s.id }}/action"{% if s.failed_install %} data-confirm="{{ trans(S ~ '.toggle_install_failed_desc') }}" data-confirm-title="{{ trans(S ~ '.toggle_install_failed_header') }}" data-confirm-ok="{{ trans(S ~ '.reinstall') }}"{% endif %}>
+        {{ csrf_field() }}<input type="hidden" name="op" value="toggle-install"><button class="btn btn-block" type="submit"{% if s.suspended %} disabled{% endif %}>{{ trans(S ~ '.toggle_install') }}</button></form>
+      <p class="hint small muted">{{ trans(S ~ '.toggle_install_help') }}</p>
+    </div>
+    <div class="stack">
+      <form method="post" action="/admin/servers/{{ s.id }}/action">{{ csrf_field() }}
+        {% if s.suspended %}<input type="hidden" name="op" value="unsuspend"><button class="btn btn-block btn-success" type="submit">{{ trans(S ~ '.unsuspend') }}</button>
+        {% else %}<input type="hidden" name="op" value="suspend"><button class="btn btn-block btn-warning" type="submit">{{ trans(S ~ '.suspend') }}</button>{% endif %}</form>
+      <p class="hint small muted">{{ trans(S ~ '.notifications.server_unsuspend_help' if s.suspended else S ~ '.notifications.server_suspend_help') }}</p>
+    </div>
+    <div class="stack">
+      <a class="btn btn-block{% if not can_transfer or s.conflict %} btn-gray{% endif %}" href="/admin/servers/{{ s.id }}/transfer"{% if not can_transfer or s.conflict %} aria-disabled="true" style="pointer-events:none;opacity:.6"{% endif %}>{{ trans(S ~ '.transfer') }}</a>
+      <p class="hint small muted">{{ trans(S ~ '.transfer_help') | replace('<br/>', ' ') | replace('<b>', '') | replace('</b>', '') }}</p>
+    </div>
+    <div class="stack">
+      <form method="post" action="/admin/servers/{{ s.id }}/action" data-confirm="{{ trans(S ~ '.reinstall_modal_description') }}" data-confirm-title="{{ trans(S ~ '.reinstall_modal_heading') }}" data-confirm-ok="{{ trans(S ~ '.reinstall') }}">
+        {{ csrf_field() }}<input type="hidden" name="op" value="reinstall"><button class="btn btn-block btn-danger" type="submit"{% if s.suspended %} disabled{% endif %}>{{ trans(S ~ '.reinstall') }}</button></form>
+      <p class="hint small muted">{{ trans(S ~ '.reinstall_help') }}</p>
+    </div>
+  </div>
+</section>
+<dialog id="change-egg" class="modal">
+  <form method="post" action="/admin/servers/{{ s.id }}/action">
+    {{ csrf_field() }}<input type="hidden" name="op" value="change-egg">
+    <div class="modal-head"><h2>{{ trans(S ~ '.change_egg') }}</h2></div>
+    <div class="modal-body">
+      {{ f.select('egg_id', trans(S ~ '.new_egg'), other_eggs, '', {}, required=true) }}
+      {{ f.toggle('keep_old_variables', trans(S ~ '.keep_old_variables'), true) }}
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+      <button type="submit" class="btn">{{ trans('filament-actions::modal.actions.submit.label') }}</button></div>
+  </form>
+</dialog>
+{% endif %}
+</div>
+{% endblock %}
