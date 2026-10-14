@@ -59,6 +59,12 @@
    `table.empty_heading/empty_icon`, `table.poll = Some("15s")`.
 4. `table.finish(&p, total, &opts, &locale)` и шаблон `admin/list.html` (`title`, `table`, `create{label,url}`,
    `header_actions`).
+- Массовые действия (`BulkActionGroup`/`DeleteBulkAction`): `table.bulk.push(Action::post(label, icon, url).color(..).confirm(..))`;
+  строки получают чекбоксы (ключ строки = `Row::new(key)`), выбранные ключи приходят как `ids[]` —
+  `super::bulk_ids(&form)`; недоступные для выбора строки — `row.unselectable = true`
+  (`checkIfRecordIsSelectableUsing`). Удаление — общий `delete_one()` для одиночного и массового действия и
+  уведомление `super::bulk_delete_notify(&admin, total, failed)` (deleted / deleted_partial / deleted_none).
+  Эталон — `admin/mounts.rs`.
 
 ## Формы (`src/forms.rs`, `templates/components/forms.html`)
 - Принимать `form: Form` (urlencoded; CSRF проверяется middleware). `form.get("x")`, `form.opt`, `form.bool` (toggle),

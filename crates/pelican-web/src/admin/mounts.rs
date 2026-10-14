@@ -28,6 +28,7 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/mounts/{id}", get(view))
         .route("/admin/mounts/{id}/edit", get(edit_form).post(update))
         .route("/admin/mounts/{id}/delete", post(delete))
+        .route("/admin/mounts/bulk-delete", post(bulk_delete))
 }
 
 /// `MountResource::getEloquentQuery()`: mounts on accessible nodes or on no node.
@@ -165,6 +166,13 @@ async fn index(admin: Admin) -> WebResult {
             Action::link(admin.t("filament-actions::view.single.label"), "eye", url)
         });
         table.rows.push(row);
+    }
+    if admin.can("delete mount") {
+        table.bulk.push(
+            Action::post(admin.t("filament-actions::delete.multiple.label"), "trash", "/admin/mounts/bulk-delete")
+                .color("danger")
+                .confirm(admin.t("filament-actions::modal.confirmation")),
+        );
     }
     table.empty_icon = "layers-linked".into();
     table.empty_heading = t("no_mounts");
@@ -427,7 +435,35 @@ async fn update(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
 
 async fn delete(admin: Admin, Path(id): Path<i64>) -> WebResult {
     admin.authorize("delete mount")?;
-    let (m, _, _) = find(&admin, id).await?;
+    match delete_one(&admin, id).await? {
+        Ok(()) => {
+            admin.flash_success(admin.t("filament-actions::delete.single.notifications.deleted.title"));
+            Ok(admin.redirect("/admin/mounts"))
+        }
+        Err(msg) => {
+            admin.flash_danger(msg, None);
+            Ok(admin.redirect(&format!("/admin/mounts/{id}/edit")))
+        }
+    }
+}
+
+/// `DeleteBulkAction('exclude_bulk_delete')`.
+async fn bulk_delete(admin: Admin, form: Form) -> WebResult {
+    admin.authorize("delete mount")?;
+    let ids = super::bulk_ids(&form);
+    let mut failed = 0;
+    for id in &ids {
+        if !matches!(delete_one(&admin, *id).await, Ok(Ok(()))) {
+            failed += 1;
+        }
+    }
+    super::bulk_delete_notify(&admin, ids.len(), failed);
+    Ok(admin.redirect(&form.back("/admin/mounts")))
+}
+
+/// Mount deletion (the `deleting` hook refuses mounts still attached to servers).
+async fn delete_one(admin: &Admin, id: i64) -> Result<Result<(), String>, WebError> {
+    let (m, _, _) = find(admin, id).await?;
     let attached = mountables::Entity::find()
         .filter(mountables::Column::MountId.eq(id))
         .filter(mountables::Column::MountableType.eq("server"))
@@ -435,8 +471,7 @@ async fn delete(admin: Admin, Path(id): Path<i64>) -> WebResult {
         .await?
         .is_some();
     if attached {
-        admin.flash_danger(admin.t("exceptions.mount.servers_attached"), None);
-        return Ok(admin.redirect(&format!("/admin/mounts/{id}/edit")));
+        return Ok(Err(admin.t("exceptions.mount.servers_attached")));
     }
     let txn = admin.st.db.begin().await?;
     txn.execute_raw(raw::stmt(
@@ -447,6 +482,5 @@ async fn delete(admin: Admin, Path(id): Path<i64>) -> WebResult {
     .await?;
     mounts::Entity::delete_by_id(m.id).exec(&txn).await?;
     txn.commit().await?;
-    admin.flash_success(admin.t("filament-actions::delete.single.notifications.deleted.title"));
-    Ok(admin.redirect("/admin/mounts"))
+    Ok(Ok(()))
 }

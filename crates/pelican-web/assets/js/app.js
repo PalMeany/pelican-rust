@@ -94,9 +94,11 @@
   // Plain forms / links with data-confirm.
   document.addEventListener('submit', (e) => {
     const f = e.target;
-    if (!(f instanceof HTMLFormElement) || !f.dataset.confirm || f.dataset.confirmed || f.hasAttribute('hx-post')) return;
+    // The submitting button may carry its own confirmation (bulk actions).
+    const src = e.submitter && e.submitter.dataset.confirm ? e.submitter : f;
+    if (!(f instanceof HTMLFormElement) || !src.dataset.confirm || f.dataset.confirmed || f.hasAttribute('hx-post')) return;
     e.preventDefault();
-    confirmDialog(f.dataset.confirm, { title: f.dataset.confirmTitle, ok: f.dataset.confirmOk, color: f.dataset.confirmColor }).then((ok) => {
+    confirmDialog(src.dataset.confirm, { title: src.dataset.confirmTitle, ok: src.dataset.confirmOk, color: src.dataset.confirmColor }).then((ok) => {
       if (ok) { f.dataset.confirmed = '1'; f.requestSubmit(e.submitter || undefined); }
     });
   }, true);
@@ -296,6 +298,30 @@
     } catch (_) { /* reported below */ }
     input.value = '';
     input.setCustomValidity('Upload failed'); input.reportValidity(); input.setCustomValidity('');
+  });
+
+  // Table bulk selection: [data-bulk-all] toggles the rows, the bar shows with a selection.
+  function updateBulk(id) {
+    const items = [...document.querySelectorAll('[data-bulk-item="' + id + '"]')];
+    const n = items.filter((i) => i.checked).length;
+    const bar = document.getElementById(id + '-bulk');
+    if (bar) {
+      bar.hidden = n === 0;
+      const c = bar.querySelector('[data-bulk-count]');
+      if (c) c.textContent = n === 1 ? (c.dataset.one || '1') : (c.dataset.many || ':count').replace(':count', n);
+    }
+    const all = document.querySelector('[data-bulk-all="' + id + '"]');
+    if (all) { all.checked = n > 0 && n === items.length; all.indeterminate = n > 0 && n < items.length; }
+  }
+  document.addEventListener('change', (e) => {
+    const all = e.target.closest?.('[data-bulk-all]');
+    if (all) {
+      document.querySelectorAll('[data-bulk-item="' + all.dataset.bulkAll + '"]').forEach((i) => { i.checked = all.checked; });
+      updateBulk(all.dataset.bulkAll);
+      return;
+    }
+    const item = e.target.closest?.('[data-bulk-item]');
+    if (item) updateBulk(item.dataset.bulkItem);
   });
 
   // Reveal / hide password inputs.

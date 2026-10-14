@@ -72,10 +72,19 @@
       {% endif %}
     </form>
     {% endif %}
+    {% if t.rows and t.bulk %}
+    <form id="{{ t.id }}-bulk" method="post" hx-boost="false" class="bulk-bar" data-bulk-bar hidden>
+      <input type="hidden" name="_token" value="{{ csrf }}"><input type="hidden" name="_back" value="{{ t.current_url }}">
+      <span class="muted small" data-bulk-count data-one="{{ trans_choice('filament-tables::table.selection_indicator.selected_count', 1) }}" data-many="{{ trans_choice('filament-tables::table.selection_indicator.selected_count', 2, count=':count') }}"></span>
+      <div class="spacer"></div>
+      {% for a in t.bulk %}<button type="submit" class="btn btn-sm {{ 'btn-danger' if a.color == 'danger' else 'btn-gray' }}" formaction="{{ a.url }}"{% if a.confirm %} data-confirm="{{ a.confirm }}" data-confirm-title="{{ a.label }}" data-confirm-ok="{{ a.label }}" data-confirm-color="{{ a.color }}"{% endif %}>{{ icon(a.icon, 'icon-sm') }}{{ a.label }}</button>{% endfor %}
+    </form>
+    {% endif %}
     {% if t.rows %}
     <div class="table-wrap">
       <table class="table">
         <thead><tr>
+          {% if t.bulk %}<th class="bulk-cell"><input type="checkbox" class="checkbox" data-bulk-all="{{ t.id }}" aria-label="{{ trans('filament-tables::table.fields.bulk_select_page.label') }}"></th>{% endif %}
           {% for c in t.columns %}
           <th style="text-align:{{ c.align }}"{% if c.wide_only %} class="wide-only"{% endif %}>
             {% if c.sortable %}<a href="{{ c.sort_url }}">{{ c.label }}{% if c.sorted == 'asc' %}{{ icon('chevron-up', 'icon-sm') }}{% elif c.sorted == 'desc' %}{{ icon('chevron-down', 'icon-sm') }}{% else %}{{ icon('selector', 'icon-sm') }}{% endif %}</a>{% else %}{{ c.label }}{% endif %}
@@ -85,8 +94,9 @@
         </tr></thead>
         <tbody>
           {% for r in t.rows %}
-          {% if r.heading %}<tr class="group-row"><td colspan="{{ t.columns | length + (1 if t.has_actions else 0) }}"><strong>{{ r.heading[0] }}</strong>{% if r.heading[1] %}<div class="desc">{{ r.heading[1] }}</div>{% endif %}</td></tr>{% endif %}
+          {% if r.heading %}<tr class="group-row"><td colspan="{{ t.columns | length + (1 if t.has_actions else 0) + (1 if t.bulk else 0) }}"><strong>{{ r.heading[0] }}</strong>{% if r.heading[1] %}<div class="desc">{{ r.heading[1] }}</div>{% endif %}</td></tr>{% endif %}
           <tr{% if r.url %} class="clickable" data-href="{{ r.url }}"{% endif %}>
+            {% if t.bulk %}<td class="bulk-cell">{% if not r.unselectable %}<input type="checkbox" class="checkbox" name="ids[]" value="{{ r.key }}" form="{{ t.id }}-bulk" data-bulk-item="{{ t.id }}">{% endif %}</td>{% endif %}
             {% for c in t.columns %}
             <td style="text-align:{{ c.align }}"{% if c.wide_only %} class="wide-only"{% endif %}>{{ cell(r.cells[c.key], csrf, t.current_url) if r.cells[c.key] }}</td>
             {% endfor %}

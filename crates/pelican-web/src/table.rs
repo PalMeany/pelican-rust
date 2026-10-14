@@ -290,6 +290,8 @@ pub struct Row {
     /// Group header shown before this row (`Table::groups`): title and description.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub heading: Option<(String, Option<String>)>,
+    /// `checkIfRecordIsSelectableUsing` returned false.
+    pub unselectable: bool,
 }
 
 impl Row {
@@ -370,6 +372,9 @@ pub struct Table {
     pub keep: Vec<(String, String)>,
     pub has_actions: bool,
     pub actions_label: String,
+    /// Bulk actions (`toolbarActions` / `BulkActionGroup`): POSTed with the selected
+    /// row keys as `ids[]`.
+    pub bulk: Vec<Action>,
 }
 
 impl Table {
