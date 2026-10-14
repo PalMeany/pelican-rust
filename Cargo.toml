@@ -19,3 +19,15 @@ sea-orm = { version = "2", default-features = false, features = ["macros", "runt
 tracing = "0.1"
 rand = "0.9"
 base64 = "0.22"
+
+# Keep target dirs small (disk is tight): no debug info, no incremental cache.
+[profile.dev]
+debug = 0
+incremental = false
+
+[profile.dev.package."*"]
+debug = 0
+
+[profile.test]
+debug = 0
+incremental = false
