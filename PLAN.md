@@ -104,13 +104,17 @@ Application API → UI → плагины → PHP-sidecar.
   - [x] шаблоны minijinja, встроенные build.rs, оверрайд `PELICAN_VIEWS_PATH`; фильтры bytes/datetime/ago
   - [x] переводы: дамп всего `lang/*` + неймспейсов Filament (32 локали, `scripts/i18n/dump-lang`), trans/trans_choice (порт MessageSelector)
   - [x] ассеты с хешем в URL: CSS (палитра Filament, тёмная тема), app.js (тосты, модалки, подтверждения, тема), htmx 2.0.4, иконки Tabler (используемые оригиналом)
-  - [ ] маршрутизация в бинаре: `/api/*` → API, остальное → web; сборка и первый запуск
-- [ ] Ресурсный фреймворк: таблица (колонки/фильтры/сортировка/пагинация/массовые действия, опрос), формы (поля+валидация), модалки
+  - [x] маршрутизация в бинаре: `/api/*` → API, остальное → web; dev-окружение (SQLite + `difftest --seed`)
+- [x] Ресурсный фреймворк: таблица (колонки/фильтры/сортировка/пагинация, действия строк, опрос через htmx), формы (поля+валидация Laravel), модалки/подтверждения, вкладки; руководство `docs/ui-guide.md`
+- [ ] Массовые действия таблиц (bulk delete)
 - [~] Auth: логин (email/username, троттлинг 5/мин, auth:success/auth:fail), MFA-челлендж (TOTP google2fa окно 8 + защита от повтора, recovery-коды bcrypt, email-код 4 мин) — готово; сброс пароля, passkeys, OAuth, капча — нет
 - [ ] Профиль: аккаунт, 2FA (настройка/отключение, recovery), API-ключи, SSH-ключи, активити, OAuth, кастомизация, passkeys
 - [ ] RequireTwoFactorAuthentication (уровни none/admin/all)
-- [ ] Admin: dashboard, nodes, servers, eggs, users, roles, db hosts, mounts, webhooks, api keys, settings, health, plugins
-- [ ] App: список серверов (вкладки my/other/all, таблица/сетка, ресурсы из Wings, power-действия, фильтры)
+- [~] Admin: каркас (доступ isAdmin, сайдбар с группами и бейджами по правам spatie)
+  - [x] mounts (эталон)
+  - [ ] воркеры: database hosts, webhooks, api keys (ui-a); users, roles, backup hosts (ui-b)
+  - [ ] nodes, servers (создание-мастер, редактирование), eggs (импорт/экспорт, переменные), dashboard, settings, health, logs, plugins
+- [x] App: список серверов (вкладки my/other/all, таблица/сетка по кастомизации, ресурсы из Wings с кешем 15 с, power-действия, фильтры egg/owner, per_page в кастомизации)
 - [ ] Server: консоль (xterm.js + websocket Wings), файлы (CodeMirror), БД, расписания, сабюзеры, бэкапы, сеть, startup, настройки, активити
 - [ ] Инсталлятор
 - [ ] E2E-проверки ключевых сценариев в браузере
