@@ -59,6 +59,13 @@ const DEPENDENT: &[&str] = &[
     "confirmed",
 ];
 
+impl CustomRule {
+    /// A rule whose outcome was computed beforehand (e.g. an async DB lookup).
+    pub fn precomputed(name: &str, failure: Option<String>) -> CustomRule {
+        CustomRule { name: name.to_string(), check: Box::new(move |_, _| failure.clone()) }
+    }
+}
+
 /// A custom rule: returns `Some(message)` on failure. `name` is what Pelican
 /// reports as `meta.rule` (snake case of the rule class).
 pub struct CustomRule {
@@ -86,6 +93,7 @@ pub struct Validator<'a> {
     /// (attribute, rule snake, message) in failure order.
     errors: Vec<(String, String, String)>,
     failed: HashMap<String, Vec<String>>,
+    ran: bool,
 }
 
 fn parse_rule(rule: &str) -> RuleSpec {
@@ -118,6 +126,7 @@ impl<'a> Validator<'a> {
             attribute_names: HashMap::new(),
             errors: Vec::new(),
             failed: HashMap::new(),
+            ran: false,
         }
     }
 
@@ -176,14 +185,17 @@ impl<'a> Validator<'a> {
         self.errors.iter().any(|e| e.0 == attribute)
     }
 
-    /// Run every rule. Returns the 422 error if anything failed.
+    /// Run every rule (once). Returns the 422 error if anything failed.
     pub fn validate(&mut self) -> Result<(), ApiError> {
-        self.run();
+        if !self.ran {
+            self.run();
+        }
         if self.errors.is_empty() { Ok(()) } else { Err(ApiError::validation(self.errors.clone())) }
     }
 
     /// Run rules without converting to an error (for `after` hooks).
     pub fn run(&mut self) {
+        self.ran = true;
         let attrs = std::mem::take(&mut self.attrs);
         for a in &attrs {
             let names: Vec<&str> = a
@@ -221,6 +233,10 @@ impl<'a> Validator<'a> {
             RuleSpec::Named { name, params } => (name.as_str(), params.clone()),
             RuleSpec::Custom(c) => {
                 if !self.is_validatable("custom", attribute, value, names) {
+                    return;
+                }
+                // hasNotFailedPreviousRuleIfPresenceRule for unique/exists rule objects.
+                if (c.name == "unique" || c.name == "exists") && self.errors_for(attribute) {
                     return;
                 }
                 if let Some(msg) = (c.check)(attribute, value.unwrap_or(&Value::Null)) {

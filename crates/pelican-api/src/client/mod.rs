@@ -6,7 +6,7 @@ pub mod data;
 mod servers;
 
 use axum::Router;
-use axum::routing::{MethodRouter, get, post};
+use axum::routing::{MethodRouter, delete, get, post, put};
 use pelican_core::state::AppState;
 
 pub fn routes(state: &AppState) -> Router<AppState> {
@@ -17,6 +17,13 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route("/", p(get(servers::index)))
         .route("/permissions", p(get(servers::permissions)))
         .route("/account", p(get(account::index)))
+        .route("/account/username", p(put(account::update_username)))
+        .route("/account/email", p(put(account::update_email)))
+        .route("/account/password", p(put(account::update_password)))
+        .route("/account/api-keys", p(get(account::api_keys_index).post(account::api_keys_store)))
+        .route("/account/api-keys/{identifier}", p(delete(account::api_keys_delete)))
+        .route("/account/ssh-keys", p(get(account::ssh_keys_index).post(account::ssh_keys_store)))
+        .route("/account/ssh-keys/{fingerprint}", p(delete(account::ssh_keys_delete)))
         .route("/account/activity", p(get(activity::account)))
         .route("/servers/{server}", p(get(servers::view)))
         .route("/servers/{server}/websocket", p(get(servers::websocket)))

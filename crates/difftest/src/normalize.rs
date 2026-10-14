@@ -143,7 +143,12 @@ impl<'a> Normalizer<'a> {
         }
         let pats = self.random_patterns.clone();
         for re in &pats {
-            for m in re.find_iter(text).map(|m| m.as_str().to_string()).collect::<Vec<_>>() {
+            // With a capture group only group 1 is random (e.g. `"secret_token":"(\w{32})"`).
+            let found: Vec<String> = re
+                .captures_iter(text)
+                .filter_map(|c| c.get(1).or_else(|| c.get(0)).map(|m| m.as_str().to_string()))
+                .collect();
+            for m in found {
                 self.register_random(&m);
             }
         }

@@ -12,5 +12,6 @@ pub mod php;
 pub mod rate_limit;
 pub mod server_config;
 pub mod server_state;
+pub mod sshkey;
 pub mod state;
 pub mod time;

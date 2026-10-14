@@ -50,32 +50,91 @@ fn mask_prefix(mask: IpAddr) -> Option<u32> {
     (expect.as_deref() == Some(b.as_slice())).then_some(ones)
 }
 
+/// Failure of `Range::parse` (IPTools throws).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IpParseError {
+    /// `IpException("Invalid IP address format")` — callers treat this as "not valid".
+    InvalidFormat,
+    /// Any other IPTools exception (bad hex/binary, prefix, netmask…) — rethrown as 500.
+    Other(&'static str),
+}
+
+/// `IP::parse()`: `0x` hex, `0b` binary, numeric → `long2ip`, else FILTER_VALIDATE_IP.
+fn ip_parse(s: &str) -> Result<IpAddr, IpParseError> {
+    if let Some(hex) = s.strip_prefix("0x") {
+        let ok = (hex.len() == 8 || hex.len() == 32) && hex.chars().all(|c| c.is_ascii_hexdigit());
+        if !ok {
+            return Err(IpParseError::Other("Invalid hexadecimal IP address format"));
+        }
+        let bytes: Vec<u8> =
+            (0..hex.len()).step_by(2).filter_map(|i| u8::from_str_radix(&hex[i..i + 2], 16).ok()).collect();
+        return from_bytes(&bytes).ok_or(IpParseError::Other("Invalid hexadecimal IP address format"));
+    }
+    if let Some(bin) = s.strip_prefix("0b") {
+        let ok = (bin.len() == 32 || bin.len() == 128) && bin.chars().all(|c| c == '0' || c == '1');
+        if !ok {
+            return Err(IpParseError::Other("Invalid binary IP address format"));
+        }
+        let bytes: Vec<u8> =
+            (0..bin.len()).step_by(8).filter_map(|i| u8::from_str_radix(&bin[i..i + 8], 2).ok()).collect();
+        return from_bytes(&bytes).ok_or(IpParseError::Other("Invalid binary IP address format"));
+    }
+    if crate::php::is_numeric_str(s) {
+        // long2ip((int) $s): the low 32 bits.
+        let n = s.trim().parse::<f64>().unwrap_or(0.0) as i64;
+        let v = (n as u64 & 0xffff_ffff) as u32;
+        return Ok(IpAddr::from(v.to_be_bytes()));
+    }
+    s.parse::<IpAddr>().map_err(|_| IpParseError::InvalidFormat)
+}
+
+fn prefix_of(mask: &IpAddr) -> Result<u32, IpParseError> {
+    mask_prefix(*mask).ok_or(IpParseError::Other("Invalid Netmask address format"))
+}
+
 impl IpRange {
     /// `IPTools\Range::parse`: CIDR / "ip mask", wildcard (`*`), `a-b`, single IP.
+    /// Note PHP `strpos(...)` truthiness: a `/`, ` ` or `-` at position 0 does not count.
+    pub fn try_parse(data: &str) -> Result<IpRange, IpParseError> {
+        let pos = |c: char| data.find(c).filter(|p| *p > 0);
+        if pos('/').is_some() || pos(' ').is_some() {
+            // Network::parse
+            if let Some((ip, prefix)) =
+                data.rsplit_once('/').filter(|(_, p)| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+            {
+                let ip = ip_parse(ip)?;
+                let max = if ip.is_ipv4() { 32 } else { 128 };
+                let prefix: u32 = prefix.parse().map_err(|_| IpParseError::Other("Invalid prefix length"))?;
+                if prefix > max {
+                    return Err(IpParseError::Other("Invalid prefix length"));
+                }
+                return network(ip, prefix).ok_or(IpParseError::Other("Invalid prefix length"));
+            }
+            if let Some((ip, mask)) = data.split_once(' ').filter(|_| pos(' ').is_some()) {
+                let ip = ip_parse(ip)?;
+                let mask = ip_parse(mask)?;
+                return network(ip, prefix_of(&mask)?).ok_or(IpParseError::Other("Invalid Netmask address format"));
+            }
+            let ip = ip_parse(data)?;
+            return Ok(IpRange { first: ip, last: ip });
+        }
+        if data.contains('*') {
+            let first = ip_parse(&data.replace('*', "0"))?;
+            let last = ip_parse(&data.replace('*', "255"))?;
+            return Ok(IpRange { first, last });
+        }
+        if let Some(p) = pos('-') {
+            let first = ip_parse(&data[..p])?;
+            let last = ip_parse(&data[p + 1..])?;
+            return Ok(IpRange { first, last });
+        }
+        let ip = ip_parse(data)?;
+        Ok(IpRange { first: ip, last: ip })
+    }
+
+    /// Convenience: `None` for any parse failure.
     pub fn parse(s: &str) -> Option<IpRange> {
-        let s = s.trim();
-        if s.contains('/') || s.contains(' ') {
-            let (ip, rest) = s.split_once('/').or_else(|| s.split_once(' '))?;
-            let ip: IpAddr = ip.trim().parse().ok()?;
-            let rest = rest.trim();
-            let prefix = match rest.parse::<u32>() {
-                Ok(p) => p,
-                Err(_) => mask_prefix(rest.parse().ok()?)?,
-            };
-            return network(ip, prefix);
-        }
-        if s.contains('*') {
-            let first: IpAddr = s.replace('*', "0").parse().ok()?;
-            let last: IpAddr = s.replace('*', "255").parse().ok()?;
-            return Some(IpRange { first, last });
-        }
-        if let Some(pos) = s.find('-').filter(|p| *p > 0) {
-            let first: IpAddr = s[..pos].trim().parse().ok()?;
-            let last: IpAddr = s[pos + 1..].trim().parse().ok()?;
-            return Some(IpRange { first, last });
-        }
-        let ip: IpAddr = s.parse().ok()?;
-        Some(IpRange { first: ip, last: ip })
+        Self::try_parse(s.trim()).ok()
     }
 
     /// Byte-wise comparison of packed addresses (v4 never matches v6).
@@ -139,6 +198,9 @@ mod tests {
         assert!(IpRange::parse("::1").unwrap().contains(&"::1".parse().unwrap()));
         assert!(!IpRange::parse("127.0.0.1").unwrap().contains(&"::1".parse().unwrap()));
         assert!(IpRange::parse("nope").is_none());
+        assert_eq!(IpRange::try_parse("nope"), Err(IpParseError::InvalidFormat));
+        assert!(IpRange::parse("5").unwrap().contains(&"0.0.0.5".parse().unwrap()));
+        assert!(matches!(IpRange::try_parse("0xzz"), Err(IpParseError::Other(_))));
     }
 
     #[test]

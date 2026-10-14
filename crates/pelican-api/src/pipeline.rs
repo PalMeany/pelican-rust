@@ -206,13 +206,14 @@ async fn pipeline(
     if !allowed.is_empty() {
         let mut ok = false;
         for entry in &allowed {
-            match IpRange::parse(entry) {
-                Some(r) if r.contains(&ip) => {
+            match IpRange::try_parse(entry) {
+                Ok(r) if r.contains(&ip) => {
                     ok = true;
                     break;
                 }
-                Some(_) => {}
-                None => return Err(ApiError::internal("InvalidArgumentException")),
+                Ok(_) => {}
+                Err(pelican_core::net::IpParseError::InvalidFormat) => return Err(ApiError::internal("IpException")),
+                Err(pelican_core::net::IpParseError::Other(_)) => return Err(ApiError::internal("NetworkException")),
             }
         }
         if !ok {
@@ -443,6 +444,11 @@ pub async fn negotiate_errors(req: Request, next: Next) -> Response {
     let is_head = req.method() == Method::HEAD;
     let method = req.method().clone();
     let path = req.uri().path().trim_matches('/').to_string();
+    // Symfony matches routes against the rawurldecoded path: an encoded `/`
+    // adds a segment, so no route parameter can contain it.
+    if path.to_ascii_lowercase().contains("%2f") {
+        return ApiError::not_found(format!("The route {path} could not be found.")).into_response();
+    }
     let mut resp = next.run(req).await;
     // axum's bare 405 → Laravel MethodNotAllowedHttpException (before any middleware).
     if resp.status() == axum::http::StatusCode::METHOD_NOT_ALLOWED && !resp.extensions().get::<Kind>().is_some() {

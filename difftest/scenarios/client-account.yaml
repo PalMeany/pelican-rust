@@ -1,0 +1,47 @@
+name: client/account-username-email
+fixtures: [base, infra, client-users]
+steps:
+  - { method: PUT, path: /api/client/account/username, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { username: "  New_Name ", password: password }, expect_status: 204 }
+  - { method: PUT, path: /api/client/account/username, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { username: admin, password: password } }
+  - { method: PUT, path: /api/client/account/username, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { username: "x", password: wrong } }
+  - { method: PUT, path: /api/client/account/username, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { username: "" , password: password } }
+  - { method: PUT, path: /api/client/account/username, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { username: new_name, password: password } }
+  - { method: PUT, path: /api/client/account/email, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { email: "Changed@Example.COM", password: password } }
+  - { method: PUT, path: /api/client/account/email, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { email: "admin@example.com", password: password } }
+  - { method: PUT, path: /api/client/account/email, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { email: "not-an-email", password: password } }
+  - { method: PUT, path: /api/client/account/email, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { email: "changed@example.com", password: password } }
+---
+name: client/account-password
+fixtures: [base, infra, client-users]
+normalize:
+  ignore_columns: [users.password]
+steps:
+  - { method: PUT, path: /api/client/account/password, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { current_password: nope, password: newpassword1, password_confirmation: newpassword1 } }
+  - { method: PUT, path: /api/client/account/password, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { current_password: password, password: short, password_confirmation: other } }
+  - { method: PUT, path: /api/client/account/password, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { current_password: password, password: newpassword1, password_confirmation: newpassword1 }, expect_status: 204 }
+---
+name: client/account-api-keys
+fixtures: [base, infra, client-users]
+normalize:
+  random_columns: [api_keys.identifier]
+  random_patterns: ['"secret_token":"([A-Za-z0-9]{32})"']
+steps:
+  - { path: /api/client/account/api-keys, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { method: POST, path: /api/client/account/api-keys, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { description: "ci/cd key", allowed_ips: ["10.0.0.0/8", "1.2.3.4"] }, expect_status: 200 }
+  - { method: POST, path: /api/client/account/api-keys, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { description: "", allowed_ips: ["nope", 5] } }
+  - { method: POST, path: /api/client/account/api-keys, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { description: "no ips" } }
+  - { method: DELETE, path: /api/client/account/api-keys/pacc_iplocked001, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: DELETE, path: /api/client/account/api-keys/pacc_admin000001, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/account/api-keys, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+---
+name: client/account-ssh-keys
+fixtures: [base, infra, client-users]
+steps:
+  - { path: /api/client/account/ssh-keys, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: POST, path: /api/client/account/ssh-keys, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: laptop, public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINY/Gpl4X9rAo73ku0nIm3OdxyGDAme+wYNeSj2WDR58 difftest" }, expect_status: 200 }
+  - { method: POST, path: /api/client/account/ssh-keys, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: dup, public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINY/Gpl4X9rAo73ku0nIm3OdxyGDAme+wYNeSj2WDR58 other-comment" } }
+  - { method: POST, path: /api/client/account/ssh-keys, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: bad, public_key: "not a key" } }
+  - { method: POST, path: /api/client/account/ssh-keys, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICUwlEWK1YWl+BPo2Dg9eqm5w0FWp2JzC/woTNFux5YY other" } }
+  - { path: /api/client/account/ssh-keys, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: DELETE, path: /api/client/account/ssh-keys/QfiNrXNQO28JKVd5iXnW%2FmBHGYgay9sfXT6QJSAgisg, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: DELETE, path: /api/client/account/ssh-keys/nope, bearer: pacc_user0000001UserClientSecret0000000000000001 }
