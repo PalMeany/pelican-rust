@@ -1,0 +1,77 @@
+name: app/eggs-read
+fixtures:
+- base
+- infra
+- client-users
+- app-extra
+steps:
+- path: /api/application/eggs
+  bearer: papp_admin000001AdminAppSecret000000000000000001
+  expect_status: 200
+- path: /api/application/eggs?include=servers,variables
+  bearer: papp_admin000001AdminAppSecret000000000000000001
+- path: /api/application/eggs/2?include=variables
+  bearer: papp_admin000001AdminAppSecret000000000000000001
+- path: /api/application/eggs/1/export?format=json
+  bearer: papp_admin000001AdminAppSecret000000000000000001
+  expect_status: 200
+- path: /api/application/eggs/2/export?format=json
+  bearer: papp_admin000001AdminAppSecret000000000000000001
+- path: /api/application/eggs/1/export?format=xml
+  bearer: papp_admin000001AdminAppSecret000000000000000001
+- path: /api/application/eggs/99
+  bearer: papp_admin000001AdminAppSecret000000000000000001
+- path: /api/application/eggs
+  bearer: papp_staffread01StaffReadSecret00000000000000001
+---
+name: app/eggs-import
+fixtures:
+- base
+- infra
+- client-users
+- app-extra
+normalize:
+  random_columns:
+  - eggs.uuid
+steps:
+- method: POST
+  path: /api/application/eggs/import
+  bearer: papp_admin000001AdminAppSecret000000000000000001
+  body: "{\n    \"_comment\": \"DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PANEL\",\n    \"meta\": {\n        \"version\": \"PTDL_v2\",\n        \"update_url\": \"https://raw.githubusercontent.com/pelican/panel/refs/heads/main/tests/Unit/Console/Command/Egg/egg-ptdlv2.json\"\n    },\n    \"exported_at\": \"2026-06-01T01:02:03+00:00\",\n    \"name\": \"Egg Example\",\n    \"author\": \"example@example.com\",\n    \"uuid\": \"21f1c702-953a-45ca-ae58-c205e8a4ea7e\",\n    \"description\": \"Egg for test purposes\",\n    \"tags\": [\n        \"test\"\n    ],\n    \"features\": [\n        \"eula\",\n        \"java_version\",\n        \"pid_limit\"\n    ],\n    \"docker_images\": {\n        \"ghcr.io\\/pelican-eggs\\/yolks:java_8\": \"ghcr.io\\/pelican-eggs\\/yolks:java_8\",\n        \"ghcr.io\\/pelican-eggs\\/yolks:java_11\": \"ghcr.io\\/pelican-eggs\\/yolks:java_11\",\n        \"ghcr.io\\/pelican-eggs\\/yolks:java_16\": \"ghcr.io\\/pelican-eggs\\/yolks:java_16\",\n        \"ghcr.io\\/pelican-eggs\\\
+    /yolks:java_17\": \"ghcr.io\\/pelican-eggs\\/yolks:java_17\"\n    },\n    \"file_denylist\": [],\n    \"startup\": \"java -Xms128M -Xmx{{SERVER_MEMORY}}M -jar minecraft.jar\",\n    \"config\": {\n        \"files\": \"{\\r\\n    \\\"server.properties\\\": {\\r\\n        \\\"parser\\\": \\\"properties\\\",\\r\\n        \\\"find\\\": {\\r\\n            \\\"server-ip\\\": \\\"0.0.0.0\\\",\\r\\n            \\\"server-port\\\": \\\"{{server.build.default.port}}\\\"\\r\\n        }\\r\\n    }\\r\\n}\",\n        \"startup\": \"{\\r\\n    \\\"done\\\": \\\")! For help, type \\\"\\r\\n}\",\n        \"logs\": \"{}\",\n        \"stop\": \"stop\"\n    },\n    \"scripts\": {\n        \"installation\": {\n            \"script\": \"#!\\/bin\\/ash\\r\\necho test some escaped backslashes (\\/), then proper backslashes (/)\",\n            \"container\": \"ghcr.io\\/pelican-eggs\\/installers:alpine\",\n            \"entrypoint\": \"ash\"\n        }\n    },\n    \"variables\": [\n        {\n            \"\
+    name\": \"Modpack Version\",\n            \"description\": \"\",\n            \"env_variable\": \"MODPACK_VERSION\",\n            \"default_value\": \"1.0.0\",\n            \"user_viewable\": true,\n            \"user_editable\": true,\n            \"rules\": \"required|string|max:20\",\n            \"sort\": null,\n            \"field_type\": \"text\"\n        }\n    ]\n}"
+  headers:
+    Content-Type: application/json
+  expect_status: 201
+- method: POST
+  path: /api/application/eggs/import
+  bearer: papp_admin000001AdminAppSecret000000000000000001
+  body: "_comment: 'DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PANEL'\nmeta:\n  version: PLCN_v3\n  update_url: 'https://raw.githubusercontent.com/pelican/panel/refs/heads/main/tests/Unit/Console/Command/Egg/egg-ptdlv2.yaml'\nexported_at: '2026-06-01T01:02:03+00:00'\nname: 'Egg Example'\nauthor: example@example.com\nuuid: 21f1c702-953a-45ca-ae58-c205e8a4ea7e\ndescription: 'Egg for test purposes'\ntags:\n  - test\nfeatures:\n  - eula\n  - java_version\n  - pid_limit\ndocker_images:\n  'ghcr.io/pelican-eggs/yolks:java_8': 'ghcr.io/pelican-eggs/yolks:java_8'\n  'ghcr.io/pelican-eggs/yolks:java_11': 'ghcr.io/pelican-eggs/yolks:java_11'\n  'ghcr.io/pelican-eggs/yolks:java_16': 'ghcr.io/pelican-eggs/yolks:java_16'\n  'ghcr.io/pelican-eggs/yolks:java_17': 'ghcr.io/pelican-eggs/yolks:java_17'\nfile_denylist: {  }\nconfig:\n  files:\n    server.properties:\n      parser: properties\n      find:\n        server-ip: 0.0.0.0\n        server-port: '{{server.allocations.default.port}}'\n  startup:\n\
+    \    done: ')! For help, type '\n  logs: {  }\n  stop: stop\nscripts:\n  installation:\n    script: |-\n      #!/bin/ash\n      echo test some escaped backslashes (/), then proper backslashes (/)\n    container: 'ghcr.io/pelican-eggs/installers:alpine'\n    entrypoint: ash\nvariables:\n  -\n    name: 'Modpack Version'\n    description: ''\n    env_variable: MODPACK_VERSION\n    default_value: 1.0.0\n    user_viewable: true\n    user_editable: true\n    rules:\n      - required\n      - string\n      - 'max:20'\n    sort: null\nstartup_commands:\n  Default: 'java -Xms128M -Xmx{{SERVER_MEMORY}}M -jar minecraft.jar'\n"
+  expect_status: 201
+- method: POST
+  path: /api/application/eggs/import
+  bearer: papp_admin000001AdminAppSecret000000000000000001
+  body: '{"meta": {"version": "PLCN_v3"}, "name": "Reserved", "author": "a@b.c", "uuid": "7e1d0000-0000-4000-8000-00000000000a", "startup_commands": {"Default": "./run --port {{SERVER_PORT}} --mem {{SERVER_MEMORY}} PORTX"}, "config": {"files": {"a.cfg": {"parser": "file", "find": {"x": "{{server.build.env.SERVER_PORT}} {{server.build.memory}}"}}}, "startup": {"done": "ok"}, "logs": {}, "stop": "^C"}, "scripts": {"installation": {"script": "#!/bin/sh\r\necho hi", "container": "alpine", "entrypoint": "sh"}}, "file_denylist": ["", "x.log", "0", "y"], "tags": ["t"], "features": null, "docker_images": {"A": "img:a"}, "variables": [{"name": "Port", "description": "p", "env_variable": "server_port", "default_value": true, "user_viewable": true, "user_editable": false, "rules": "required|integer", "sort": 1}, {"name": "Mem", "description": "m", "env_variable": "memo", "default_value": 25565, "user_viewable": false, "user_editable": true, "rules": ["nullable"], "sort": null}]}'
+- method: POST
+  path: /api/application/eggs/import
+  bearer: papp_admin000001AdminAppSecret000000000000000001
+  body: '{"_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PANEL", "meta": {"version": "PTDL_v2", "update_url": "https://raw.githubusercontent.com/pelican/panel/refs/heads/main/tests/Unit/Console/Command/Egg/egg-ptdlv2.json"}, "exported_at": "2026-06-01T01:02:03+00:00", "name": "Egg Example v2", "author": "example@example.com", "uuid": "21f1c702-953a-45ca-ae58-c205e8a4ea7e", "description": "Egg for test purposes", "tags": ["test"], "features": ["eula", "java_version", "pid_limit"], "docker_images": {"ghcr.io/pelican-eggs/yolks:java_8": "ghcr.io/pelican-eggs/yolks:java_8", "ghcr.io/pelican-eggs/yolks:java_11": "ghcr.io/pelican-eggs/yolks:java_11", "ghcr.io/pelican-eggs/yolks:java_16": "ghcr.io/pelican-eggs/yolks:java_16", "ghcr.io/pelican-eggs/yolks:java_17": "ghcr.io/pelican-eggs/yolks:java_17"}, "file_denylist": [], "startup": "java -Xms128M -Xmx{{SERVER_MEMORY}}M -jar minecraft.jar", "config": {"files": "{\r\n    \"server.properties\": {\r\n        \"parser\": \"properties\",\r\n        \"find\":
+    {\r\n            \"server-ip\": \"0.0.0.0\",\r\n            \"server-port\": \"{{server.build.default.port}}\"\r\n        }\r\n    }\r\n}", "startup": "{\r\n    \"done\": \")! For help, type \"\r\n}", "logs": "{}", "stop": "stop"}, "scripts": {"installation": {"script": "#!/bin/ash\r\necho test some escaped backslashes (/), then proper backslashes (/)", "container": "ghcr.io/pelican-eggs/installers:alpine", "entrypoint": "ash"}}, "variables": []}'
+- method: POST
+  path: /api/application/eggs/import
+  bearer: papp_admin000001AdminAppSecret000000000000000001
+  body: "meta:\n  version: PTDL_v9\nname: x\n"
+- method: GET
+  path: /api/application/eggs?include=variables
+  bearer: papp_admin000001AdminAppSecret000000000000000001
+- method: DELETE
+  path: /api/application/eggs/1
+  bearer: papp_admin000001AdminAppSecret000000000000000001
+- method: DELETE
+  path: /api/application/eggs/uuid/21f1c702-953a-45ca-ae58-c205e8a4ea7e
+  bearer: papp_admin000001AdminAppSecret000000000000000001
+  expect_status: 204
+- method: DELETE
+  path: /api/application/eggs/uuid/nope
+  bearer: papp_admin000001AdminAppSecret000000000000000001

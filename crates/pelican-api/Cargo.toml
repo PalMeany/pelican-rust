@@ -11,6 +11,7 @@ pelican-db = { path = "../pelican-db" }
 laravel-compat = { path = "../laravel-compat" }
 pelican-wings = { path = "../pelican-wings" }
 cron-php = { path = "../cron-php" }
+egg-format = { path = "../egg-format" }
 chrono-tz = "0.10"
 base64.workspace = true
 sha2 = "0.10"

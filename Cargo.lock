@@ -953,6 +953,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
+name = "egg-format"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "laravel-compat",
+ "regex",
+ "serde_json",
+ "serde_yaml",
+ "thiserror",
+]
+
+[[package]]
 name = "either"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1926,6 +1938,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "cron-php",
+ "egg-format",
  "fancy-regex",
  "hex",
  "http-body-util",

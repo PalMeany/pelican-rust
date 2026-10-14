@@ -8,3 +8,6 @@ description = "Pelican egg files: export (PHP JSON / Symfony YAML dumper) and im
 serde_json.workspace = true
 laravel-compat = { path = "../laravel-compat" }
 base64.workspace = true
+thiserror.workspace = true
+serde_yaml = "0.9"
+regex = "1"

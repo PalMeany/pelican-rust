@@ -2,6 +2,7 @@
 
 pub mod data;
 mod database_hosts;
+mod eggs;
 mod mounts;
 mod nodes;
 mod roles;
@@ -156,6 +157,11 @@ pub fn routes(state: &AppState) -> Router<AppState> {
             p(get(servers::databases_view).delete(servers::databases_delete)),
         )
         .route("/servers/{server}/databases/{database}/reset-password", p(post(servers::databases_reset_password)))
+        .route("/eggs", p(get(eggs::index)))
+        .route("/eggs/import", p(post(eggs::import)))
+        .route("/eggs/{egg}", p(get(eggs::view).delete(eggs::delete)))
+        .route("/eggs/{egg}/export", p(get(eggs::export)))
+        .route("/eggs/uuid/{egg_uuid}", p(delete(eggs::delete)))
         .route("/database-hosts", p(get(database_hosts::index).post(database_hosts::store)))
         .route(
             "/database-hosts/{database_host}",
