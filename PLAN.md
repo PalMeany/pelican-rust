@@ -109,9 +109,10 @@ Application API → UI → плагины → PHP-sidecar.
   - [x] маршрутизация в бинаре: `/api/*` → API, остальное → web; dev-окружение (SQLite + `difftest --seed`)
 - [x] Ресурсный фреймворк: таблица (колонки/фильтры/сортировка/пагинация, действия строк, опрос через htmx), формы (поля+валидация Laravel, TagsInput, KeyValue), модалки/подтверждения, вкладки (`?tab=`); руководство `docs/ui-guide.md`
 - [ ] Массовые действия таблиц (bulk delete)
-- [~] Auth: логин (email/username, троттлинг 5/мин, auth:success/auth:fail), MFA-челлендж (TOTP google2fa окно 8 + защита от повтора, recovery-коды bcrypt, email-код 4 мин), сброс пароля (брокер Laravel, подписанная ссылка) — готово; passkeys, OAuth, капча — нет
+- [~] Auth: логин (email/username, троттлинг 5/мин, auth:success/auth:fail), MFA-челлендж (TOTP google2fa окно 8 + защита от повтора, recovery-коды bcrypt, email-код 4 мин), сброс пароля (брокер Laravel, подписанная ссылка), OAuth (11 драйверов Socialite, вход/привязка/создание пользователей), капча Turnstile — готово; passkeys — нет (нужна проверка WebAuthn, совместимая с форматом web-auth/webauthn-lib в `passkeys.credential`)
 - [x] Профиль: аккаунт, 2FA (TOTP с QR, recovery-коды, email-коды; настройка/отключение/перевыпуск), API-ключи, SSH-ключи, активити, кастомизация
-- [ ] Профиль: OAuth-привязки, passkeys, загрузка аватара
+- [x] Профиль: OAuth-привязки, аватары (Gravatar/UI Avatars/загрузка)
+- [ ] Профиль: passkeys
 - [x] RequireTwoFactorAuthentication (уровни none/admin/all)
 - [~] Admin: каркас (доступ isAdmin, сайдбар с группами и бейджами по правам spatie)
   - [x] mounts (эталон)
@@ -133,7 +134,8 @@ Application API → UI → плагины → PHP-sidecar.
   - [x] файлы (список, массовые действия, права, архивы, загрузка напрямую в Wings, поиск, редактор CodeMirror 5)
   - [x] databases, network, activity (воркер ui-c); блокировка страниц в конфликтном состоянии (BlockAccessInConflict)
   - [x] users (сабюзеры, воркер)
-  - [ ] startup, settings, mounts (очередь C2); backups, schedules, webhooks (очередь B3)
+  - [x] startup, settings, backups (воркеры)
+  - [ ] mounts (C2), schedules, webhooks (B3)
 - [ ] Инсталлятор
 - [ ] E2E-проверки ключевых сценариев в браузере (нужен настоящий Wings в VM: консоль, файлы, power, установка)
 
