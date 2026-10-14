@@ -1932,6 +1932,7 @@ dependencies = [
  "pelican-core",
  "pelican-db",
  "pelican-wings",
+ "rand 0.9.5",
  "regex",
  "sea-orm",
  "serde",
