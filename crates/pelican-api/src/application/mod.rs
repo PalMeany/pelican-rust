@@ -6,6 +6,7 @@ mod mounts;
 mod nodes;
 mod roles;
 mod servers;
+mod servers_write;
 mod users;
 
 use axum::Router;
@@ -137,11 +138,14 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route("/nodes/{node}/configuration", p(get(nodes::config)))
         .route("/nodes/{node}/allocations", p(get(nodes::allocations_index).post(nodes::allocations_store)))
         .route("/nodes/{node}/allocations/{allocation}", p(delete(nodes::allocations_delete)))
-        .route("/servers", p(get(servers::index)))
+        .route("/servers", p(get(servers::index).post(servers_write::store)))
         .route("/servers/external/{external_id}", p(get(servers::view_external)))
         .route("/servers/{server}", p(get(servers::view).delete(servers::delete)))
         .route("/servers/{server}/{force}", p(delete(servers::delete)))
         .route("/servers/{server}/details", p(patch(servers::details)))
+        .route("/servers/{server}/build", p(patch(servers_write::build)))
+        .route("/servers/{server}/startup", p(patch(servers_write::startup)))
+        .route("/servers/{server}/transfer", p(post(servers_write::transfer)))
         .route("/servers/{server}/suspend", p(post(servers::suspend)))
         .route("/servers/{server}/unsuspend", p(post(servers::unsuspend)))
         .route("/servers/{server}/reinstall", p(post(servers::reinstall)))

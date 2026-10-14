@@ -363,16 +363,26 @@ pub async fn transfer_cancel(State(st): State<AppState>, Extension(ctx): Extensi
     Ok(no_content())
 }
 
-/// `DELETE /servers/{server}[/{force}]` (`ServerDeletionService`).
+/// `DELETE /servers/{server}[/{force}]`.
 pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) -> ApiResult<Response> {
     ctx.acl("server", WRITE)?;
     let force = ctx.bound.param("force") == Some("force");
     let s = bound(&ctx)?;
-    let conn = node_conn(&st, &st.db, s.node_id).await?;
+    delete_server(&st, &ctx, &s, force).await?;
+    Ok(no_content())
+}
+
+/// `ServerDeletionService::withForce()->handle()`.
+pub(super) async fn force_delete(st: &AppState, ctx: &Ctx, s: &servers::Model) -> ApiResult<()> {
+    delete_server(st, ctx, s, true).await
+}
+
+/// `ServerDeletionService::handle()`.
+async fn delete_server(st: &AppState, ctx: &Ctx, s: &servers::Model, force: bool) -> ApiResult<()> {
+    let conn = node_conn(st, &st.db, s.node_id).await?;
     match st.wings.delete_server(&conn, &s.uuid).await {
         Ok(()) => {}
-        Err(pelican_wings::WingsError::Connection(m)) if !force => {
-            let _ = m;
+        Err(pelican_wings::WingsError::Connection(_)) if !force => {
             return Err(ApiError::internal("ConnectionException"));
         }
         Err(e) => tracing::warn!(error = %e, "deleting server on wings failed"),
@@ -386,7 +396,7 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
     .all(&txn)
     .await?;
     for d in &dbs {
-        if let Err(e) = crate::client::databases::delete_database_in(&st, &ctx, &txn, d).await {
+        if let Err(e) = crate::client::databases::delete_database_in(st, ctx, &txn, d).await {
             if !force {
                 return Err(e);
             }
@@ -411,7 +421,7 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
     .await?;
     servers::Entity::delete_by_id(s.id).exec(&txn).await?;
     txn.commit().await?;
-    Ok(no_content())
+    Ok(())
 }
 
 // --- server databases ------------------------------------------------------------

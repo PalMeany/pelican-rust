@@ -46,3 +46,57 @@ steps:
   - { method: DELETE, path: /api/application/servers/2, bearer: papp_admin000001AdminAppSecret000000000000000001 }
   - { method: DELETE, path: /api/application/servers/3/force, bearer: papp_admin000001AdminAppSecret000000000000000001 }
   - { method: DELETE, path: /api/application/servers/1/whatever, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+---
+name: app/servers-create
+fixtures: [base, infra, client-users, app-extra]
+rows:
+  allocations:
+    - { id: 6, node_id: 2, ip: 0.0.0.0, port: 30001, server_id: null, is_locked: 0, show_port: 1, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+normalize:
+  random_columns: [servers.uuid, servers.uuid_short]
+steps:
+  - { method: POST, path: /api/application/servers, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Deployed, user: 2, egg: 1, environment: { MAX_PLAYERS: "30" }, limits: { memory: 1024, swap: 0, disk: 2048, io: 500, cpu: 100 }, feature_limits: { databases: 1, backups: 2 }, deploy: { tags: ["eu"], dedicated_ip: false, port_range: ["25570", "25600-25610"] }, start_on_completion: true }, expect_status: 201 }
+  - { method: POST, path: /api/application/servers, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Taken, user: 2, egg: 1, environment: {}, limits: { memory: 1, swap: 0, disk: 1, io: 500, cpu: 0 }, feature_limits: { databases: null, backups: null }, allocation: { default: 4 } } }
+  - { method: POST, path: /api/application/servers, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: NoAlloc, user: 2, egg: 1, environment: {}, limits: { memory: 1, swap: 0, disk: 1, io: 500, cpu: 0 }, feature_limits: { databases: null, backups: null } } }
+  - { method: POST, path: /api/application/servers, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Nowhere, user: 2, egg: 1, environment: {}, limits: { memory: 1, swap: 0, disk: 1, io: 500, cpu: 0 }, feature_limits: { databases: null, backups: null }, deploy: { tags: ["mars"], dedicated_ip: true, port_range: [] } } }
+  - { method: POST, path: /api/application/servers, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: BadEnv, user: 2, egg: 1, environment: { SERVER_JARFILE: "x.zip", MAX_PLAYERS: "abc", ONLINE: "maybe" }, limits: { memory: 1, swap: 0, disk: 1, io: 500, cpu: 0 }, feature_limits: { databases: null, backups: null }, deploy: { tags: [], dedicated_ip: false, port_range: [] } } }
+  - { method: POST, path: /api/application/servers, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: "", user: 999, egg: 99, limits: { memory: -5, io: 2000, threads: "a" }, feature_limits: {}, deploy: { dedicated_ip: "x" } } }
+  - { method: POST, path: /api/application/servers, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: OnNodeTwo, external_id: srv-ext, description: "d", user: 3, egg: 2, docker_image: "custom:img", startup: "./run", environment: { CHILD: "y" }, skip_scripts: true, oom_killer: true, limits: { memory: 512, swap: -1, disk: 512, io: 10, cpu: 0, threads: "0-1" }, feature_limits: { databases: 0, allocations: 2, backups: 0 }, allocation: { default: 6, additional: [6, 4] } } }
+---
+name: app/servers-create-wings-down
+fixtures: [base, infra, client-users, app-extra]
+normalize:
+  random_columns: [servers.uuid, servers.uuid_short]
+rows:
+  allocations:
+    - { id: 6, node_id: 2, ip: 0.0.0.0, port: 30001, server_id: null, is_locked: 0, show_port: 1, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+wings:
+  responses:
+    - { method: POST, path: /api/servers, status: 500, json: { error: "down" } }
+steps:
+  - { method: POST, path: /api/application/servers, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Doomed, user: 2, egg: 1, environment: {}, limits: { memory: 1, swap: 0, disk: 1, io: 500, cpu: 0 }, feature_limits: { databases: null, backups: null }, allocation: { default: 6 } } }
+  - { method: POST, path: /api/application/servers, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Stays, user: 2, egg: 1, environment: {}, limits: { memory: 1, swap: 0, disk: 1, io: 500, cpu: 0 }, feature_limits: { databases: null, backups: null }, allocation: { default: 4 } } }
+---
+name: app/servers-build-startup
+fixtures: [base, infra, client-users, app-extra]
+steps:
+  - { method: PATCH, path: /api/application/servers/1/build, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { allocation: 1, oom_killer: true, limits: { memory: 4096, swap: 0, io: 500, cpu: 100, disk: 20480, threads: null }, feature_limits: { databases: 3, allocations: 6, backups: 4 }, add_allocations: [4], remove_allocations: [2] }, expect_status: 200 }
+  - { method: PATCH, path: /api/application/servers/1/build, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { feature_limits: { databases: null, backups: null } } }
+  - { method: PATCH, path: /api/application/servers/1/build, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { allocation: 1, remove_allocations: [1], feature_limits: { databases: null, backups: null } } }
+  - { method: PATCH, path: /api/application/servers/1/build, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { allocation: 5, feature_limits: { databases: null, backups: null } } }
+  - { method: PATCH, path: /api/application/servers/1/build, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { allocation: 99, limits: { memory: "x" }, add_allocations: "a", feature_limits: "z" } }
+  - { method: PATCH, path: /api/application/servers/1/startup, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { startup: "java -jar {{SERVER_JARFILE}}", environment: { SERVER_JARFILE: "paper.jar", MAX_PLAYERS: 50 }, egg: 1, skip_scripts: true }, expect_status: 200 }
+  - { method: PATCH, path: /api/application/servers/1/startup, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { environment: {}, egg: 2, skip_scripts: false } }
+  - { method: PATCH, path: /api/application/servers/1/startup, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { egg: 1 } }
+  - { method: PATCH, path: /api/application/servers/1/startup, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { environment: { SERVER_JARFILE: "bad" }, egg: 1, skip_scripts: false } }
+---
+name: app/servers-transfer
+fixtures: [base, infra, client-users, app-extra]
+rows:
+  allocations:
+    - { id: 6, node_id: 2, ip: 0.0.0.0, port: 30001, server_id: null, is_locked: 0, show_port: 1, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+steps:
+  - { method: POST, path: /api/application/servers/1/transfer, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { node_id: 2, allocation_id: 6, allocation_additional: [] }, expect_status: 204 }
+  - { method: POST, path: /api/application/servers/1/transfer, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { node_id: 2, allocation_id: 4 } }
+  - { method: POST, path: /api/application/servers/2/transfer, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { node_id: 2, allocation_id: 4 } }
+  - { method: POST, path: /api/application/servers/1/transfer, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { node_id: 99, allocation_id: 1, allocation_additional: [99] } }
