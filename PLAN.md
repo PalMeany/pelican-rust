@@ -58,15 +58,17 @@ Application API → UI → плагины → PHP-sidecar.
 - [ ] Логин/2FA/сессии/CSRF — вместе с UI (M6)
 
 ### M3 — Remote API для Wings (`/api/remote/*`) и клиент Wings
-- [ ] DaemonAuthenticate
-- [ ] `GET /servers`, `GET /servers/{uuid}` (полная конфигурация сервера), `POST /servers/reset`
-- [ ] install GET/POST, transfer success/failure, container status
-- [ ] `POST /sftp/auth` (пароль, ключ, троттлинг)
-- [ ] `POST /activity`
-- [ ] backups: remote upload (S3 multipart), status, restore
-- [ ] Клиент Wings (DaemonRepository-аналоги) + JWT (websocket, download, upload, backup)
-- [ ] Конфигурация ноды (YAML)
-- [ ] Диф-тесты байт-в-байт для каждого эндпоинта на трёх СУБД
+- [x] DaemonAuthenticate (порядок ошибок: binding 404 → 401 → 400 → 404 → 403), 405 до auth
+- [x] `GET /servers` (пагинатор Laravel, переиндексация), `GET /servers/{uuid}` (конфигурация побайтно), `POST /servers/reset`
+- [x] install GET/POST (+Filament-уведомления), transfer success/failure, container status
+- [x] `POST /sftp/auth` (пароль, ключ OpenSSH, троттлинг, права, конфликты состояния)
+- [x] `POST /activity`
+- [x] backups: status, restore (wings-адаптер)
+- [ ] backups S3: presigned multipart (R11), complete/abort (R12) — нужен MinIO в диф-окружении
+- [ ] `Server::saved` → удаление сабюзера-владельца (SubuserDeletionService) — с M4
+- [x] Клиент Wings (семантика throwIf/User-Agent) + JWT (побайтно = PHP lcobucci); остальные вызовы — по мере эндпоинтов M4/M5
+- [ ] Конфигурация ноды (JSON/YAML) — вместе с Application API nodes (M5)
+- [x] Диф-тесты Remote API на 4 СУБД (remote*.yaml, 9 сценариев)
 - [ ] Ручная проверка с настоящим Wings (контейнер), см. QUESTIONS
 
 ### M4 — Client API (`/api/client/*`)

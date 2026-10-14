@@ -34,8 +34,18 @@
 Сценарии `difftest/scenarios/*.yaml`, фикстуры `difftest/fixtures/*.yaml` (токены ключей — в шапке base.yaml).
 `--self-check` сравнивает оригинал сам с собой (проверка нормализации).
 
+- 2026-10-14 (вечер): M3 почти закрыта. Remote API R1–R13 совпадает с оригиналом на 4 СУБД
+  (конфиг сервера побайтно, SFTP-auth, activity, transfers, backups wings). Клиент Wings + JWT
+  (сверено с PHP lcobucci). Запись JSON как в PHP (`pelican_db::write`), запросы формы Eloquent
+  (ADR-0011). Валидатор Laravel (`pelican-api/src/validation.rs`), ввод (`input.rs`).
+
 ## Где остановился / что дальше
-- M2 хвосты: валидация (сообщения Laravel, TrimStrings/ConvertEmptyStringsToNull).
-- M3: Remote API (spec remote-api.md): DaemonAuthenticate уже есть; GET /servers и /servers/{uuid}
-  (конфигурация сервера), install, sftp/auth, activity, transfer, backups; клиент Wings + JWT.
-  Нужна фикстура `infra` (нода wings.test:8080, egg, сервер, аллокации).
+- M3 хвосты: S3-бэкапы (MinIO в compose + presign), удаление сабюзера-владельца (`Server::saved`).
+- M4 Client API: начать с каркаса серверных маршрутов (AuthenticateServerAccess, ResourceLimit,
+  subject activity), затем GET /api/client (список серверов), ServerData и далее по spec client-api.md §8.
+  Механические ресурсы/эндпоинты отдавать воркерам по шаблону (см. scripts/worker/*.md).
+
+## Грабли (важно)
+- Python-замены в исходниках после `cargo fmt` молча не срабатывают — всегда `assert old in s`.
+- Таблицы, которые засевают миграции (`backup_hosts` «Local»), сбрасываются харнессом — добавлять в фикстуры.
+- В PG нельзя биндить text в json-колонку: только через `pelican_db::write` (CAST).
