@@ -54,13 +54,19 @@
   сессии в таблице `sessions`, CSRF, minijinja со встраиванием, дамп переводов оригинала (32 локали вместе
   с Filament), htmx и иконки Tabler вендорены, вход с MFA (TOTP/recovery/email).
 
+- 2026-10-15: M5 слита в main (полный прогон 73×4 СУБД зелёный). M6 в `.worktrees/m6`: ресурсный фреймворк
+  (таблицы, формы, TagsInput/KeyValue, вкладки), профиль с 2FA, app-список серверов, admin: mounts, servers
+  (+создание, аллокации/БД), nodes (графики, YAML-конфиг, деплой), database hosts, eggs, webhooks, api keys;
+  server: консоль (xterm+WS), файлы, базы данных. Воркеры GLM: ui-a готов, ui-b (users/roles/backup hosts) и
+  ui-c (network/activity/startup/settings/mounts) в работе.
+
 ## Где остановился / что дальше
-- M5 закрыта в ветке `m5` (полный прогон `--backend all` идёт перед слиянием в main). Хвосты M5: вебхуки на
-  события моделей eloquent.*, egg check-updates/update-index (с UI), plugins API (M7), S3-бэкапы (MinIO),
-  конфигурация ноды YAML.
-- M6 начата в `.worktrees/m6`: каркас pelican-web (сессии, CSRF, шаблоны, ассеты, переводы, вход с MFA).
-  Дальше: подключить web-роутер в бинарь, собрать, ресурсный фреймворк (таблицы/формы), эталонные страницы
-  (список серверов, профиль, один ресурс админки, одна страница сервера), затем воркеры по страницам.
+- Хвосты M5: вебхуки на события моделей eloquent.*, egg check-updates/update-index (с UI), plugins API (M7),
+  S3-бэкапы (MinIO), конфигурация ноды YAML через API.
+- M6 (`.worktrees/m6`, dev-панель — контейнер `pelican-m6-dev` на :8088, SQLite из `.worktrees/.difftest/m6dev`):
+  дальше — интеграция ui-b/ui-c, admin dashboard/settings/health/logs/plugins, перенос сервера, server
+  users/backups/schedules/webhooks, сброс пароля, затем инсталлятор и E2E с настоящим Wings.
+- Запись в SQLite dev-окружения с хоста не видна контейнеру (кэш ФС VM) — менять данные только через панель.
 
 ## Диск (просьба пользователя)
 На хосте мало места (~15–30 ГБ свободно). Сборки живут в docker-томах VM (`pelican-rs-target*`).

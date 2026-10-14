@@ -107,7 +107,7 @@ Application API → UI → плагины → PHP-sidecar.
   - [x] переводы: дамп всего `lang/*` + неймспейсов Filament (32 локали, `scripts/i18n/dump-lang`), trans/trans_choice (порт MessageSelector)
   - [x] ассеты с хешем в URL: CSS (палитра Filament, тёмная тема), app.js (тосты, модалки, подтверждения, тема), htmx 2.0.4, иконки Tabler (используемые оригиналом)
   - [x] маршрутизация в бинаре: `/api/*` → API, остальное → web; dev-окружение (SQLite + `difftest --seed`)
-- [x] Ресурсный фреймворк: таблица (колонки/фильтры/сортировка/пагинация, действия строк, опрос через htmx), формы (поля+валидация Laravel), модалки/подтверждения, вкладки; руководство `docs/ui-guide.md`
+- [x] Ресурсный фреймворк: таблица (колонки/фильтры/сортировка/пагинация, действия строк, опрос через htmx), формы (поля+валидация Laravel, TagsInput, KeyValue), модалки/подтверждения, вкладки (`?tab=`); руководство `docs/ui-guide.md`
 - [ ] Массовые действия таблиц (bulk delete)
 - [~] Auth: логин (email/username, троттлинг 5/мин, auth:success/auth:fail), MFA-челлендж (TOTP google2fa окно 8 + защита от повтора, recovery-коды bcrypt, email-код 4 мин) — готово; сброс пароля, passkeys, OAuth, капча — нет
 - [x] Профиль: аккаунт, 2FA (TOTP с QR, recovery-коды, email-коды; настройка/отключение/перевыпуск), API-ключи, SSH-ключи, активити, кастомизация
@@ -115,11 +115,14 @@ Application API → UI → плагины → PHP-sidecar.
 - [ ] RequireTwoFactorAuthentication (уровни none/admin/all)
 - [~] Admin: каркас (доступ isAdmin, сайдбар с группами и бейджами по правам spatie)
   - [x] mounts (эталон)
-  - [ ] воркеры: database hosts, webhooks, api keys (ui-a); users, roles, backup hosts (ui-b)
+  - [x] database hosts, webhooks, api keys (воркер ui-a, ревью + доработки)
+  - [ ] воркеры: users, roles, backup hosts (ui-b)
   - [x] servers: список (группировка, inline основная аллокация), редактирование (5 вкладок, переменные, маунты, синхронизация с Wings), действия, создание (htmx-перерисовка по ноде/яйцу, откат при недоступном Wings), отношения allocations/databases
   - [ ] servers: перенос на другую ноду (TransferServerService), inline-создание владельца/аллокации в мастере
   - [x] nodes: список (здоровье, доступность из браузера), создание, вкладки (обзор с графиками, настройки, YAML-конфиг, авто-деплой, сброс токена, диагностика), аллокации, серверы
-  - [ ] eggs (импорт/экспорт, переменные), dashboard, settings, health, logs, plugins
+  - [x] eggs: список (теги, число серверов), импорт (файлы/URL), 4 вкладки формы, CopyFrom, повторитель переменных, экспорт JSON/YAML, обновление по update_url, копия, удаление
+  - [ ] eggs: вкладка импорта из индекса GitHub (`eggs.index`), видимость «Обновить» по флагу проверки обновлений (сейчас — при наличии update_url), массовые delete/update
+  - [ ] dashboard, settings, health, logs, plugins
 - [x] App: список серверов (вкладки my/other/all, таблица/сетка по кастомизации, ресурсы из Wings с кешем 15 с, power-действия, фильтры egg/owner, per_page в кастомизации)
 - [~] Server: каркас (доступ к тенанту, права сабюзера, навигация, баннер конфликта)
   - [x] консоль (xterm.js 5.5 + WebSocket Wings, power через set state, история команд, графики)
