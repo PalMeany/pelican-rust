@@ -21,6 +21,7 @@
   --text-3: var(--gray-400);
   --input-bg: #fff;
   --hover: var(--gray-50);
+  --muted-bg: var(--gray-200);
   --ring: var(--primary-600);
   --shadow: 0 1px 2px rgb(0 0 0 / 0.05);
   --shadow-lg: 0 10px 30px -5px rgb(0 0 0 / 0.15);
@@ -37,7 +38,7 @@
     --bg: var(--gray-950); --surface: var(--gray-900); --surface-2: rgb(255 255 255 / 0.03);
     --border: rgb(255 255 255 / 0.1); --border-strong: var(--gray-700);
     --text: #fff; --text-2: var(--gray-400); --text-3: var(--gray-500);
-    --input-bg: rgb(255 255 255 / 0.05); --hover: rgb(255 255 255 / 0.05);
+    --input-bg: rgb(255 255 255 / 0.05); --hover: rgb(255 255 255 / 0.05); --muted-bg: var(--gray-700);
     --ring: var(--primary-500); --shadow: none; --shadow-lg: 0 10px 30px -5px rgb(0 0 0 / 0.6);
     color-scheme: dark;
   }
@@ -46,7 +47,7 @@
   --bg: var(--gray-950); --surface: var(--gray-900); --surface-2: rgb(255 255 255 / 0.03);
   --border: rgb(255 255 255 / 0.1); --border-strong: var(--gray-700);
   --text: #fff; --text-2: var(--gray-400); --text-3: var(--gray-500);
-  --input-bg: rgb(255 255 255 / 0.05); --hover: rgb(255 255 255 / 0.05);
+  --input-bg: rgb(255 255 255 / 0.05); --hover: rgb(255 255 255 / 0.05); --muted-bg: var(--gray-700);
   --ring: var(--primary-500); --shadow: none; --shadow-lg: 0 10px 30px -5px rgb(0 0 0 / 0.6);
   color-scheme: dark;
 }
@@ -193,8 +194,7 @@ img { max-width: 100%; }
 .check input[type=checkbox], .check input[type=radio] { width: 1rem; height: 1rem; accent-color: var(--primary-600); margin: 0; }
 .toggle { position: relative; display: inline-flex; align-items: center; gap: 0.75rem; cursor: pointer; font-size: 0.875rem; }
 .toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
-.toggle .track { width: 2.75rem; height: 1.5rem; border-radius: 999px; background: var(--gray-200); position: relative; transition: background 0.2s; flex-shrink: 0; }
-:root[data-theme="dark"] .toggle .track { background: var(--gray-700); }
+.toggle .track { width: 2.75rem; height: 1.5rem; border-radius: 999px; background: var(--muted-bg); position: relative; transition: background 0.2s; flex-shrink: 0; }
 .toggle .track::after { content: ""; position: absolute; top: 0.125rem; left: 0.125rem; width: 1.25rem; height: 1.25rem; border-radius: 50%;
   background: #fff; box-shadow: var(--shadow); transition: transform 0.2s; }
 .toggle input:checked + .track { background: var(--primary-600); }
@@ -231,8 +231,7 @@ table.table { width: 100%; border-collapse: collapse; }
 .pagination .current { color: var(--primary-600); font-weight: 600; background: var(--hover); }
 .pagination .disabled { color: var(--text-3); }
 .empty { padding: 3rem 1.5rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.75rem; }
-.empty .icon-wrap { width: 3rem; height: 3rem; border-radius: 50%; background: var(--gray-100); display: flex; align-items: center; justify-content: center; color: var(--text-3); }
-:root[data-theme="dark"] .empty .icon-wrap { background: var(--gray-800); }
+.empty .icon-wrap { width: 3rem; height: 3rem; border-radius: 50%; background: var(--muted-bg); display: flex; align-items: center; justify-content: center; color: var(--text-3); }
 .empty h3 { font-size: 1rem; font-weight: 600; }
 
 /* ---------- tabs ---------- */
@@ -293,8 +292,7 @@ dialog.modal::backdrop { background: rgb(9 9 11 / 0.5); }
 .banner.success { background: rgb(34 197 94 / 0.1); border-color: rgb(34 197 94 / 0.3); }
 
 /* ---------- progress / misc ---------- */
-.progress { height: 0.5rem; border-radius: 999px; background: var(--gray-200); overflow: hidden; min-width: 6rem; }
-:root[data-theme="dark"] .progress { background: var(--gray-800); }
+.progress { height: 0.5rem; border-radius: 999px; background: var(--muted-bg); overflow: hidden; min-width: 6rem; }
 .progress > span { display: block; height: 100%; background: var(--success-500); border-radius: 999px; }
 .progress.warning > span { background: var(--warning-500); } .progress.danger > span { background: var(--danger-500); }
 .progress-label { font-size: 0.75rem; color: var(--text-2); margin-top: 0.25rem; white-space: nowrap; }
@@ -338,3 +336,10 @@ dialog.modal::backdrop { background: rgb(9 9 11 / 0.5); }
 .console-input input { flex: 1; background: transparent; border: 0; color: #e4e4e7; font: 0.875rem var(--mono); padding: 0.5rem 0; outline: none; }
 .console-input input[readonly] { cursor: not-allowed; opacity: 0.6; }
 canvas.chart { width: 100%; height: 120px; display: block; }
+
+/* ---------- file manager ---------- */
+.crumbs { display: flex; gap: 0.25rem; flex-wrap: wrap; margin-top: 0.25rem; }
+#fm.drop { outline: 2px dashed var(--primary-500); outline-offset: 4px; }
+.fm-uploads { position: fixed; right: 1rem; bottom: 1rem; width: min(24rem, calc(100vw - 2rem)); z-index: 50; box-shadow: var(--shadow-lg); max-height: 50vh; overflow: auto; }
+.fm-table td:first-child, .fm-table th:first-child { width: 2rem; }
+.CodeMirror { font-family: var(--mono); font-size: 0.8125rem; height: 65vh; }

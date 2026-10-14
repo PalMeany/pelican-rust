@@ -1,0 +1,162 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% set F = 'server/file.actions' %}
+{% block head %}<script src="{{ asset('js/files.js') }}" defer></script>{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ title }}</h1>
+    <nav class="crumbs small"><a href="{{ server_base }}/files?path=/">/</a>{% for c in crumbs %}<span class="muted">/</span><a href="{{ c[1] }}">{{ c[0] }}</a>{% endfor %}</nav>
+  </div>
+  <div class="page-actions">
+    {% if can.create %}
+    <button type="button" class="btn btn-sm" data-modal-open="fm-new-file" title="{{ trans(F ~ '.new_file.title') }}">{{ icon('file-plus', 'icon-sm') }}</button>
+    <button type="button" class="btn btn-sm" data-modal-open="fm-new-folder" title="{{ trans(F ~ '.new_folder.title') }}">{{ icon('folder-plus', 'icon-sm') }}</button>
+    <button type="button" class="btn btn-sm btn-success" data-upload-trigger title="{{ trans(F ~ '.upload.title') }}">{{ icon('upload', 'icon-sm') }}</button>
+    <button type="button" class="btn btn-sm btn-success" data-modal-open="fm-pull" title="{{ trans(F ~ '.upload.from_url') }}">{{ icon('world-download', 'icon-sm') }}</button>
+    {% endif %}
+    <button type="button" class="btn btn-sm" data-modal-open="fm-search" title="{{ trans(F ~ '.nested_search.title') }}">{{ icon('folder-search', 'icon-sm') }}</button>
+    <a class="btn btn-sm btn-gray" href="{{ sftp_url }}" title="{{ trans(F ~ '.connect_sftp') }}">{{ icon('world', 'icon-sm') }}</a>
+  </div>
+</div>
+{% if error %}<div class="banner danger">{{ icon('alert-triangle') }}<div><strong>{{ trans('server/file.alerts.files_node_error.title') }}</strong><div>{{ error }}</div></div></div>{% endif %}
+
+<div class="card table-card" id="fm" data-dir="{{ dir }}" data-base="{{ server_base }}" data-upload="{{ server_base }}/files/upload-url?path={{ dir | urlencode }}">
+  <form class="table-toolbar" method="get" action="{{ server_base }}/files">
+    <input type="hidden" name="path" value="{{ dir }}">
+    <div class="row fm-bulk" hidden>
+      <span class="small muted" data-selected-count></span>
+      {% if can.update %}<button type="button" class="btn btn-sm btn-gray" data-modal-open="fm-bulk-move">{{ icon('replace', 'icon-sm') }}{{ trans(F ~ '.move.title') }}</button>{% endif %}
+      {% if can.archive %}<button type="button" class="btn btn-sm btn-gray" data-modal-open="fm-bulk-archive">{{ icon('archive', 'icon-sm') }}{{ trans(F ~ '.archive.title') }}</button>{% endif %}
+      {% if can.delete %}<button type="button" class="btn btn-sm btn-danger" data-bulk-delete>{{ icon('trash', 'icon-sm') }}{{ trans('filament-actions::delete.multiple.label') }}</button>{% endif %}
+    </div>
+    <div class="spacer"></div>
+    <input class="input search" type="search" name="search" value="{{ search }}" placeholder="{{ trans('filament-tables::table.fields.search.placeholder') }}">
+  </form>
+  <div class="table-wrap">
+    <table class="table fm-table">
+      <thead><tr>
+        <th style="width:1%"><input type="checkbox" data-select-all aria-label="{{ trans('filament-tables::table.fields.bulk_select_page.label') }}"></th>
+        {% for col in [['name', 'server/file.name'], ['size', 'server/file.size'], ['modified_at', 'server/file.modified_at']] %}
+        <th{% if col[0] != 'name' %} class="wide-only"{% endif %}><a href="{{ sort_urls[col[0]] }}">{{ trans(col[1]) }}{% if sort == col[0] %}{{ icon('chevron-down' if desc else 'chevron-up', 'icon-sm') }}{% endif %}</a></th>
+        {% endfor %}
+        <th class="sr-only">{{ trans_choice('filament-tables::table.columns.actions.label', 2) }}</th>
+      </tr></thead>
+      <tbody>
+        {% if parent %}<tr class="clickable" data-href="{{ server_base }}/files?path={{ parent | urlencode }}"><td></td><td colspan="4">{{ icon('folder', 'icon-sm') }} ..</td></tr>{% endif %}
+        {% for r in rows %}
+        {% set full = (dir ~ '/' ~ r.name) | replace('//', '/') %}
+        {% if r.is_directory %}{% set href = server_base ~ '/files?path=' ~ (full | urlencode) %}{% elif r.can_edit and can.read_content %}{% set href = server_base ~ '/files/edit?path=' ~ (full | urlencode) %}{% else %}{% set href = '' %}{% endif %}
+        <tr{% if href %} class="clickable" data-href="{{ href }}"{% endif %} data-file="{{ r.name }}" data-mode="{{ r.mode_bits }}" data-is-file="{{ '1' if r.is_file }}">
+          <td><input type="checkbox" class="fm-check" value="{{ r.name }}" aria-label="{{ r.name }}"></td>
+          <td><span class="row" style="flex-wrap:nowrap;gap:0.5rem">{{ icon(r.icon, 'icon-sm') }}<span class="truncate">{{ r.name }}</span></span></td>
+          <td class="wide-only nowrap">{{ '' if r.is_directory else (r.size | bytes) }}</td>
+          <td class="wide-only nowrap" title="{{ r.modified_at | datetime }}">{{ r.modified_at | ago }}</td>
+          <td class="actions">
+            {% if r.is_directory %}<a class="btn-link" href="{{ href }}">{{ icon('eye', 'icon-sm') }}{{ trans(F ~ '.open') }}</a>
+            {% elif r.can_edit and can.read_content %}<a class="btn-link" href="{{ href }}">{{ icon('pencil', 'icon-sm') }}{{ trans('filament-actions::edit.single.label') }}</a>{% endif %}
+            <details class="dropdown" style="display:inline-block">
+              <summary class="icon-btn" aria-label="{{ trans_choice('filament-tables::table.columns.actions.label', 2) }}">{{ icon('dots-vertical', 'icon') }}</summary>
+              <div class="dropdown-menu">
+                {% if can.update %}<button type="button" data-row-action="fm-rename">{{ icon('forms', 'icon-sm') }}{{ trans(F ~ '.rename.title') }}</button>{% endif %}
+                {% if can.create and r.is_file %}<button type="button" data-row-action="copy">{{ icon('copy', 'icon-sm') }}{{ trans(F ~ '.copy.title') }}</button>{% endif %}
+                {% if can.read_content and r.is_file %}<a href="{{ server_base }}/files/download?path={{ full | urlencode }}" target="_blank">{{ icon('download', 'icon-sm') }}{{ trans(F ~ '.download') }}</a>{% endif %}
+                {% if can.update %}<button type="button" data-row-action="fm-move">{{ icon('replace', 'icon-sm') }}{{ trans(F ~ '.move.title') }}</button>
+                <button type="button" data-row-action="fm-chmod">{{ icon('license', 'icon-sm') }}{{ trans(F ~ '.permissions.title') }}</button>{% endif %}
+                {% if can.archive %}<button type="button" data-row-action="fm-archive">{{ icon('archive', 'icon-sm') }}{{ trans(F ~ '.archive.title') }}</button>
+                {% if r.is_archive %}<button type="button" data-row-action="unarchive">{{ icon('archive', 'icon-sm') }}{{ trans(F ~ '.unarchive.title') }}</button>{% endif %}{% endif %}
+                {% if can.delete %}<hr><button type="button" class="danger" data-row-action="delete" data-confirm-title="{{ trans('filament-actions::delete.single.modal.heading', label=r.name ~ (' folder' if r.is_directory else ' file')) }}">{{ icon('trash', 'icon-sm') }}{{ trans('filament-actions::delete.single.label') }}</button>{% endif %}
+              </div>
+            </details>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5"><div class="empty"><div class="icon-wrap">{{ icon('files', 'icon-lg') }}</div></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if pagination.total > 0 %}
+  <div class="table-foot">
+    <span class="muted">{{ trans_choice('filament::components/pagination.overview', pagination.total, first=pagination.first_item, last=pagination.last_item, total=pagination.total) }}</span>
+    <nav class="pagination">
+      {% if pagination.prev %}<a href="{{ pagination.prev }}">{{ icon('chevron-left', 'icon-sm') }}</a>{% else %}<span class="disabled">{{ icon('chevron-left', 'icon-sm') }}</span>{% endif %}
+      <span class="current">{{ pagination.page }} / {{ pagination.last }}</span>
+      {% if pagination.next %}<a href="{{ pagination.next }}">{{ icon('chevron-right', 'icon-sm') }}</a>{% else %}<span class="disabled">{{ icon('chevron-right', 'icon-sm') }}</span>{% endif %}
+    </nav>
+  </div>
+  {% endif %}
+</div>
+<input type="file" id="fm-upload-input" multiple hidden>
+<div id="fm-uploads" class="card fm-uploads" hidden><div class="card-head"><h3>{{ trans(F ~ '.upload.header') }}</h3><span class="small muted" data-upload-progress></span></div><div class="card-body stack" data-upload-list></div></div>
+
+{# One form per action; row buttons fill `name` (and mode bits) before opening. #}
+{% macro modal(id, title, op, submit, color='') %}
+<dialog id="{{ id }}" class="modal">
+  <form method="post" action="{{ server_base }}/files/action">
+    {{ csrf_field() }}<input type="hidden" name="op" value="{{ op }}"><input type="hidden" name="directory" value="{{ dir }}"><input type="hidden" name="name" value="">
+    <div data-bulk-files></div>
+    <div class="modal-head"><h2>{{ title }}</h2></div>
+    <div class="modal-body">{{ caller() }}</div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+      <button type="submit" class="btn {{ color }}">{{ submit }}</button></div>
+  </form>
+</dialog>
+{% endmacro %}
+{% call modal('fm-rename', trans(F ~ '.rename.title'), 'rename', trans('filament-actions::modal.actions.submit.label')) %}
+  {{ f.text('to', trans(F ~ '.rename.file_name'), '', {}, required=true) }}
+{% endcall %}
+{% call modal('fm-move', trans(F ~ '.move.title'), 'move', trans('filament-actions::modal.actions.submit.label')) %}
+  {{ f.text('location', trans(F ~ '.move.new_location'), '', {}, required=true, hint=trans(F ~ '.move.new_location_hint')) }}
+{% endcall %}
+{% call modal('fm-bulk-move', trans(F ~ '.move.title'), 'bulk-move', trans('filament-actions::modal.actions.submit.label')) %}
+  {{ f.text('location', trans(F ~ '.move.directory'), '', {}, required=true, hint=trans(F ~ '.move.directory_hint')) }}
+{% endcall %}
+{% call modal('fm-chmod', trans(F ~ '.permissions.title'), 'chmod', trans('filament-actions::modal.actions.submit.label')) %}
+  {% for g in ['owner', 'group', 'public'] %}
+  <div class="field"><span class="field-label">{{ trans(F ~ '.permissions.' ~ g) }}</span>
+    <div class="radio-group inline">{% for p in ['read', 'write', 'execute'] %}{{ f.checkbox(g ~ '[]', trans(F ~ '.permissions.' ~ p), false, p) }}{% endfor %}</div></div>
+  {% endfor %}
+{% endcall %}
+{% for kind in ['fm-archive', 'fm-bulk-archive'] %}
+{% call modal(kind, trans(F ~ '.archive.title'), 'archive' if kind == 'fm-archive' else 'bulk-archive', trans('filament-actions::modal.actions.submit.label')) %}
+  <div class="grid grid-3">
+    <div class="span-2">{{ f.text('archive_name', trans(F ~ '.archive.archive_name'), '', {}, placeholder=archive_default) }}</div>
+    {{ f.select('extension', trans(F ~ '.archive.extension'), [['tar.gz', 'tar.gz'], ['zip', 'zip'], ['tar.bz2', 'tar.bz2'], ['tar.xz', 'tar.xz']], 'tar.gz') }}
+  </div>
+{% endcall %}
+{% endfor %}
+{% call modal('fm-new-folder', trans(F ~ '.new_folder.title'), 'new-folder', trans('filament-actions::modal.actions.submit.label')) %}
+  {{ f.text('name', trans(F ~ '.new_folder.folder_name'), '', {}, required=true) }}
+{% endcall %}
+{% call modal('fm-pull', trans(F ~ '.upload.from_url'), 'pull', trans('filament-actions::modal.actions.submit.label')) %}
+  {{ f.text('url', trans(F ~ '.upload.url'), '', {}, type='url', required=true) }}
+{% endcall %}
+<dialog id="fm-new-file" class="modal wide">
+  <form method="post" action="{{ server_base }}/files/action">
+    {{ csrf_field() }}<input type="hidden" name="op" value="new-file"><input type="hidden" name="directory" value="{{ dir }}">
+    <div class="modal-head"><h2>{{ trans(F ~ '.new_file.title') }}</h2></div>
+    <div class="modal-body">
+      {{ f.text('name', trans(F ~ '.new_file.file_name'), '', {}, required=true) }}
+      {{ f.textarea('content', '', '', {}, rows=14, code=true) }}
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+      <button type="submit" class="btn">{{ trans(F ~ '.new_file.create') }}</button></div>
+  </form>
+</dialog>
+<dialog id="fm-search" class="modal">
+  <form method="get" action="{{ server_base }}/files/search">
+    <input type="hidden" name="path" value="{{ dir }}">
+    <div class="modal-head"><h2>{{ trans(F ~ '.nested_search.title') }}</h2></div>
+    <div class="modal-body">{{ f.text('q', trans(F ~ '.nested_search.search_term'), '', {}, required=true, placeholder=trans(F ~ '.nested_search.search_term_placeholder'), attrs='minlength="3" pattern="[^*]*\\*?[^*]*"') }}</div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+      <button type="submit" class="btn">{{ trans(F ~ '.nested_search.search') }}</button></div>
+  </form>
+</dialog>
+<form id="fm-quick" method="post" action="{{ server_base }}/files/action" hidden>{{ csrf_field() }}<input type="hidden" name="op"><input type="hidden" name="directory" value="{{ dir }}"><input type="hidden" name="name"><div data-bulk-files></div></form>
+<script type="application/json" id="fm-strings">{{ {
+  "uploaded": trans(F ~ '.upload.success'), "failed": trans(F ~ '.upload.failed'), "progress": trans(F ~ '.upload.progress'),
+  "token_failed": trans(F ~ '.upload.token_failed'), "confirm": trans('filament-actions::modal.confirmation'),
+  "delete": trans('filament-actions::delete.single.label'), "delete_many": trans('filament-actions::delete.multiple.label'),
+} | tojson }}</script>
+{% endblock %}

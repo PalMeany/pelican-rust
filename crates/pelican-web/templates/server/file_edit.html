@@ -1,0 +1,32 @@
+{% extends "layouts/panel.html" %}
+{% block head %}
+<link rel="stylesheet" href="{{ asset('vendor/codemirror/codemirror.css') }}">
+<link rel="stylesheet" href="{{ asset('vendor/codemirror/theme-dark.css') }}">
+<script src="{{ asset('vendor/codemirror/codemirror.js') }}" defer></script>
+{% for m in ['javascript', 'yaml', 'properties', 'shell', 'python', 'xml', 'css', 'htmlmixed', 'toml', 'lua', 'clike', 'markdown', 'sql', 'nginx'] %}<script src="{{ asset('vendor/codemirror/mode/' ~ m ~ '.js') }}" defer></script>{% endfor %}
+<script src="{{ asset('vendor/codemirror/addon/simple.js') }}" defer></script>
+<script src="{{ asset('vendor/codemirror/mode/dockerfile.js') }}" defer></script>
+<script src="{{ asset('vendor/codemirror/addon/matchbrackets.js') }}" defer></script>
+<script src="{{ asset('vendor/codemirror/addon/active-line.js') }}" defer></script>
+<script src="{{ asset('js/files.js') }}" defer></script>
+{% endblock %}
+{% block content %}
+{% if special %}<div class="banner info">{{ icon('info-circle') }}<div><strong>{{ special.title }}</strong><div style="white-space:pre-line">{{ special.body }}</div></div></div>{% endif %}
+<form id="fm-editor" class="card" data-saved="{{ trans('server/file.actions.edit.notification') }}" method="post" action="{{ server_base }}/files/edit?path={{ path | urlencode }}">
+  {{ csrf_field() }}
+  <div class="card-head"><h2 class="truncate">{{ title }}</h2>
+    <label class="row small" style="gap:0.5rem">{{ trans('server/file.actions.new_file.syntax') }}
+      <select class="select" id="fm-lang" style="width:auto">
+        {% for l in ['plaintext', 'json', 'javascript', 'typescript', 'yaml', 'ini', 'properties', 'toml', 'shell', 'python', 'java', 'kotlin', 'c', 'cpp', 'csharp', 'go', 'rust', 'lua', 'html', 'xml', 'css', 'markdown', 'sql', 'mysql', 'pgsql', 'dockerfile', 'php', 'ruby'] %}<option value="{{ l }}"{% if l == language %} selected{% endif %}>{{ l }}</option>{% endfor %}
+      </select></label>
+  </div>
+  <textarea name="content" id="fm-content" class="textarea code" style="min-height:60vh;border:0;border-radius:0">{{ content }}</textarea>
+  <div class="card-foot">
+    <button type="button" class="btn btn-danger" onclick="document.referrer ? history.back() : (location.href='{{ server_base }}/files?path={{ dir | urlencode }}')">{{ icon('x', 'icon-sm') }}{{ trans('server/file.actions.edit.cancel') }}</button>
+    {% if can_update %}
+    <button type="submit" class="btn btn-gray" name="close" value="0" data-save>{{ icon('device-floppy', 'icon-sm') }}{{ trans('server/file.actions.edit.save') }}</button>
+    <button type="submit" class="btn" name="close" value="1">{{ icon('device-floppy', 'icon-sm') }}{{ trans('server/file.actions.edit.save_close') }}</button>
+    {% endif %}
+  </div>
+</form>
+{% endblock %}

@@ -2,6 +2,7 @@
 //! subuser permissions, navigation and the console.
 
 mod console;
+mod files;
 
 use std::collections::HashSet;
 
@@ -20,7 +21,7 @@ use crate::ctx::Authed;
 use crate::error::{WebError, WebResult};
 
 pub fn routes() -> Router<AppState> {
-    Router::new().merge(console::routes())
+    Router::new().merge(console::routes()).merge(files::routes())
 }
 
 /// A request inside a server's panel: the tenant, its node and what the user may do there.
@@ -102,6 +103,11 @@ impl ServerPanel {
                     || (permission == "websocket.connect" && self.user.can_view_server(self.node.id.0))
             }
         }
+    }
+
+    /// Activity entry with the server as subject (`ServerSubject` middleware).
+    pub fn activity_for_server(&self, event: &str) -> pelican_core::activity::Activity {
+        self.activity(event).subject(pelican_core::activity::morph::SERVER, self.server.id.0)
     }
 
     pub fn authorize(&self, permission: &str) -> Result<(), WebError> {
@@ -216,4 +222,38 @@ fn conflict_message(p: &ServerPanel) -> Option<String> {
         "state_conflict"
     };
     Some(p.t(&format!("exceptions.server.{key}")))
+}
+
+/// PHP `rawurlencode`.
+pub fn rawurlencode(s: &str) -> String {
+    s.bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) {
+                (b as char).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
+        .collect()
+}
+
+/// `Server::getSftpUrl()` for the signed-in user.
+pub fn sftp_url(p: &ServerPanel, directory: Option<&str>) -> String {
+    let dir = directory
+        .map(|d| {
+            let parts: Vec<String> = d.trim_matches('/').split('/').map(rawurlencode).collect();
+            let joined = format!("/{}", parts.join("/"));
+            if joined != "/" { format!("{joined}/") } else { joined }
+        })
+        .filter(|d| d != "/")
+        .unwrap_or_default();
+    let fqdn = p.node.daemon_sftp_alias.clone().unwrap_or_else(|| p.node.fqdn.clone());
+    format!(
+        "sftp://{}.{}@{}:{}{}",
+        rawurlencode(&p.user.user.username),
+        p.server.uuid_short,
+        fqdn,
+        p.node.daemon_sftp.0,
+        dir
+    )
 }

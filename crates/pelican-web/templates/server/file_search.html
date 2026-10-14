@@ -1,0 +1,18 @@
+{% extends "layouts/panel.html" %}
+{% block content %}
+<div class="page-head"><h1>{{ title }}</h1><a class="btn btn-gray" href="{{ server_base }}/files?path={{ dir | urlencode }}">{{ icon('arrow-left', 'icon-sm') }}</a></div>
+{% if error %}<div class="banner danger">{{ icon('alert-triangle') }}<div>{{ error }}</div></div>{% endif %}
+<div class="card table-card"><div class="table-wrap"><table class="table">
+  <thead><tr><th>{{ trans('server/file.name') }}</th><th class="wide-only">{{ trans('server/file.size') }}</th><th class="wide-only">{{ trans('server/file.modified_at') }}</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  {% set full = (dir ~ '/' ~ r.name) | replace('//', '/') %}
+  <tr{% if r.is_directory %} class="clickable" data-href="{{ server_base }}/files?path={{ full | urlencode }}"{% elif r.can_edit and can_read_content %} class="clickable" data-href="{{ server_base }}/files/edit?path={{ full | urlencode }}"{% endif %}>
+    <td><span class="row" style="flex-wrap:nowrap;gap:0.5rem">{{ icon(r.icon, 'icon-sm') }}{{ r.name }}</span></td>
+    <td class="wide-only">{{ '' if r.is_directory else (r.size | bytes) }}</td>
+    <td class="wide-only">{{ r.modified_at | ago }}</td>
+  </tr>
+  {% else %}<tr><td colspan="3"><div class="empty"><div class="icon-wrap">{{ icon('folder-search', 'icon-lg') }}</div></div></td></tr>{% endfor %}
+  </tbody>
+</table></div></div>
+{% endblock %}
