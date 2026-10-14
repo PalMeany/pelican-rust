@@ -109,17 +109,18 @@ Application API → UI → плагины → PHP-sidecar.
   - [x] маршрутизация в бинаре: `/api/*` → API, остальное → web; dev-окружение (SQLite + `difftest --seed`)
 - [x] Ресурсный фреймворк: таблица (колонки/фильтры/сортировка/пагинация, действия строк, опрос через htmx), формы (поля+валидация Laravel, TagsInput, KeyValue), модалки/подтверждения, вкладки (`?tab=`); руководство `docs/ui-guide.md`
 - [ ] Массовые действия таблиц (bulk delete)
-- [~] Auth: логин (email/username, троттлинг 5/мин, auth:success/auth:fail), MFA-челлендж (TOTP google2fa окно 8 + защита от повтора, recovery-коды bcrypt, email-код 4 мин) — готово; сброс пароля, passkeys, OAuth, капча — нет
+- [~] Auth: логин (email/username, троттлинг 5/мин, auth:success/auth:fail), MFA-челлендж (TOTP google2fa окно 8 + защита от повтора, recovery-коды bcrypt, email-код 4 мин), сброс пароля (брокер Laravel, подписанная ссылка) — готово; passkeys, OAuth, капча — нет
 - [x] Профиль: аккаунт, 2FA (TOTP с QR, recovery-коды, email-коды; настройка/отключение/перевыпуск), API-ключи, SSH-ключи, активити, кастомизация
 - [ ] Профиль: OAuth-привязки, passkeys, загрузка аватара
-- [ ] RequireTwoFactorAuthentication (уровни none/admin/all)
+- [x] RequireTwoFactorAuthentication (уровни none/admin/all)
 - [~] Admin: каркас (доступ isAdmin, сайдбар с группами и бейджами по правам spatie)
   - [x] mounts (эталон)
   - [x] database hosts, webhooks, api keys (воркер ui-a, ревью + доработки)
   - [x] users, roles (воркер ui-b)
   - [ ] backup hosts (воркер, очередь B2)
   - [x] servers: список (группировка, inline основная аллокация), редактирование (5 вкладок, переменные, маунты, синхронизация с Wings), действия, создание (htmx-перерисовка по ноде/яйцу, откат при недоступном Wings), отношения allocations/databases
-  - [ ] servers: перенос на другую ноду (TransferServerService), inline-создание владельца/аллокации в мастере
+  - [x] servers: перенос на другую ноду (TransferServerService, выбор бэкапов Wings)
+  - [ ] servers: inline-создание владельца/аллокации в мастере, массовые действия
   - [x] nodes: список (здоровье, доступность из браузера), создание, вкладки (обзор с графиками, настройки, YAML-конфиг, авто-деплой, сброс токена, диагностика), аллокации, серверы
   - [x] eggs: список (теги, число серверов), импорт (файлы/URL), 4 вкладки формы, CopyFrom, повторитель переменных, экспорт JSON/YAML, обновление по update_url, копия, удаление
   - [ ] eggs: вкладка импорта из индекса GitHub (`eggs.index`), видимость «Обновить» по флагу проверки обновлений (сейчас — при наличии update_url), массовые delete/update
@@ -131,7 +132,8 @@ Application API → UI → плагины → PHP-sidecar.
   - [x] консоль (xterm.js 5.5 + WebSocket Wings, power через set state, история команд, графики)
   - [x] файлы (список, массовые действия, права, архивы, загрузка напрямую в Wings, поиск, редактор CodeMirror 5)
   - [x] databases, network, activity (воркер ui-c); блокировка страниц в конфликтном состоянии (BlockAccessInConflict)
-  - [ ] startup, settings, mounts (очередь C2); users/сабюзеры (B2); backups, schedules, webhooks (после B2)
+  - [x] users (сабюзеры, воркер)
+  - [ ] startup, settings, mounts (очередь C2); backups, schedules, webhooks (очередь B3)
 - [ ] Инсталлятор
 - [ ] E2E-проверки ключевых сценариев в браузере (нужен настоящий Wings в VM: консоль, файлы, power, установка)
 
