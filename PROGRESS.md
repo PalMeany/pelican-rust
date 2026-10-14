@@ -60,6 +60,11 @@
   server: консоль (xterm+WS), файлы, базы данных. Воркеры GLM: ui-a готов, ui-b (users/roles/backup hosts) и
   ui-c (network/activity/startup/settings/mounts) в работе.
 
+- 2026-10-15 (ночь): E2E с настоящим Wings (v1.0.0-rc.1, бинарник в alpine-контейнере, rootless Docker в VM):
+  установка, консоль, питание, файлы, бэкап — работают с Rust-панелью без доработок. Наблюдение: уведомление
+  Wings о готовом бэкапе может прийти раньше коммита транзакции InitiateBackupService (так же в оригинале → 404,
+  бэкап «висит»); оставлено как в оригинале.
+
 ## Где остановился / что дальше
 - Хвосты M5: вебхуки на события моделей eloquent.*, egg check-updates/update-index (с UI), plugins API (M7),
   S3-бэкапы (MinIO), конфигурация ноды YAML через API.
