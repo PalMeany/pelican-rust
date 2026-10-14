@@ -3,7 +3,10 @@
 
 use axum::extract::RawPathParams;
 use pelican_core::state::AppState;
-use pelican_db::entities::{allocations, backups, databases, schedules, servers, subusers, tasks, users};
+use pelican_db::entities::{
+    allocations, backups, database_hosts, databases, eggs, mounts, nodes, roles, schedules, servers, subusers, tasks,
+    users, webhook_configurations,
+};
 use pelican_db::{Driver, Int};
 use sea_orm::{ColumnTrait, Condition, EntityTrait, QueryFilter};
 
@@ -22,6 +25,13 @@ pub struct Bound {
     pub backup: Option<backups::Model>,
     /// Client `{user:uuid}`: the subuser row of the bound user.
     pub subuser: Option<subusers::Model>,
+    /// Application API models.
+    pub node: Option<nodes::Model>,
+    pub egg: Option<eggs::Model>,
+    pub database_host: Option<database_hosts::Model>,
+    pub mount: Option<mounts::Model>,
+    pub role: Option<roles::Model>,
+    pub webhook: Option<webhook_configurations::Model>,
     /// Raw parameters by name (for string parameters and late lookups).
     pub raw: Vec<(String, String)>,
 }
@@ -78,6 +88,7 @@ pub async fn resolve(st: &AppState, group: Group, params: &RawPathParams) -> Api
                     Some(users::Entity::find_by_id(Int(id)).one(&st.db).await?.ok_or_else(ApiError::model_not_found)?);
             }
             (Group::Client, child) => bind_client_child(st, &mut b, child, value).await?,
+            (Group::Application, child) => bind_application(st, &mut b, child, value).await?,
             _ => {}
         }
     }
@@ -155,6 +166,45 @@ async fn bind_client_child(st: &AppState, b: &mut Bound, name: &str, value: &str
                 .ok_or_else(ApiError::model_not_found)?;
             b.subuser = Some(sub);
             b.user = Some(user);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Application API bindings (`{model:id}`; `scopeBindings()` for allocations of
+/// a node and databases of a server).
+async fn bind_application(st: &AppState, b: &mut Bound, name: &str, value: &str) -> ApiResult<()> {
+    let id = || -> ApiResult<Int> { Ok(Int(bind_id(value, st.driver)?.ok_or_else(ApiError::model_not_found)?)) };
+    let nf = ApiError::model_not_found;
+    match name {
+        "node" => b.node = Some(nodes::Entity::find_by_id(id()?).one(&st.db).await?.ok_or_else(nf)?),
+        "allocation" => {
+            let mut q = allocations::Entity::find().filter(allocations::Column::Id.eq(id()?));
+            if let Some(n) = &b.node {
+                q = q.filter(allocations::Column::NodeId.eq(n.id));
+            }
+            b.allocation = Some(q.one(&st.db).await?.ok_or_else(nf)?);
+        }
+        "database" => {
+            let mut q = databases::Entity::find().filter(databases::Column::Id.eq(id()?));
+            if let Some(s) = &b.server {
+                q = q.filter(databases::Column::ServerId.eq(s.id));
+            }
+            b.database = Some(q.one(&st.db).await?.ok_or_else(nf)?);
+        }
+        "egg" => b.egg = Some(eggs::Entity::find_by_id(id()?).one(&st.db).await?.ok_or_else(nf)?),
+        // `/eggs/uuid/{egg:uuid}`
+        "egg_uuid" => {
+            b.egg = Some(eggs::Entity::find().filter(eggs::Column::Uuid.eq(value)).one(&st.db).await?.ok_or_else(nf)?)
+        }
+        "database_host" => {
+            b.database_host = Some(database_hosts::Entity::find_by_id(id()?).one(&st.db).await?.ok_or_else(nf)?)
+        }
+        "mount" => b.mount = Some(mounts::Entity::find_by_id(id()?).one(&st.db).await?.ok_or_else(nf)?),
+        "role" => b.role = Some(roles::Entity::find_by_id(id()?).one(&st.db).await?.ok_or_else(nf)?),
+        "webhook" => {
+            b.webhook = Some(webhook_configurations::Entity::find_by_id(id()?).one(&st.db).await?.ok_or_else(nf)?)
         }
         _ => {}
     }
