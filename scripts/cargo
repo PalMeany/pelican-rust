@@ -24,9 +24,10 @@ case "$REPO" in
 esac
 TARGET_DEFAULT="${TARGET_DEFAULT//\//-}"
 
+# Forward with explicit values: `limactl shell` does not carry the host environment into the VM.
 envs=()
 while IFS='=' read -r k _; do
-  case "$k" in PELICAN_*|DB_*|RUST_LOG|RUST_BACKTRACE|TEST_*|CARGO_TERM_COLOR) envs+=(-e "$k");; esac
+  case "$k" in PELICAN_*|DB_*|RUST_LOG|RUST_BACKTRACE|TEST_*|CARGO_TERM_COLOR) envs+=(-e "$(printf %q "$k=${!k}")");; esac
 done < <(env)
 
 tty=()
@@ -36,8 +37,10 @@ exec limactl shell --workdir "$PWD" "$VM" -- sh -c '
   net=""
   docker network inspect '"$NET"' >/dev/null 2>&1 && net="--network '"$NET"'"
   alias=""
+  sock=""
+  [ "'"${PELICAN_DOCKER_SOCK:-}"'" = 1 ] && [ -S "$XDG_RUNTIME_DIR/docker.sock" ] && sock="-v $XDG_RUNTIME_DIR/docker.sock:/var/run/docker.sock"
   [ -n "'"${PELICAN_NET_ALIAS:-}"'" ] && [ -n "$net" ] && alias="--network-alias '"${PELICAN_NET_ALIAS:-}"'"
-  exec docker run --rm -i '"${tty[*]:-}"' $net $alias \
+  exec docker run --rm -i '"${tty[*]:-}"' $net $alias $sock \
     -v "'"$REPO"'":"'"$REPO"'" -v "'"$DATA"'":"'"$DATA"'" -w "$PWD" \
     -v '"${PELICAN_TARGET_VOLUME:-$TARGET_DEFAULT}"':/target -v pelican-rs-registry:/usr/local/cargo/registry \
     '"${envs[*]:-}"' "$@"' sh pelican-rs-dev cargo "$@"

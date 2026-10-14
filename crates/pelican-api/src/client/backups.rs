@@ -157,10 +157,55 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         .map(str::to_string)
         .collect();
     let is_locked = if ctx.can(&st, "backup.delete").await? { php_boolean(input.get("is_locked")) } else { false };
-    let db = &st.db;
+    let txn = st.db.begin().await?;
+    lock_server(&txn, server.id.0).await?;
+    let opts = InitiateBackup {
+        name: input.get("name").map(pelican_core::php::string),
+        ignored,
+        is_locked,
+        is_scheduled: false,
+        override_limit: false,
+    };
+    let backup = initiate_backup(&st, &txn, &server, opts).await?;
+    let name = backup.name.clone();
+    ctx.activity("server:backup.start")
+        .subject(morph::BACKUP, backup.id.0)
+        .property("name", name)
+        .property("locked", php_boolean(input.get("is_locked")))
+        .save_in(&txn)
+        .await?;
+    txn.commit().await?;
+    Ok(PhpJson::ok(backup_item(&backup)).into_response())
+}
+
+/// Options of `InitiateBackupService`.
+pub struct InitiateBackup {
+    pub name: Option<String>,
+    /// `setIgnoredFiles()`: already split, empty lines dropped.
+    pub ignored: Vec<String>,
+    pub is_locked: bool,
+    pub is_scheduled: bool,
+    /// `handle(..., $override)`: scheduled backups rotate the oldest unlocked backup.
+    pub override_limit: bool,
+}
+
+/// `SELECT id FROM servers WHERE id = ? FOR UPDATE` (no lock clause on SQLite).
+pub async fn lock_server<C: ConnectionTrait>(db: &C, id: i64) -> ApiResult<()> {
     let b = db.get_database_backend();
-    let txn = db.begin().await?;
-    // InitiateBackupService: throttle.
+    let lock = if b == sea_orm::DbBackend::Sqlite { "" } else { " for update" };
+    let sql = format!("select {{id}} from {{servers}} where {{servers.id}} = ? limit 1{lock}");
+    db.query_one_raw(raw::stmt(b, &sql, vec![id.into()])).await?;
+    Ok(())
+}
+
+/// `InitiateBackupService::handle()` on `db` (the caller's transaction).
+pub async fn initiate_backup<C: ConnectionTrait>(
+    st: &AppState,
+    db: &C,
+    server: &servers::Model,
+    o: InitiateBackup,
+) -> ApiResult<backups::Model> {
+    let b = db.get_database_backend();
     let limit = st.config.env.int_or("BACKUP_THROTTLE_LIMIT", 2);
     let period = st.config.env.int_or("BACKUP_THROTTLE_PERIOD", 600);
     let now = pelican_core::time::now();
@@ -171,7 +216,7 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
             &format!("select * from {{backups}} where {{backups.server_id}} = ? and {{backups.server_id}} is not null and {{created_at}} >= ? and {NON_FAILED}"),
             vec![server.id.0.into(), since.into(), bool_val(b)],
         ))
-        .all(&txn)
+        .all(db)
         .await?;
         if previous.len() as i64 >= limit {
             let last = previous.last().and_then(|p| p.created_at).map(|t| t.0).unwrap_or(now);
@@ -185,28 +230,38 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
             .with_header("retry-after", retry));
         }
     }
-    let non_failed = count(
-        &txn,
-        b,
-        &format!("select * from {{backups}} where {{backups.server_id}} = ? and {{backups.server_id}} is not null and {NON_FAILED}"),
-        vec![server.id.0.into(), bool_val(b)],
-    )
-    .await?;
-    if server.backup_limit.0 == 0 || non_failed >= server.backup_limit.0 {
-        return Err(ApiError::display(
+    let successful = "select * from {backups} where {backups.server_id} = ? and {backups.server_id} is not null";
+    let non_failed =
+        count(db, b, &format!("{successful} and {NON_FAILED}"), vec![server.id.0.into(), bool_val(b)]).await?;
+    let too_many = || {
+        ApiError::display(
             "TooManyBackupsException",
             400,
             format!(
                 "Cannot create a new backup, this server has reached its limit of {} backups.",
                 server.backup_limit.0
             ),
-        ));
+        )
+    };
+    if server.backup_limit.0 == 0 || non_failed >= server.backup_limit.0 {
+        if !o.override_limit || server.backup_limit.0 <= 0 {
+            return Err(too_many());
+        }
+        let oldest = backups::Model::find_by_statement(raw::stmt(
+            b,
+            &format!("{successful} and {NON_FAILED} and {{is_locked}} = ? order by {{created_at}} asc limit 1"),
+            vec![server.id.0.into(), bool_val(b), 0.into()],
+        ))
+        .one(db)
+        .await?
+        .ok_or_else(too_many)?;
+        delete_backup_in(st, db, server, &oldest).await?;
     }
-    let host = backup_host(&txn, server.node_id.0).await?;
+    let host = backup_host(db, server.node_id.0).await?;
     if host.schema != "wings" && host.schema != "s3" {
         return Err(ApiError::internal("Exception"));
     }
-    let name = input.get("name").map(pelican_core::php::string).unwrap_or_default();
+    let name = o.name.unwrap_or_default();
     let name = name.trim();
     let name =
         if name.is_empty() { format!("Backup at {}", now.format("%Y-%m-%d %H:%M:%S")) } else { name.to_string() };
@@ -214,11 +269,11 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
     let am = backups::ActiveModel {
         server_id: Set(server.id),
         uuid: Set(uuid::Uuid::new_v4().to_string()),
-        name: Set(name.clone()),
-        ignored_files: Set(Json(json!(ignored))),
+        name: Set(name),
+        ignored_files: Set(Json(json!(o.ignored))),
         backup_host_id: Set(host.id),
-        is_locked: Set(SmallBool(is_locked)),
-        is_scheduled: Set(Bool(false)),
+        is_locked: Set(SmallBool(o.is_locked)),
+        is_scheduled: Set(Bool(o.is_scheduled)),
         is_successful: Set(Bool(false)),
         checksum: Set(None),
         bytes: Set(Int(0)),
@@ -227,24 +282,17 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         updated_at: Set(Some(ts)),
         ..Default::default()
     };
-    let backup = pelican_db::write::insert(&txn, am).await?;
+    let backup = pelican_db::write::insert(db, am).await?;
     if host.schema == "wings" {
-        let (_, conn) = node_conn(&st, &server).await?;
+        let (_, conn) = node_conn(st, server).await?;
         st.wings
-            .create_backup(&conn, &server.uuid, "wings", &backup.uuid, &ignored.join("\n"))
+            .create_backup(&conn, &server.uuid, "wings", &backup.uuid, &o.ignored.join("\n"))
             .await
             .map_err(wings_err)?;
     } else {
         return Err(ApiError::internal("S3Exception"));
     }
-    ctx.activity("server:backup.start")
-        .subject(morph::BACKUP, backup.id.0)
-        .property("name", name)
-        .property("locked", php_boolean(input.get("is_locked")))
-        .save_in(&txn)
-        .await?;
-    txn.commit().await?;
-    Ok(PhpJson::ok(backup_item(&backup)).into_response())
+    Ok(backup)
 }
 
 fn bound(ctx: &Ctx) -> ApiResult<&backups::Model> {
@@ -424,6 +472,19 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
 
 /// `DeleteBackupService::handle`.
 pub async fn delete_backup(st: &AppState, server: &servers::Model, backup: &backups::Model) -> ApiResult<()> {
+    let txn = st.db.begin().await?;
+    delete_backup_in(st, &txn, server, backup).await?;
+    txn.commit().await?;
+    Ok(())
+}
+
+/// `DeleteBackupService::handle` inside the caller's transaction.
+pub async fn delete_backup_in<C: ConnectionTrait>(
+    st: &AppState,
+    db: &C,
+    server: &servers::Model,
+    backup: &backups::Model,
+) -> ApiResult<()> {
     if backup.is_locked.0 && backup.is_successful.0 && backup.completed_at.is_some() {
         return Err(ApiError::display(
             "BackupLockedException",
@@ -431,11 +492,10 @@ pub async fn delete_backup(st: &AppState, server: &servers::Model, backup: &back
             "Cannot delete a backup that is marked as locked.",
         ));
     }
-    let host = host_of(&st.db, backup).await?;
+    let host = host_of(db, backup).await?;
     if host.schema != "wings" && host.schema != "s3" {
         return Err(ApiError::internal("Exception"));
     }
-    let txn = st.db.begin().await?;
     let result = if host.schema == "wings" {
         let (_, conn) = node_conn(st, server).await?;
         match st.wings.delete_backup(&conn, &server.uuid, &backup.uuid).await {
@@ -450,7 +510,6 @@ pub async fn delete_backup(st: &AppState, server: &servers::Model, backup: &back
             return Err(e);
         }
     }
-    backups::Entity::delete_by_id(backup.id).exec(&txn).await?;
-    txn.commit().await?;
+    backups::Entity::delete_by_id(backup.id).exec(db).await?;
     Ok(())
 }

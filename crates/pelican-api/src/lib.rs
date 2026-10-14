@@ -6,6 +6,7 @@ pub mod client;
 pub mod envelope;
 pub mod error;
 pub mod input;
+pub mod jobs;
 pub mod json;
 pub mod paginate;
 pub mod pipeline;

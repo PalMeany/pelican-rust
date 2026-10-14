@@ -52,7 +52,34 @@ fn now() -> chrono::NaiveDateTime {
     chrono::Utc::now().naive_utc()
 }
 
-pub async fn run(ctx: &Ctx<'_>, s: &Scenario, base_url: &str) -> Result<RunResult> {
+/// The panel a scenario runs against.
+pub enum Target<'a> {
+    /// Original panel: HTTP base URL and its container (for `command` steps).
+    Orig { url: &'a str, container: Option<&'a str> },
+    /// pelican-rs started in-process.
+    Rust { url: &'a str, state: Option<&'a pelican_core::state::AppState> },
+}
+
+impl Target<'_> {
+    fn url(&self) -> &str {
+        match self {
+            Target::Orig { url, .. } | Target::Rust { url, .. } => url,
+        }
+    }
+
+    async fn command(&self, name: &str) -> Result<i64> {
+        match self {
+            Target::Orig { container: Some(c), .. } => {
+                crate::docker::exec(c, &["php", "/var/www/html/artisan", name]).await
+            }
+            Target::Rust { state: Some(st), .. } => crate::rust_target::command(st, name).await,
+            _ => anyhow::bail!("`command` steps need PELICAN_ORIG_CONTAINER and an in-process pelican-rs"),
+        }
+    }
+}
+
+pub async fn run(ctx: &Ctx<'_>, s: &Scenario, target: &Target<'_>) -> Result<RunResult> {
+    let base_url = target.url();
     ctx.wings.reset(s.wings.responses.clone());
     ctx.db.reset().await.context("db reset")?;
     let rows = merged_rows(ctx, s)?;
@@ -63,6 +90,16 @@ pub async fn run(ctx: &Ctx<'_>, s: &Scenario, base_url: &str) -> Result<RunResul
     let start = now();
     let mut steps = Vec::new();
     for (i, st) in s.steps.iter().enumerate() {
+        if let Some(cmd) = &st.command {
+            let code = target.command(cmd).await.with_context(|| format!("step {} command {cmd}", i + 1))?;
+            steps.push(StepResult {
+                status: code as u16,
+                headers: Vec::new(),
+                body: Vec::new(),
+                wings: ctx.wings.take_calls(),
+            });
+            continue;
+        }
         let url = format!("{}{}", base_url.trim_end_matches('/'), st.path);
         let method = reqwest::Method::from_bytes(st.method.as_bytes())?;
         // Both panels trust all proxies (TRUSTED_PROXIES=0.0.0.0/0), so the
@@ -150,8 +187,13 @@ pub fn report(enc: &Encrypter, s: &Scenario, rows_text: &str, r: &RunResult) -> 
     let mut raw = String::new();
     for (i, st) in r.steps.iter().enumerate() {
         let spec = &s.steps[i];
-        writeln!(raw, "### step {}: {} {}", i + 1, spec.method, spec.path)?;
-        writeln!(raw, "status: {}", st.status)?;
+        if let Some(cmd) = &spec.command {
+            writeln!(raw, "### step {}: COMMAND {cmd}", i + 1)?;
+            writeln!(raw, "exit: {}", st.status)?;
+        } else {
+            writeln!(raw, "### step {}: {} {}", i + 1, spec.method, spec.path)?;
+            writeln!(raw, "status: {}", st.status)?;
+        }
         for (k, v) in &st.headers {
             if COMPARED_HEADERS.contains(&k.as_str()) || s.normalize.headers.iter().any(|h| h.eq_ignore_ascii_case(k)) {
                 writeln!(raw, "{k}: {v}")?;

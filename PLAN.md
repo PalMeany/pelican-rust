@@ -72,11 +72,13 @@ Application API → UI → плагины → PHP-sidecar.
 - [ ] Ручная проверка с настоящим Wings (контейнер), см. QUESTIONS
 
 ### M4 — Client API (`/api/client/*`)
-- [ ] account, api-keys, ssh-keys, activity, permissions
-- [ ] servers: index, view, websocket, resources, command, power
-- [ ] databases, files (+ upload/download URL), schedules + tasks, allocations, subusers, backups, startup, settings
-- [ ] Лимиты ресурсов (ResourceLimit), rate limiting, активити-лог
-- [ ] Диф-тесты на каждый маршрут (успех + основные ошибки)
+- [x] account, api-keys, ssh-keys, activity, permissions
+- [x] servers: index, view, websocket, resources, command, power
+- [x] databases (реальный DDL на хосте БД), files (+ upload/download URL), schedules + tasks (+ RunTaskJob, sync-очередь), allocations, subusers, backups, startup
+- [ ] settings (воркер)
+- [x] Лимиты ресурсов (ResourceLimit), rate limiting (семантика CACHE_STORE=array), активити-лог
+- [x] Диф-тесты на каждый маршрут (успех + основные ошибки), 4 СУБД
+- [ ] Раннер расписаний (`p:schedule:process`, тикер в serve) — реализован, диф-теста нет (нужен шаг «artisan-команда» в харнессе)
 
 ### M5 — Application API (`/api/application/*`)
 - [ ] users, nodes (+configuration, deployable), allocations, servers (+details/build/startup/suspend/reinstall/transfer/delete), databases

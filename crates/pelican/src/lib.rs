@@ -34,6 +34,9 @@ pub async fn boot(env: Env, base: &Path) -> Result<AppState> {
 
 /// Serve the panel on an already bound listener.
 pub async fn serve(state: AppState, listener: tokio::net::TcpListener) -> Result<()> {
+    if state.config.env.bool_or("PELICAN_SCHEDULER", true) {
+        pelican_api::jobs::spawn_scheduler(state.clone());
+    }
     let app = pelican_api::router(state);
     axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
     Ok(())

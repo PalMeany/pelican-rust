@@ -1,0 +1,13 @@
+# p:schedule:process (cron, every minute): due schedule 1 runs its whole chain
+# (sync queue); inactive, never-scheduled and non-ready-server schedules are skipped.
+name: console/schedule-process
+fixtures: [base, infra, client-users, schedules]
+wings:
+  responses:
+    - method: GET
+      path: /api/servers/*/files/list-directory
+      json: [ { name: "latest.log", file: true }, { name: "x.txt", file: true } ]
+steps:
+  - { command: "p:schedule:process" }
+  - { command: "p:schedule:process" }
+  - { path: /api/client/servers/0b5c6a0e/schedules, bearer: pacc_user0000001UserClientSecret0000000000000001 }

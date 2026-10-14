@@ -3,6 +3,7 @@
 //!   pelican serve [--listen 0.0.0.0:8000] [--path <panel dir with .env>]
 //!   pelican db:install      create the schema in an empty database
 //!   pelican db:status       show the schema state
+//!   pelican schedule:process  run due schedules once (`p:schedule:process`)
 
 use std::path::PathBuf;
 
@@ -31,6 +32,8 @@ enum Cmd {
     DbInstall,
     #[command(name = "db:status")]
     DbStatus,
+    #[command(name = "schedule:process")]
+    ScheduleProcess,
 }
 
 #[tokio::main]
@@ -46,6 +49,14 @@ async fn main() -> Result<()> {
             let listener = tokio::net::TcpListener::bind(&listen).await?;
             tracing::info!("listening on {listen}");
             pelican::serve(state, listener).await
+        }
+        Cmd::ScheduleProcess => {
+            let state = pelican::boot(env, &cli.path).await?;
+            let ran = pelican_api::jobs::process_runnable(&state)
+                .await
+                .map_err(|e| anyhow::anyhow!("schedule processing failed: {:?}", e.errors.first().map(|o| &o.code)))?;
+            println!("{ran} schedule(s) processed");
+            Ok(())
         }
         Cmd::DbInstall => {
             let (config, _) = Config::from_env(env, &cli.path)?;

@@ -2,11 +2,12 @@
 
 mod account;
 mod activity;
-mod backups;
+pub mod backups;
 pub mod data;
 mod databases;
 mod files;
 mod network;
+mod schedules;
 mod servers;
 mod startup;
 mod subusers;
@@ -58,6 +59,17 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route("/servers/{server}/network/allocations", p(get(network::index).post(network::store)))
         .route("/servers/{server}/network/allocations/{allocation}", p(post(network::update).delete(network::delete)))
         .route("/servers/{server}/network/allocations/{allocation}/primary", p(post(network::set_primary)))
+        .route("/servers/{server}/schedules", p(get(schedules::index).post(schedules::store)))
+        .route(
+            "/servers/{server}/schedules/{schedule}",
+            p(get(schedules::view).post(schedules::update).delete(schedules::delete)),
+        )
+        .route("/servers/{server}/schedules/{schedule}/execute", p(post(schedules::execute)))
+        .route("/servers/{server}/schedules/{schedule}/tasks", p(post(schedules::task_store)))
+        .route(
+            "/servers/{server}/schedules/{schedule}/tasks/{task}",
+            p(post(schedules::task_update).delete(schedules::task_delete)),
+        )
         .route("/servers/{server}/startup", p(get(startup::index)))
         .route("/servers/{server}/startup/variable", p(put(startup::update)))
         .route("/servers/{server}/backups/{backup}", p(get(backups::view).delete(backups::delete)))

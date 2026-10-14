@@ -43,7 +43,12 @@ pub struct Scenario {
 pub struct Step {
     #[serde(default = "default_method")]
     pub method: String,
+    #[serde(default)]
     pub path: String,
+    /// Console command instead of an HTTP request: artisan name in panel-orig
+    /// (`php artisan <command>`), mapped to the equivalent in pelican-rs.
+    #[serde(default)]
+    pub command: Option<String>,
     #[serde(default)]
     pub headers: IndexMap<String, String>,
     /// Shortcut for `Authorization: Bearer <token>`.

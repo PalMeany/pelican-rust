@@ -1,0 +1,51 @@
+name: client/schedules-read
+fixtures: [base, infra, client-users, schedules]
+steps:
+  - { path: /api/client/servers/0b5c6a0e/schedules, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { path: /api/client/servers/0b5c6a0e/schedules/1, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { path: /api/client/servers/0b5c6a0e/schedules/4, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/schedules, bearer: pacc_user3key001User3ClientSecret000000000001 }
+---
+name: client/schedules-write
+fixtures: [base, infra, client-users, schedules]
+steps:
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: " New year ", minute: "0", hour: "4", day_of_month: "1", month: "1", day_of_week: "*" }, expect_status: 200 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: "Bad", minute: "61", hour: "*", day_of_month: "*", month: "*", day_of_week: "*", is_active: true } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: "", minute: 5, is_active: null, only_when_online: "yes" } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules/2, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: "Online only", minute: "*/15", hour: "*", day_of_month: "*", month: "1", day_of_week: "1-5", is_active: true, only_when_online: "1" }, expect_status: 200 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules/1, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: "Daily restart", minute: "0", hour: "4", day_of_month: "1", month: "*", day_of_week: "*", is_active: "1" } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules/3/tasks, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { action: command, payload: "say a", time_offset: 0 }, expect_status: 200 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules/3/tasks, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { action: power, payload: start, time_offset: "10", sequence_id: 1, continue_on_failure: true } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules/3/tasks, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { action: backup, time_offset: 0, sequence_id: "9" } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules/3/tasks, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { action: shell, payload: null, time_offset: 901 } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules/1/tasks/2, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { action: power, payload: stop, time_offset: 5, sequence_id: 4 } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules/1/tasks/4, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { action: backup, payload: "*.tmp\n\ncache/", time_offset: 0, sequence_id: 1 } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules/1/tasks/1, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { action: command, payload: "say restarting", time_offset: 0 } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules/1/tasks/6, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { action: command, payload: "x", time_offset: 0 } }
+  - { method: DELETE, path: /api/client/servers/0b5c6a0e/schedules/1/tasks/3, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 204 }
+  - { method: DELETE, path: /api/client/servers/0b5c6a0e/schedules/1/tasks/1, bearer: pacc_user3key001User3ClientSecret000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/schedules/1, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: DELETE, path: /api/client/servers/0b5c6a0e/schedules/2, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 204 }
+---
+name: client/schedules-execute
+fixtures: [base, infra, client-users, schedules]
+wings:
+  responses:
+    - method: GET
+      path: /api/servers/*/files/list-directory
+      json: [ { name: "latest.log", file: true }, { name: "debug.log", file: true }, { name: "x.txt", file: true }, { name: "keep.txt", file: true } ]
+    - { method: GET, path: /api/servers/0b5c6a0e-3f0e-4c1e-9d55-6c1d7c0a2d11, json: { state: offline } }
+steps:
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules/1/execute, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 202 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules/2/execute, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 202 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules/5/execute, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/schedules, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+---
+name: client/schedules-execute-failure
+fixtures: [base, infra, client-users, schedules]
+wings:
+  responses:
+    - { method: POST, path: /api/servers/*/power, status: 500, json: { error: "boom" } }
+steps:
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules/1/execute, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/schedules/1, bearer: pacc_user0000001UserClientSecret0000000000000001 }

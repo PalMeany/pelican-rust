@@ -35,6 +35,7 @@ for b in "${backends[@]}"; do
     echo "$b" > "$marker"
   fi
   echo "== difftest on $b"
+  PELICAN_DOCKER_SOCK=1 PELICAN_ORIG_CONTAINER="${PROJECT}-panel-orig-1" \
   PELICAN_NET="${PROJECT}_default" PELICAN_NET_ALIAS=wings.test TEST_DIFFTEST_SQLITE="$DATA/sqlite/database.sqlite" \
     PELICAN_TARGET_VOLUME="pelican-rs-target-$ENV_NAME" DIFFTEST_BACKEND="$b" TEST_DIFFTEST_BACKEND="$b" \
     "$REPO/scripts/cargo" run -q -p difftest -- --backend "$b" "$@" || rc=1

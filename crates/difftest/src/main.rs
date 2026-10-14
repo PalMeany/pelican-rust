@@ -56,12 +56,20 @@ async fn main() -> Result<()> {
         .build()?;
     let ctx = Ctx { db: &db, wings: &wings, enc: &enc, http, fixtures_dir: root.join("fixtures") };
 
-    let second_url = if args.self_check {
-        ORIG_URL.to_string()
+    let container = std::env::var("PELICAN_ORIG_CONTAINER").ok();
+    let orig = runner::Target::Orig { url: ORIG_URL, container: container.as_deref() };
+    let (second_url, rust_state) = if args.self_check {
+        (ORIG_URL.to_string(), None)
     } else if let Some(u) = &args.rust_url {
-        u.clone()
+        (u.clone(), None)
     } else {
-        difftest::rust_target::start(&args.backend, APP_KEY).await?
+        let (u, st) = difftest::rust_target::start(&args.backend, APP_KEY).await?;
+        (u, Some(st))
+    };
+    let second = if args.self_check {
+        runner::Target::Orig { url: ORIG_URL, container: container.as_deref() }
+    } else {
+        runner::Target::Rust { url: &second_url, state: rust_state.as_ref() }
     };
 
     let scenarios = load_scenarios(&root.join("scenarios"), args.filter.as_deref())?;
@@ -76,8 +84,8 @@ async fn main() -> Result<()> {
             continue;
         }
         let rows_text = serde_yaml::to_string(&runner::merged_rows(&ctx, s)?)?;
-        let a = runner::run(&ctx, s, ORIG_URL).await.with_context(|| format!("{}: original", s.name));
-        let b = runner::run(&ctx, s, &second_url).await.with_context(|| format!("{}: second", s.name));
+        let a = runner::run(&ctx, s, &orig).await.with_context(|| format!("{}: original", s.name));
+        let b = runner::run(&ctx, s, &second).await.with_context(|| format!("{}: second", s.name));
         let (a, b) = match (a, b) {
             (Ok(a), Ok(b)) => (a, b),
             (a, b) => {

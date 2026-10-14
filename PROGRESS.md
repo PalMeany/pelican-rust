@@ -39,11 +39,17 @@
   (сверено с PHP lcobucci). Запись JSON как в PHP (`pelican_db::write`), запросы формы Eloquent
   (ADR-0011). Валидатор Laravel (`pelican-api/src/validation.rs`), ввод (`input.rs`).
 
+- 2026-10-14 (ночь): M4 почти закрыта. Client API: account/keys/ssh/activity, servers, subusers,
+  backups, startup, files (Wings-прокси, подписанные URL, правило `url` = Str::isUrl), databases
+  (реальный DDL на хосте MariaDB из difftest-сети), network (воркер), schedules+tasks (RunTaskJob,
+  sync-очередь как SyncQueue, ADR-0012), cron-php (воркер, 1840/1840 векторов PHP). Всё зелёное на 4 СУБД.
+
 ## Где остановился / что дальше
+- M4: принять settings от воркера (`.worktrees/settings`), затем закрыть веху (полный прогон `--backend all`).
+- Харнесс: шаг «artisan-команда» (запуск `p:schedule:process` в panel-orig и `pelican schedule:process`),
+  чтобы диф-тестировать раннер расписаний и прочие консольные команды M5.
 - M3 хвосты: S3-бэкапы (MinIO в compose + presign), удаление сабюзера-владельца (`Server::saved`).
-- M4 Client API: начать с каркаса серверных маршрутов (AuthenticateServerAccess, ResourceLimit,
-  subject activity), затем GET /api/client (список серверов), ServerData и далее по spec client-api.md §8.
-  Механические ресурсы/эндпоинты отдавать воркерам по шаблону (см. scripts/worker/*.md).
+- Далее M5 Application API.
 
 ## Диск (просьба пользователя)
 На хосте мало места (~15–30 ГБ свободно). Сборки живут в docker-томах VM (`pelican-rs-target*`).
@@ -53,6 +59,13 @@
 Проверка: `df -h /Users/tazik`, `du -sh ~/.lima/pelican`. Пользователь предлагал отдельный сервер для сборок.
 
 ## Грабли (важно)
+- Каждый checkout (main, `.worktrees/<name>`) обязан иметь свой target-том: cargo хеширует path-крейты
+  относительно корня воркспейса, и общий target приводит к перезаписи rlib чужой версией
+  (`scripts/cargo` выбирает том по пути сам). Воркеры запускаются через `env -i` — env-переменные не доходят.
+- Даты «ближайшего запуска» cron в сценариях держать дальше 3 дней от «сейчас»: нормализатор
+  записывает близкие времена относительно старта прогона, а панели стартуют в разное время.
+- Оригинал в difftest работает с CACHE_STORE=array и QUEUE_CONNECTION=sync — у Rust-панели те же
+  значения (`rust_target.rs`), иначе троттлинг и очередь расходятся.
 - Python-замены в исходниках после `cargo fmt` молча не срабатывают — всегда `assert old in s`.
 - Таблицы, которые засевают миграции (`backup_hosts` «Local»), сбрасываются харнессом — добавлять в фикстуры.
 - В PG нельзя биндить text в json-колонку: только через `pelican_db::write` (CAST).

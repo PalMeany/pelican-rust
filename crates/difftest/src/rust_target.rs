@@ -6,7 +6,7 @@ use std::path::Path;
 use pelican_core::env::Env;
 
 /// Start pelican-rs against the difftest database and return its base URL.
-pub async fn start(backend: &str, app_key: &str) -> anyhow::Result<String> {
+pub async fn start(backend: &str, app_key: &str) -> anyhow::Result<(String, pelican_core::state::AppState)> {
     let cfg = crate::db::config_for(backend)?;
     let mut vars: HashMap<String, String> = HashMap::new();
     let mut set = |k: &str, v: &str| {
@@ -18,6 +18,9 @@ pub async fn start(backend: &str, app_key: &str) -> anyhow::Result<String> {
     set("TRUSTED_PROXIES", "0.0.0.0/0");
     // Same per-request cache semantics as panel-orig (difftest/compose.yml).
     set("CACHE_STORE", "array");
+    set("QUEUE_CONNECTION", "sync");
+    // panel-orig runs no cron either.
+    set("PELICAN_SCHEDULER", "false");
     set("PANEL_CLIENT_ALLOCATIONS_ENABLED", "true");
     set("PANEL_CLIENT_ALLOCATIONS_RANGE_START", "25570");
     set("PANEL_CLIENT_ALLOCATIONS_RANGE_END", "25571");
@@ -30,10 +33,24 @@ pub async fn start(backend: &str, app_key: &str) -> anyhow::Result<String> {
     let state = pelican::boot(Env::from_map(vars), Path::new("/nonexistent")).await?;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;
+    let handle = state.clone();
     tokio::spawn(async move {
         if let Err(e) = pelican::serve(state, listener).await {
             eprintln!("pelican-rs stopped: {e:#}");
         }
     });
-    Ok(format!("http://{addr}"))
+    Ok((format!("http://{addr}"), handle))
+}
+
+/// Console commands of pelican-rs by their artisan name; returns the exit code.
+pub async fn command(state: &pelican_core::state::AppState, name: &str) -> anyhow::Result<i64> {
+    match name {
+        "p:schedule:process" => {
+            pelican_api::jobs::process_runnable(state)
+                .await
+                .map_err(|e| anyhow::anyhow!("{:?}", e.errors.first().map(|o| &o.code)))?;
+            Ok(0)
+        }
+        other => anyhow::bail!("no pelican-rs equivalent for `{other}`"),
+    }
 }
