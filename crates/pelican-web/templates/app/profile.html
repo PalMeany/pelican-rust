@@ -1,0 +1,179 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% set A = 'filament-panels::auth/multi-factor/app' %}
+{% set E = 'filament-panels::auth/multi-factor/email' %}
+{% block content %}
+<div data-tabs-root class="stack">
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    <a class="btn btn-gray" href="/" title="{{ trans('filament-panels::auth/pages/edit-profile.actions.cancel.label') }}">{{ icon('arrow-left', 'icon-sm') }}</a>
+    <button class="btn" type="submit" form="profile-form" title="{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}">{{ icon('device-floppy', 'icon-sm') }}{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}</button>
+  </div>
+</div>
+<div><nav class="tabs">
+  {% for t in [['account', 'user-cog'], ['2fa', 'shield-lock'], ['api_keys', 'key'], ['ssh_keys', 'lock-code'], ['activity', 'history'], ['customization', 'adjustments']] %}
+  <button type="button" data-tab="{{ t[0] }}" class="{{ 'active' if tab == t[0] }}">{{ icon(t[1], 'icon-sm') }}{{ trans('profile.tabs.' ~ t[0]) }}</button>
+  {% endfor %}
+</nav></div>
+
+<form id="profile-form" method="post" action="/profile">
+  {{ csrf_field() }}
+  <input type="hidden" name="_tab" value="{{ tab }}">
+  <section class="card card-body form" data-tab-panel="account"{% if tab != 'account' %} hidden{% endif %}>
+    {{ f.text('username', trans('profile.username'), v.username, errors, required=true, disabled=managed, attrs='maxlength="255"', autocomplete='username') }}
+    {{ f.text('email', trans('profile.email'), v.email, errors, type='email', required=true, disabled=managed, attrs='maxlength="255"', autocomplete='email') }}
+    {% if not managed %}
+    {{ f.password('password', trans('profile.password'), errors, autocomplete='new-password') }}
+    {{ f.password('passwordConfirmation', trans('profile.password_confirmation'), errors, autocomplete='new-password') }}
+    {% endif %}
+    {{ f.select('timezone', trans('profile.timezone'), timezones, v.timezone, errors, required=true) }}
+    {{ f.select('language', trans('profile.language'), languages, v.language, errors, required=true, hint=language_help or '') }}
+  </section>
+  <section class="stack" data-tab-panel="customization"{% if tab != 'customization' %} hidden{% endif %}>
+    <fieldset class="card card-body form" style="margin:0">
+      <legend class="row" style="font-weight:600">{{ icon('dashboard', 'icon-sm') }}{{ trans('profile.dashboard') }}</legend>
+      {{ f.radios('dashboard_layout', trans('profile.dashboard_layout'), [['grid', trans('profile.grid')], ['table', trans('profile.table')]], v.custom.dashboard_layout, errors, inline=true) }}
+      {{ f.radios('top_navigation', trans('profile.navigation'), [['sidebar', trans('profile.sidebar')], ['topbar', trans('profile.topbar')], ['mixed', trans('profile.mixed')]], v.custom.top_navigation, errors, inline=true) }}
+      {{ f.radios('button_style', trans('profile.button_style'), [['1', trans('profile.icon')], ['0', trans('profile.icon_button')]], '1' if v.custom.button_style else '0', errors, inline=true) }}
+    </fieldset>
+    {% if is_admin %}
+    <fieldset class="card card-body form" style="margin:0">
+      <legend class="row" style="font-weight:600">{{ icon('shield', 'icon-sm') }}{{ trans('profile.admin') }}</legend>
+      {{ f.radios('redirect_to_admin', trans('profile.redirect_to_admin'), [['1', trans('filament-forms::components.toggle_buttons.boolean.true')], ['0', trans('filament-forms::components.toggle_buttons.boolean.false')]], '1' if v.custom.redirect_to_admin else '0', errors, inline=true, hint=trans('profile.redirect_to_admin_help')) }}
+    </fieldset>
+    {% endif %}
+    <fieldset class="card card-body grid grid-4" style="margin:0">
+      <legend class="row" style="font-weight:600">{{ icon('terminal-2', 'icon-sm') }}{{ trans('profile.console') }}</legend>
+      {{ f.text('console_font_size', trans('profile.font_size'), v.custom.console_font_size, errors, type='number', required=true, attrs='min="1"') }}
+      {{ f.select('console_font', trans('profile.font'), fonts, v.custom.console_font, errors, required=true) }}
+      <div class="field span-2"><span class="field-label">{{ trans('profile.font_preview') }}</span>
+        <span style="font-family:{{ v.custom.console_font }},monospace;font-size:{{ v.custom.console_font_size }}px">The quick blue pelican jumps over the lazy pterodactyl. :)</span></div>
+      <div class="span-2">{{ f.text('console_graph_period', trans('profile.graph_period'), v.custom.console_graph_period, errors, type='number', required=true, suffix=trans('profile.seconds'), hint=trans('profile.graph_period_helper'), attrs='min="10" max="120"') }}</div>
+      <div class="span-2">{{ f.text('console_rows', trans('profile.rows'), v.custom.console_rows, errors, type='number', required=true, attrs='min="1"') }}</div>
+    </fieldset>
+  </section>
+</form>
+
+<section class="stack" data-tab-panel="2fa"{% if tab != '2fa' %} hidden{% endif %}>
+  <div class="card card-body stack">
+    <div class="row"><strong>{{ trans(A ~ '/provider.management_schema.actions.label') }}</strong>
+      <span class="badge {{ 'badge-success' if mfa.app }}">{{ trans(A ~ '/provider.management_schema.actions.messages.' ~ ('enabled' if mfa.app else 'disabled')) }}</span></div>
+    <p class="muted">{{ trans(A ~ '/provider.management_schema.actions.below_content') }}</p>
+    {% if not mfa.app %}
+    <div><a class="btn" href="/profile/mfa/app/setup">{{ icon('lock', 'icon-sm') }}{{ trans(A ~ '/actions/set-up.label') }}</a></div>
+    {% else %}
+    <div class="row">
+      <button class="btn btn-gray" type="button" data-modal-open="mfa-app-regenerate">{{ trans(A ~ '/actions/regenerate-recovery-codes.label') }}</button>
+      <button class="btn btn-danger" type="button" data-modal-open="mfa-app-disable">{{ trans(A ~ '/actions/disable.label') }}</button>
+    </div>
+    {% endif %}
+  </div>
+  <div class="card card-body stack">
+    <div class="row"><strong>{{ trans(E ~ '/provider.management_schema.actions.label') }}</strong>
+      <span class="badge {{ 'badge-success' if mfa.email }}">{{ trans(E ~ '/provider.management_schema.actions.messages.' ~ ('enabled' if mfa.email else 'disabled')) }}</span></div>
+    <p class="muted">{{ trans(E ~ '/provider.management_schema.actions.below_content') }}</p>
+    {% if not mfa.email %}
+    <div><a class="btn" href="/profile/mfa/email/setup">{{ icon('mail', 'icon-sm') }}{{ trans(E ~ '/actions/set-up.label') }}</a></div>
+    {% else %}
+    <div class="row"><button class="btn btn-danger" type="button" data-modal-open="mfa-email-disable">{{ trans(E ~ '/actions/disable.label') }}</button></div>
+    {% endif %}
+  </div>
+</section>
+
+<section class="grid grid-3" data-tab-panel="api_keys"{% if tab != 'api_keys' %} hidden{% endif %}>
+  <form class="card span-2" method="post" action="/profile/api-keys">
+    {{ csrf_field() }}
+    <div class="card-head"><h2>{{ trans('profile.create_api_key') }}</h2><button class="btn btn-sm" type="submit">{{ trans('filament-actions::create.single.modal.actions.create.label') }}</button></div>
+    <div class="card-body form">
+      {{ f.text('description', trans('profile.description'), '', {}, required=true) }}
+      {{ f.text('allowed_ips', trans('profile.allowed_ips'), '', {}, placeholder='127.0.0.1 or 192.168.1.1', hint=trans('profile.allowed_ips_help')) }}
+    </div>
+  </form>
+  <div class="card">
+    <div class="card-head"><h2>{{ trans('profile.api_keys') }}</h2></div>
+    <div class="card-body stack">
+      {% for k in api_keys %}
+      <div class="row" style="justify-content:space-between;flex-wrap:nowrap">
+        <div style="min-width:0"><div class="mono truncate">{{ k.identifier }}</div><div class="muted small truncate">{{ k.memo }}</div></div>
+        <form method="post" action="/profile/api-keys/{{ k.id }}/delete" data-confirm="{{ trans('filament-actions::modal.confirmation') }}" data-confirm-title="{{ trans('filament-actions::delete.single.label') }}">
+          {{ csrf_field() }}<button class="icon-btn danger" type="submit" aria-label="{{ trans('filament-actions::delete.single.label') }}">{{ icon('trash', 'icon-sm') }}</button></form>
+      </div>
+      {% else %}<p class="muted">{{ trans('profile.no_api_keys') }}</p>{% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="grid grid-3" data-tab-panel="ssh_keys"{% if tab != 'ssh_keys' %} hidden{% endif %}>
+  <form class="card span-2" method="post" action="/profile/ssh-keys">
+    {{ csrf_field() }}
+    <div class="card-head"><h2>{{ trans('profile.create_ssh_key') }}</h2><button class="btn btn-sm" type="submit">{{ trans('filament-actions::create.single.modal.actions.create.label') }}</button></div>
+    <div class="card-body form">
+      {{ f.text('name', trans('profile.name'), '', {}, required=true) }}
+      {{ f.textarea('public_key', trans('profile.public_key'), '', {}, required=true, rows=4, code=true) }}
+    </div>
+  </form>
+  <div class="card">
+    <div class="card-head"><h2>{{ trans('profile.ssh_keys') }}</h2></div>
+    <div class="card-body stack">
+      {% for k in ssh_keys %}
+      <div class="row" style="justify-content:space-between;flex-wrap:nowrap">
+        <div style="min-width:0"><div class="truncate">{{ k.name }}</div><div class="muted small mono truncate">SHA256:{{ k.fingerprint }}</div></div>
+        <form method="post" action="/profile/ssh-keys/{{ k.id }}/delete" data-confirm="{{ trans('filament-actions::modal.confirmation') }}" data-confirm-title="{{ trans('filament-actions::delete.single.label') }}">
+          {{ csrf_field() }}<button class="icon-btn danger" type="submit" aria-label="{{ trans('filament-actions::delete.single.label') }}">{{ icon('trash', 'icon-sm') }}</button></form>
+      </div>
+      {% else %}<p class="muted">{{ trans('profile.no_ssh_keys') }}</p>{% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="card" data-tab-panel="activity"{% if tab != 'activity' %} hidden{% endif %}>
+  <div class="card-head"><h2>{{ trans('profile.activity_info') }}</h2></div>
+  <div class="card-body stack">
+    {% for a in activity %}{% include "components/activity_entry.html" %}{% endfor %}
+  </div>
+</section>
+</div>
+
+{% if mfa.app %}
+<dialog id="mfa-app-disable" class="modal">
+  <form method="post" action="/profile/mfa/app/disable">
+    {{ csrf_field() }}
+    <div class="modal-head"><h2>{{ trans(A ~ '/actions/disable.modal.heading') }}</h2></div>
+    <div class="modal-body">
+      <p class="muted">{{ trans(A ~ '/actions/disable.modal.description') }}</p>
+      {{ f.text('code', trans(A ~ '/actions/disable.modal.form.code.label'), '', {}, autocomplete='one-time-code', attrs='inputmode="numeric" maxlength="6"') }}
+      {{ f.password('recovery_code', trans(A ~ '/actions/disable.modal.form.recovery_code.label'), {}, autocomplete='off') }}
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+      <button type="submit" class="btn btn-danger">{{ trans(A ~ '/actions/disable.modal.actions.submit.label') }}</button></div>
+  </form>
+</dialog>
+<dialog id="mfa-app-regenerate" class="modal">
+  <form method="post" action="/profile/mfa/app/recovery-codes">
+    {{ csrf_field() }}
+    <div class="modal-head"><h2>{{ trans(A ~ '/actions/regenerate-recovery-codes.modal.heading') }}</h2></div>
+    <div class="modal-body">
+      <p class="muted">{{ trans(A ~ '/actions/regenerate-recovery-codes.modal.description') }}</p>
+      {{ f.text('code', trans(A ~ '/actions/regenerate-recovery-codes.modal.form.code.label'), '', {}, required=true, autocomplete='one-time-code', attrs='inputmode="numeric" maxlength="6"') }}
+      {{ f.password('password', trans(A ~ '/actions/regenerate-recovery-codes.modal.form.password.label'), {}, required=true) }}
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+      <button type="submit" class="btn">{{ trans(A ~ '/actions/regenerate-recovery-codes.modal.actions.submit.label') }}</button></div>
+  </form>
+</dialog>
+{% endif %}
+{% if mfa.email %}
+<dialog id="mfa-email-disable" class="modal">
+  <div class="modal-head"><h2>{{ trans(E ~ '/actions/disable.modal.heading') }}</h2></div>
+  <div class="modal-body">
+    <p class="muted">{{ trans(E ~ '/actions/disable.modal.description') }}</p>
+    <form method="post" action="/profile/mfa/email/resend">{{ csrf_field() }}<button class="btn-link" type="submit">{{ trans(E ~ '/actions/disable.modal.form.code.actions.resend.label') }}</button></form>
+    <form id="mfa-email-disable-form" method="post" action="/profile/mfa/email/disable">{{ csrf_field() }}
+      {{ f.text('code', trans(E ~ '/actions/disable.modal.form.code.label'), '', {}, required=true, autocomplete='one-time-code', attrs='inputmode="numeric" maxlength="6"') }}</form>
+  </div>
+  <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+    <button type="submit" form="mfa-email-disable-form" class="btn btn-danger">{{ trans(E ~ '/actions/disable.modal.actions.submit.label') }}</button></div>
+</dialog>
+{% endif %}
+{% endblock %}

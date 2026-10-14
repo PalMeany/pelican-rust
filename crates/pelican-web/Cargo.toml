@@ -31,5 +31,6 @@ sha1 = "0.10"
 chrono-tz = "0.10"
 form_urlencoded = "1"
 futures = "0.3"
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 indexmap = { version = "2", features = ["serde"] }
 serde_urlencoded = "0.7"

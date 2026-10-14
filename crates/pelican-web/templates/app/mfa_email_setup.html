@@ -1,0 +1,18 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% set E = 'filament-panels::auth/multi-factor/email/actions/set-up.modal' %}
+{% block content %}
+<div class="card" style="max-width:36rem;margin:0 auto;width:100%">
+  <div class="card-head"><h2>{{ title }}</h2></div>
+  <div class="card-body stack">
+    <p class="muted">{{ trans(E ~ '.description') }}</p>
+    <form method="post" action="/profile/mfa/email/setup" class="form">
+      {{ csrf_field() }}
+      {{ f.text('code', trans(E ~ '.form.code.label'), '', errors, required=true, autofocus=true, autocomplete='one-time-code', attrs='inputmode="numeric" maxlength="6"') }}
+      <div class="form-actions"><a class="btn btn-gray" href="/profile?tab=2fa">{{ trans('filament-actions::modal.actions.cancel.label') }}</a>
+        <button class="btn" type="submit">{{ trans(E ~ '.actions.submit.label') }}</button></div>
+    </form>
+    <form method="post" action="/profile/mfa/email/resend">{{ csrf_field() }}<button class="btn-link" type="submit">{{ trans(E ~ '.form.code.actions.resend.label') }}</button></form>
+  </div>
+</div>
+{% endblock %}

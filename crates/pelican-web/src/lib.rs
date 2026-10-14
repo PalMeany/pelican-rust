@@ -1,6 +1,7 @@
 //! Web UI of pelican-rs (ADR-0005, ADR-0013): server-rendered minijinja pages
 //! with htmx, sharing the domain services of the APIs.
 
+pub mod activity;
 pub mod assets;
 mod auth;
 pub mod cache;

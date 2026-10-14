@@ -1,0 +1,31 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% set A = 'filament-panels::auth/multi-factor/app/actions/set-up.modal' %}
+{% block content %}
+<div class="card" style="max-width:36rem;margin:0 auto;width:100%">
+  <div class="card-head"><h2>{{ title }}</h2></div>
+  <div class="card-body stack">
+  {% if recovery_codes %}
+    <p style="font-weight:600">{{ trans(A ~ '.content.recovery_codes.instruction') }}</p>
+    <div class="recovery-codes">{% for c in recovery_codes %}<span>{{ c }}</span>{% endfor %}</div>
+    <p class="small">{{ trans('filament-panels::auth/multi-factor/recovery-codes-modal-content.actions.0') }}
+      <button type="button" class="btn-link" data-copy="{{ recovery_codes | join('\n') }}">{{ trans('filament-panels::auth/multi-factor/recovery-codes-modal-content.actions.copy.label') }}</button>
+      {{ trans('filament-panels::auth/multi-factor/recovery-codes-modal-content.actions.1') }}
+      <a class="btn-link" download="recovery-codes.txt" href="data:text/plain;charset=utf-8,{{ recovery_codes | join('\n') | urlencode }}">{{ trans('filament-panels::auth/multi-factor/recovery-codes-modal-content.actions.download.label') }}</a>
+      {{ trans('filament-panels::auth/multi-factor/recovery-codes-modal-content.actions.2') }}</p>
+    <div><a class="btn" href="/profile?tab=2fa">{{ trans('filament::components/modal.actions.close.label') }}</a></div>
+  {% else %}
+    <p class="muted">{{ trans(A ~ '.content.qr_code.instruction') }}</p>
+    <div style="text-align:center"><span class="qr" role="img" aria-label="{{ trans(A ~ '.content.qr_code.alt') }}">{{ qr }}</span></div>
+    <p class="muted">{{ trans(A ~ '.content.text_code.instruction') }} <span class="mono copyable" data-copy="{{ secret }}">{{ secret }}</span></p>
+    <form method="post" action="/profile/mfa/app/setup" class="form">
+      {{ csrf_field() }}
+      {{ f.text('code', trans(A ~ '.form.code.label'), '', errors, required=true, autofocus=true, autocomplete='one-time-code', hint=trans(A ~ '.form.code.below_content'), attrs='inputmode="numeric" maxlength="6"') }}
+      {{ f.password('password', trans(A ~ '.form.password.label'), errors, required=true) }}
+      <div class="form-actions"><a class="btn btn-gray" href="/profile?tab=2fa">{{ trans('filament-actions::modal.actions.cancel.label') }}</a>
+        <button class="btn" type="submit">{{ trans(A ~ '.actions.submit.label') }}</button></div>
+    </form>
+  {% endif %}
+  </div>
+</div>
+{% endblock %}

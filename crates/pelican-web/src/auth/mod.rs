@@ -262,7 +262,7 @@ pub async fn cancel(web: Web) -> Response {
 }
 
 /// `EmailAuthentication::sendCode()`: 2 sends per minute, code bound to this session.
-async fn send_email_code(web: &Web, user: &users::Model) -> Result<bool, WebError> {
+pub(crate) async fn send_email_code(web: &Web, user: &users::Model) -> Result<bool, WebError> {
     let key = format!("filament-email-authentication:{}", user.id.0);
     if web.st.limiter.too_many_attempts(&key, 2, now()).is_some() {
         return Ok(false);
@@ -287,7 +287,7 @@ async fn send_email_code(web: &Web, user: &users::Model) -> Result<bool, WebErro
     Ok(true)
 }
 
-fn verify_email_code(web: &Web, code: &str) -> bool {
+pub(crate) fn verify_email_code(web: &Web, code: &str) -> bool {
     let data = web.session.data();
     let Some(entry) = data.extra.get("mfa_email_code") else { return false };
     let hash = entry.get("hash").and_then(|h| h.as_str()).unwrap_or("");
