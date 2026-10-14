@@ -11,6 +11,7 @@ pub mod input;
 pub mod jobs;
 pub mod json;
 pub mod paginate;
+pub mod passwords;
 pub mod pipeline;
 pub mod query;
 pub mod remote;

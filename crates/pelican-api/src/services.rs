@@ -63,7 +63,7 @@ fn enabled(st: &AppState, key: &str) -> bool {
 }
 
 /// Filament app panel reset URL: `URL::signedRoute('filament.app.auth.password-reset.reset', [email, token])`.
-fn reset_url(st: &AppState, email: &str, token: &str) -> String {
+pub fn reset_url(st: &AppState, email: &str, token: &str) -> String {
     let q = |s: &str| crate::envelope::rfc3986(s);
     let url = format!(
         "{}/password-reset/reset?email={}&token={}",
@@ -90,6 +90,7 @@ pub async fn account_created(st: &AppState, user: &users::Model, token: Option<&
     }
     let l = user.language.as_str();
     let msg = MailMessage {
+        outro: Vec::new(),
         subject: "Account Created".into(),
         error: false,
         greeting: Some(trans(l, "mail.greeting", &[("name", &user.username)])),
@@ -114,6 +115,7 @@ pub async fn subuser_mail(st: &AppState, user: &users::Model, server: &servers::
     let group = if added { "added_to_server" } else { "removed_from_server" };
     let url = if added { console_url(st, server) } else { st.config.app_url.clone() };
     let msg = MailMessage {
+        outro: Vec::new(),
         subject: if added { "Added To Server".into() } else { "Removed From Server".into() },
         error: !added,
         greeting: Some(trans(l, "mail.greeting", &[("name", &user.username)])),
@@ -135,6 +137,7 @@ pub async fn server_installed_mail(st: &AppState, server: &servers::Model, initi
     let Some(owner) = users::Entity::find_by_id(server.owner_id).one(&st.db).await? else { return Ok(()) };
     let l = owner.language.as_str();
     let msg = MailMessage {
+        outro: Vec::new(),
         subject: "Server Installed".into(),
         error: false,
         greeting: Some(trans(l, "mail.greeting", &[("name", &owner.username)])),

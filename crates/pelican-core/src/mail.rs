@@ -55,6 +55,8 @@ pub struct MailMessage {
     pub greeting: Option<String>,
     pub lines: Vec<String>,
     pub action: Option<(String, String)>,
+    /// Lines after the action button (`outroLines`).
+    pub outro: Vec<String>,
 }
 
 fn html_escape(s: &str) -> String {
@@ -73,6 +75,9 @@ impl MailMessage {
         }
         if let Some((text, url)) = &self.action {
             out.push_str(&format!("{text}: {url}\n\n"));
+        }
+        for l in &self.outro {
+            out.push_str(&format!("{l}\n\n"));
         }
         out.push_str(&format!("Regards,\n{app_name}\n"));
         if let Some((text, url)) = &self.action {
@@ -98,6 +103,9 @@ impl MailMessage {
                 html_escape(url),
                 html_escape(text)
             ));
+        }
+        for l in &self.outro {
+            body.push_str(&format!("<p>{}</p>", html_escape(l)));
         }
         body.push_str(&format!("<p>Regards,<br>{}</p>", html_escape(app_name)));
         if let Some((text, url)) = &self.action {

@@ -21,7 +21,9 @@ $locales = array_values(array_filter(scandir(lang_path()), fn ($d) => $d[0] !== 
 $result = [];
 foreach ($locales as $locale) {
     $data = [];
-    foreach ($groups(lang_path(), $locale) as $g) {
+    // App groups plus the framework's own (passwords, auth, pagination, validation fallbacks).
+    $framework = base_path('vendor/laravel/framework/src/Illuminate/Translation/lang');
+    foreach (array_unique(array_merge($groups(lang_path(), $locale), $groups($framework, $locale))) as $g) {
         $data[$g] = $loader->load($locale, $g, '*');
     }
     foreach ($loader->namespaces() as $ns => $path) {

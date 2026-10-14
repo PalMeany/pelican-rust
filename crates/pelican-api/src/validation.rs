@@ -405,6 +405,9 @@ impl<'a> Validator<'a> {
                 let other = self.other(&format!("{attribute}_confirmation"));
                 other == value
             }
+            // validateSame / validateDifferent: strict comparison with another field.
+            "same" => p.first().is_some_and(|f| self.other(f) == value),
+            "different" => p.first().is_some_and(|f| self.other(f) != value),
             "distinct" => {
                 let Some(primary) = self.attrs_primary_for(attribute) else { return true };
                 let siblings = expand_wildcard(self.data, &primary);
@@ -513,6 +516,13 @@ impl<'a> Validator<'a> {
             "required_with" | "required_with_all" | "required_without" | "required_without_all" => {
                 let vals: Vec<String> = params.iter().map(|p| snake(p).replace('_', " ")).collect();
                 msg = msg.replace(":values", &vals.join(" / "));
+            }
+            "same" | "different" => {
+                let other = params
+                    .first()
+                    .map(|p| self.attribute_names.get(p).cloned().unwrap_or_else(|| snake(p).replace('_', " ")))
+                    .unwrap_or_default();
+                msg = msg.replace(":other", &other);
             }
             "required_if" | "required_unless" => {
                 let other = params.first().map(|p| snake(p).replace('_', " ")).unwrap_or_default();

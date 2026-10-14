@@ -1,6 +1,7 @@
 //! Sign-in, multi-factor challenge and sign-out
 //! (app/Filament/Pages/Auth/Login.php over Filament's `Auth\Pages\Login`).
 
+pub mod password_reset;
 pub mod totp;
 
 use axum::response::Response;
@@ -279,6 +280,7 @@ pub(crate) async fn send_email_code(web: &Web, user: &users::Model) -> Result<bo
     let line =
         |i: u8| crate::i18n::trans_choice(&locale, &format!("{group}.lines.{i}"), EMAIL_CODE_MINUTES as f64, &params);
     let msg = pelican_core::mail::MailMessage {
+        outro: Vec::new(),
         subject: crate::i18n::trans(&locale, &format!("{group}.subject"), &[]),
         lines: vec![line(0), line(1)],
         ..Default::default()
