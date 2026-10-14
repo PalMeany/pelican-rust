@@ -18,6 +18,7 @@ use crate::input::In;
 use crate::json::{PhpJson, no_content};
 use crate::paginate::LengthAware;
 use crate::pipeline::Ctx;
+use crate::services::LogActivity;
 use crate::validation::Validator;
 
 fn config_err(e: ConfigError) -> ApiError {
@@ -139,7 +140,7 @@ pub async fn reset(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) -
             .subject("server", server.id.0)
             .subject("backup", backup.id.0)
             .property("name", backup.name.clone())
-            .save_in(&txn)
+            .log_in(&st, &txn)
             .await?;
     }
     let now = Timestamp(pelican_core::time::now());

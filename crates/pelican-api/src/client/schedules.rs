@@ -19,6 +19,7 @@ use crate::jobs::{next_run_date, touch_schedule};
 use crate::json::{PhpJson, no_content};
 use crate::pipeline::Ctx;
 use crate::resources::{atom, format_timestamp};
+use crate::services::LogActivity;
 use crate::validation::Validator;
 
 /// `TaskData` (`schedule_task`).
@@ -168,7 +169,7 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
     ctx.activity("server:schedule.create")
         .subject(morph::SCHEDULE, created.id.0)
         .property("name", created.name.clone())
-        .save(&st.db)
+        .log(&st)
         .await?;
     Ok(PhpJson::ok(schedule_item(&created, &[])).into_response())
 }
@@ -231,7 +232,7 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
     ctx.activity("server:schedule.update")
         .subject(morph::SCHEDULE, s.id.0)
         .properties(Value::Object(props))
-        .save(&st.db)
+        .log(&st)
         .await?;
     let fresh = schedules::Entity::find_by_id(s.id).one(&st.db).await?.ok_or_else(ApiError::model_not_found)?;
     let ts = tasks_of(&st.db, &[s.id.0]).await?;
@@ -246,7 +247,7 @@ pub async fn execute(State(st): State<AppState>, Extension(ctx): Extension<Ctx>)
     ctx.activity("server:schedule.execute")
         .subject(morph::SCHEDULE, s.id.0)
         .property("name", s.name.clone())
-        .save(&st.db)
+        .log(&st)
         .await?;
     Ok(PhpJson::with_status(StatusCode::ACCEPTED, json!([])).into_response())
 }
@@ -259,7 +260,7 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
     ctx.activity("server:schedule.delete")
         .subject(morph::SCHEDULE, s.id.0)
         .property("name", s.name.clone())
-        .save(&st.db)
+        .log(&st)
         .await?;
     Ok(no_content())
 }
@@ -407,7 +408,7 @@ pub async fn task_store(
         .subject(morph::SCHEDULE, s.id.0)
         .subject(morph::TASK, id)
         .properties(Value::Object(props))
-        .save(&st.db)
+        .log(&st)
         .await?;
     let t = tasks::Model {
         id: Int(id),
@@ -489,7 +490,7 @@ pub async fn task_update(
         .subject(morph::SCHEDULE, s.id.0)
         .subject(morph::TASK, t.id.0)
         .properties(Value::Object(props))
-        .save(&st.db)
+        .log(&st)
         .await?;
     let fresh = tasks::Entity::find_by_id(t.id).one(&st.db).await?.ok_or_else(ApiError::model_not_found)?;
     Ok(PhpJson::ok(task_item(&fresh)).into_response())
@@ -515,7 +516,7 @@ pub async fn task_delete(State(st): State<AppState>, Extension(ctx): Extension<C
         .subject(morph::SCHEDULE, s.id.0)
         .subject(morph::TASK, t.id.0)
         .property("name", s.name.clone())
-        .save(&st.db)
+        .log(&st)
         .await?;
     Ok(no_content())
 }

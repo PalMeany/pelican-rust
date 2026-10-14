@@ -17,6 +17,7 @@ use crate::error::{ApiError, ApiResult, Style};
 use crate::input::In;
 use crate::json::PhpJson;
 use crate::pipeline::Ctx;
+use crate::services::LogActivity;
 use crate::validation::Validator;
 
 const MAX_ATTEMPTS: u32 = 5;
@@ -102,7 +103,7 @@ pub async fn auth(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, In
             Activity::new("auth:sftp.fail", ctx.ip.to_string())
                 .property("method", "password")
                 .subject(morph::USER, user.id.0)
-                .save(&st.db)
+                .log(&st)
                 .await?;
             increment(&st);
             return Err(reject());
@@ -141,7 +142,7 @@ pub async fn auth(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, In
             Activity::new("server:sftp.denied", ctx.ip.to_string())
                 .actor(morph::USER, user.id.0)
                 .subject(morph::SERVER, server.id.0)
-                .save(&st.db)
+                .log(&st)
                 .await?;
             return Err(forbidden("You do not have permission to access SFTP for this server."));
         }

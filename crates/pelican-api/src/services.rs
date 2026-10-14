@@ -146,3 +146,153 @@ pub async fn server_installed_mail(st: &AppState, server: &servers::Model, initi
     };
     notify(st, &owner, msg).await
 }
+
+// --- ActivityLogged → DispatchWebhooks (app/Listeners/DispatchWebhooks.php) ---------
+
+use std::future::Future;
+
+use pelican_core::activity::Activity;
+use pelican_db::entities::webhook_configurations;
+use serde_json::{Map, Value, json};
+
+/// Saving an activity also fires `ActivityLogged`, which delivers webhooks
+/// (inline under `QUEUE_CONNECTION=sync`, like the original's sync queue).
+pub trait LogActivity {
+    fn log<'a>(self, st: &'a AppState) -> impl Future<Output = ApiResult<i64>> + Send + 'a;
+    fn log_in<'a, C: ConnectionTrait + Sync>(
+        self,
+        st: &'a AppState,
+        db: &'a C,
+    ) -> impl Future<Output = ApiResult<i64>> + Send + 'a;
+}
+
+impl LogActivity for Activity {
+    fn log<'a>(self, st: &'a AppState) -> impl Future<Output = ApiResult<i64>> + Send + 'a {
+        async move {
+            let id = self.save_in(&st.db).await?;
+            activity_logged(st, &st.db, &self, id).await?;
+            Ok(id)
+        }
+    }
+
+    fn log_in<'a, C: ConnectionTrait + Sync>(
+        self,
+        st: &'a AppState,
+        db: &'a C,
+    ) -> impl Future<Output = ApiResult<i64>> + Send + 'a {
+        async move {
+            let id = self.save_in(db).await?;
+            activity_logged(st, db, &self, id).await?;
+            Ok(id)
+        }
+    }
+}
+
+fn listens(c: &webhook_configurations::Model, event: &str) -> bool {
+    match &c.events.0 {
+        Value::Array(a) => a.iter().any(|e| e.as_str() == Some(event)),
+        Value::Object(m) => m.values().any(|e| e.as_str() == Some(event)),
+        _ => false,
+    }
+}
+
+/// `buildActivityPayload()`.
+async fn activity_payload<C: ConnectionTrait>(db: &C, a: &Activity) -> ApiResult<Value> {
+    let mut m = Map::new();
+    m.insert("event".into(), json!(a.event));
+    m.insert("description".into(), json!(a.description));
+    m.insert("ip".into(), json!(a.ip));
+    m.insert("timestamp".into(), json!(pelican_core::time::atom(&pelican_core::time::now())));
+    if let Some((kind, id)) = &a.actor {
+        let username = if kind == "user" {
+            users::Entity::find_by_id(pelican_db::Int(*id)).one(db).await?.map(|u| u.username)
+        } else {
+            None
+        };
+        m.insert("actor".into(), json!({"id": id, "type": kind, "username": username}));
+    }
+    let props_empty = match &a.properties {
+        Value::Array(x) => x.is_empty(),
+        Value::Object(x) => x.is_empty(),
+        Value::Null => true,
+        _ => false,
+    };
+    if !props_empty {
+        m.insert("properties".into(), pelican_core::server_config::php_assoc(a.properties.clone()));
+    }
+    if !a.subjects.is_empty() {
+        let subjects: Vec<Value> = a.subjects.iter().map(|(t, id)| json!({"id": id, "type": t})).collect();
+        m.insert("subjects".into(), Value::Array(subjects));
+    }
+    Ok(Value::Object(m))
+}
+
+/// `hasPayloadContent()`: anything besides `event` that is not null/""/empty.
+fn has_content(data: &Value) -> bool {
+    data.as_object().is_some_and(|m| {
+        m.iter().filter(|(k, _)| k.as_str() != "event").any(|(_, v)| match v {
+            Value::Null => false,
+            Value::String(s) => !s.is_empty(),
+            Value::Array(a) => !a.is_empty(),
+            Value::Object(o) => !o.is_empty(),
+            _ => true,
+        })
+    })
+}
+
+/// `DispatchWebhooks::handleActivityLogged()` + `handleGlobalWebhooks()`.
+pub async fn activity_logged<C: ConnectionTrait>(st: &AppState, db: &C, a: &Activity, _id: i64) -> ApiResult<()> {
+    let configs: Vec<webhook_configurations::Model> = webhook_configurations::Entity::find()
+        .filter(webhook_configurations::Column::DeletedAt.is_null())
+        .all(db)
+        .await?;
+    if configs.is_empty() {
+        return Ok(());
+    }
+    let event = a.event.as_str();
+    let mut payload: Option<Value> = None;
+    // Server scope: the first `server` subject's webhooks listening to the event.
+    if event.starts_with("server:") {
+        let server_id = a
+            .subjects
+            .iter()
+            .find(|(t, _)| t == "server")
+            .map(|(_, id)| *id)
+            .or_else(|| a.properties.get("server").and_then(|s| s.get("id")).and_then(Value::as_i64));
+        if let Some(sid) = server_id {
+            let hooks: Vec<&webhook_configurations::Model> =
+                configs.iter().filter(|c| c.server_id.map(|s| s.0) == Some(sid) && listens(c, event)).collect();
+            if !hooks.is_empty() {
+                let data = activity_payload(db, a).await?;
+                if has_content(&data) {
+                    for c in hooks {
+                        crate::application::webhooks::process_webhook_in(st, db, c, event, &data).await?;
+                    }
+                }
+                payload = Some(data);
+            }
+        }
+    }
+    // Global: listeners of the event name, then of `App\Events\ActivityLogged` (unique by id).
+    let mut global: Vec<&webhook_configurations::Model> =
+        configs.iter().filter(|c| c.scope == "global" && listens(c, event)).collect();
+    for c in configs.iter().filter(|c| c.scope == "global" && listens(c, "App\\Events\\ActivityLogged")) {
+        if !global.iter().any(|g| g.id == c.id) {
+            global.push(c);
+        }
+    }
+    if global.is_empty() {
+        return Ok(());
+    }
+    let data = match payload {
+        Some(p) => p,
+        None => activity_payload(db, a).await?,
+    };
+    if !has_content(&data) {
+        return Ok(());
+    }
+    for c in global {
+        crate::application::webhooks::process_webhook_in(st, db, c, event, &data).await?;
+    }
+    Ok(())
+}

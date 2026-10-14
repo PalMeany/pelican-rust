@@ -20,6 +20,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::input::{In, Input};
 use crate::json::{PhpJson, no_content};
 use crate::pipeline::Ctx;
+use crate::services::LogActivity;
 use crate::validation::Validator;
 
 /// `$server->node` (not transfer-aware) and its decrypted connection.
@@ -234,7 +235,7 @@ pub async fn contents(State(st): State<AppState>, Extension(ctx): Extension<Ctx>
             "The file you are attempting to open is too large to view in the file editor.",
         ));
     }
-    ctx.activity("server:file.read").property("file", file).save(&st.db).await?;
+    ctx.activity("server:file.read").property("file", file).log(&st).await?;
     Ok((StatusCode::OK, [(header::CONTENT_TYPE, "text/plain; charset=utf-8")], convert_to_utf8(resp.body))
         .into_response())
 }
@@ -281,7 +282,7 @@ pub async fn download(State(st): State<AppState>, Extension(ctx): Extension<Ctx>
     let conn = node(&st, &server).await?;
     let claims = vec![("file_path".into(), json!(file_path)), ("server_uuid".into(), json!(server.uuid))];
     let resp = signed_url(&st, &ctx, &conn, &server, "download", claims)?;
-    ctx.activity("server:file.download").property("file", file).save(&st.db).await?;
+    ctx.activity("server:file.download").property("file", file).log(&st).await?;
     Ok(resp)
 }
 
@@ -307,7 +308,7 @@ pub async fn write(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
     let mut c = Call::new(Method::POST, &p).query(&q);
     c.body = Body::Raw(i.raw.to_vec());
     st.wings.send(&conn, c).await.map_err(exists_err)?;
-    ctx.activity("server:file.write").property("file", file).save(&st.db).await?;
+    ctx.activity("server:file.write").property("file", file).log(&st).await?;
     Ok(no_content())
 }
 
@@ -337,7 +338,7 @@ pub async fn create_folder(
     ctx.activity("server:file.create-directory")
         .property("name", name)
         .property("directory", input(&i, "root"))
-        .save(&st.db)
+        .log(&st)
         .await?;
     Ok(no_content())
 }
@@ -373,7 +374,7 @@ pub async fn rename(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
         .property("files", files)
         .property("to", to)
         .property("from", from)
-        .save(&st.db)
+        .log(&st)
         .await?;
     Ok(no_content())
 }
@@ -388,7 +389,7 @@ pub async fn copy(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, In
     let location = input(&i, "location");
     let p = path(&server, "copy");
     call(&st, &server, Call::new(Method::POST, &p).json(json!({"location": location}))).await?;
-    ctx.activity("server:file.copy").property("file", location).save(&st.db).await?;
+    ctx.activity("server:file.copy").property("file", location).log(&st).await?;
     Ok(no_content())
 }
 
@@ -422,7 +423,7 @@ pub async fn compress(State(st): State<AppState>, Extension(ctx): Extension<Ctx>
         .property("name", name)
         .property("directory", root)
         .property("files", files)
-        .save(&st.db)
+        .log(&st)
         .await?;
     Ok(PhpJson::ok(file_object(&file)?).into_response())
 }
@@ -441,7 +442,7 @@ pub async fn decompress(State(st): State<AppState>, Extension(ctx): Extension<Ct
     let mut c = Call::new(Method::POST, &p).json(json!({"root": or_root(&root), "file": file}));
     c.timeout = Some(Duration::from_secs(15 * 60));
     call(&st, &server, c).await?;
-    ctx.activity("server:file.decompress").property("directory", root).property("file", file).save(&st.db).await?;
+    ctx.activity("server:file.decompress").property("directory", root).property("file", file).log(&st).await?;
     Ok(no_content())
 }
 
@@ -459,7 +460,7 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
     let p = path(&server, "delete");
     call(&st, &server, Call::new(Method::POST, &p).json(json!({"root": or_root(&root), "files": files.clone()})))
         .await?;
-    ctx.activity("server:file.delete").property("directory", root).property("files", files).save(&st.db).await?;
+    ctx.activity("server:file.delete").property("directory", root).property("files", files).log(&st).await?;
     Ok(no_content())
 }
 
@@ -504,6 +505,6 @@ pub async fn pull(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, In
     }
     let p = path(&server, "pull");
     call(&st, &server, Call::new(Method::POST, &p).json(Value::Object(body))).await?;
-    ctx.activity("server:file.pull").property("directory", directory).property("url", url).save(&st.db).await?;
+    ctx.activity("server:file.pull").property("directory", directory).property("url", url).log(&st).await?;
     Ok(no_content())
 }

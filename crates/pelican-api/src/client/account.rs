@@ -20,6 +20,7 @@ use crate::input::In;
 use crate::json::{PhpJson, no_content};
 use crate::pipeline::Ctx;
 use crate::resources::{atom, user_data};
+use crate::services::LogActivity;
 use crate::validation::{CustomRule, Validator};
 
 /// `GET /account` → item `user`.
@@ -86,7 +87,7 @@ pub async fn update_username(
         ctx.activity("user:account.username-changed")
             .property("old", original)
             .property("new", raw_input)
-            .save(&st.db)
+            .log(&st)
             .await?;
     }
     Ok(no_content())
@@ -131,7 +132,7 @@ pub async fn update_email(
         ctx.activity("user:account.email-changed")
             .property("old", original)
             .property("new", raw_input)
-            .save(&st.db)
+            .log(&st)
             .await?;
     }
     Ok(no_content())
@@ -161,7 +162,7 @@ pub async fn update_password(
         .await?;
     // PasswordChanged → RevocationListener: one deauthorize call per node (sync queue).
     revoke_sftp_access(&st, &txn, &u.user).await?;
-    ctx.activity("user:account.password-changed").save_in(&txn).await?;
+    ctx.activity("user:account.password-changed").log_in(&st, &txn).await?;
     txn.commit().await?;
     Ok(no_content())
 }
@@ -277,7 +278,7 @@ pub async fn api_keys_store(
     ctx.activity("user:api-key.create")
         .subject(morph::API_KEY, key.id.0)
         .property("identifier", identifier)
-        .save(&st.db)
+        .log(&st)
         .await?;
     let mut meta = Map::new();
     meta.insert("secret_token".into(), json!(secret));
@@ -298,7 +299,7 @@ pub async fn api_keys_delete(
         .one(&st.db)
         .await?
         .ok_or_else(ApiError::model_not_found)?;
-    ctx.activity("user:api-key.delete").property("identifier", key.identifier.clone()).save(&st.db).await?;
+    ctx.activity("user:api-key.delete").property("identifier", key.identifier.clone()).log(&st).await?;
     api_keys::Entity::delete_by_id(key.id).exec(&st.db).await?;
     Ok(no_content())
 }
@@ -383,7 +384,7 @@ pub async fn ssh_keys_store(
     ctx.activity("user:ssh-key.create")
         .subject(morph::SSH_KEY, model.id.0)
         .property("fingerprint", fingerprint)
-        .save(&st.db)
+        .log(&st)
         .await?;
     Ok(PhpJson::ok(ssh_key_item(&model)).into_response())
 }
@@ -405,7 +406,7 @@ pub async fn ssh_keys_delete(
     ctx.activity("user:ssh-key.delete")
         .subject(morph::SSH_KEY, key.id.0)
         .property("fingerprint", key.fingerprint.clone())
-        .save(&st.db)
+        .log(&st)
         .await?;
     let now = Timestamp(pelican_core::time::now());
     user_ssh_keys::Entity::update_many()

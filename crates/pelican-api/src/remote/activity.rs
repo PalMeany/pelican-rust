@@ -16,6 +16,7 @@ use super::node;
 use crate::error::{ApiError, ApiResult};
 use crate::input::In;
 use crate::pipeline::Ctx;
+use crate::services::LogActivity;
 use crate::validation::Validator;
 
 fn rfc3339_ok(ts: &str) -> bool {
@@ -100,7 +101,7 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
     for (uuid, list) in logs {
         let Some(server) = srv.iter().find(|s| s.uuid == uuid) else { continue };
         for a in list {
-            a.subject(morph::SERVER, server.id.0).save(&st.db).await?;
+            a.subject(morph::SERVER, server.id.0).log(&st).await?;
         }
     }
     Ok(void_response())

@@ -9,7 +9,7 @@ mod roles;
 mod servers;
 mod servers_write;
 mod users;
-mod webhooks;
+pub(crate) mod webhooks;
 
 use axum::Router;
 use axum::routing::{MethodRouter, delete, get, patch, post};

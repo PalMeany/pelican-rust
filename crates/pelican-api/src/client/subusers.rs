@@ -20,6 +20,7 @@ use crate::error::{ApiError, ApiResult, Style};
 use crate::input::{In, Input};
 use crate::json::{PhpJson, no_content};
 use crate::pipeline::Ctx;
+use crate::services::LogActivity;
 use crate::validation::Validator;
 
 /// `SubuserRequest::authorize` (after the permission check).
@@ -263,7 +264,7 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         .subject(morph::USER, user.id.0)
         .property("email", email)
         .property("permissions", json!(stored))
-        .save(&st.db)
+        .log(&st)
         .await?;
     Ok(PhpJson::ok(subuser_item(&st.db, &sub, &user).await?).into_response())
 }
@@ -303,7 +304,7 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
             .property("old", json!(current))
             .property("new", json!(cleaned))
             .property("revoked", true)
-            .save_in(&txn)
+            .log_in(&st, &txn)
             .await?;
         txn.commit().await?;
     }
@@ -358,7 +359,7 @@ pub async fn delete_subuser_in<C: ConnectionTrait>(
         .subject(morph::USER, user.id.0)
         .property("email", user.email.clone())
         .property("revoked", true)
-        .save_in(txn)
+        .log_in(st, txn)
         .await?;
     Ok(())
 }

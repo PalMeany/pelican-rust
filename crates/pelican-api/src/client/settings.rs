@@ -16,6 +16,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::input::In;
 use crate::json::{PhpJson, no_content};
 use crate::pipeline::Ctx;
+use crate::services::LogActivity;
 use crate::validation::{CustomRule, Validator, php_loose_eq};
 
 /// Eloquent `save()` semantics: a dirty update writes only the changed column
@@ -45,7 +46,7 @@ pub async fn rename(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
         ctx.activity("server:settings.rename")
             .property("old", server.name.clone())
             .property("new", name.clone())
-            .save(&st.db)
+            .log(&st)
             .await?;
     }
     Ok(no_content())
@@ -77,7 +78,7 @@ pub async fn description(
         ctx.activity("server:settings.description")
             .property("old", server.description.clone().map(Value::String).unwrap_or(Value::Null))
             .property("new", new_raw)
-            .save(&st.db)
+            .log(&st)
             .await?;
     }
     Ok(no_content())
@@ -105,7 +106,7 @@ pub async fn reinstall(State(st): State<AppState>, Extension(ctx): Extension<Ctx
     }
     st.wings.reinstall_server(&conn, &server.uuid).await.map_err(|e| ApiError::internal(e.code()))?;
     txn.commit().await?;
-    ctx.activity("server:reinstall").save(&st.db).await?;
+    ctx.activity("server:reinstall").log(&st).await?;
     Ok(PhpJson::with_status(StatusCode::ACCEPTED, json!([])).into_response())
 }
 
@@ -166,7 +167,7 @@ pub async fn docker_image(
         ctx.activity("server:startup.image")
             .property("old", server.image.clone())
             .property("new", image.clone())
-            .save(&st.db)
+            .log(&st)
             .await?;
     }
     Ok(no_content())

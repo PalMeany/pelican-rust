@@ -21,6 +21,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::input::In;
 use crate::json::{PhpJson, no_content};
 use crate::pipeline::Ctx;
+use crate::services::LogActivity;
 use crate::validation::Validator;
 
 /// `Allocation::address`: alias (ip_alias else ip), bracketed when IPv6, + `:port`.
@@ -190,7 +191,7 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) -
     ctx.activity("server:allocation.create")
         .subject(morph::ALLOCATION, fresh.id.0)
         .property("allocation", alloc_address(&fresh))
-        .save_in(&txn)
+        .log_in(&st, &txn)
         .await?;
     txn.commit().await?;
 
@@ -301,7 +302,7 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
             .property("allocation", alloc_address(&alloc))
             .property("old", original.map(Value::String).unwrap_or(Value::Null))
             .property("new", new_notes.map(Value::String).unwrap_or(Value::Null))
-            .save(&st.db)
+            .log(&st)
             .await?;
     }
     // AllocationData re-loads the `server` relation lazily, so is_default is
@@ -335,7 +336,7 @@ pub async fn set_primary(State(st): State<AppState>, Extension(ctx): Extension<C
     ctx.activity("server:allocation.primary")
         .subject(morph::ALLOCATION, alloc.id.0)
         .property("allocation", alloc_address(&alloc))
-        .save(&st.db)
+        .log(&st)
         .await?;
     Ok(PhpJson::ok(allocation_data(&alloc, Some(alloc.id.0), false)).into_response())
 }
@@ -414,7 +415,7 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
             ctx.activity("server:allocation.primary")
                 .subject(morph::ALLOCATION, p.id.0)
                 .property("allocation", alloc_address(&p))
-                .save_in(&txn)
+                .log_in(&st, &txn)
                 .await?;
         }
     }
@@ -423,7 +424,7 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
     ctx.activity("server:allocation.delete")
         .subject(morph::ALLOCATION, alloc.id.0)
         .property("allocation", alloc_address(&alloc))
-        .save(&st.db)
+        .log(&st)
         .await?;
     Ok(no_content())
 }

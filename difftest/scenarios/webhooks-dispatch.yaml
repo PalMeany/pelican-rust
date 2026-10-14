@@ -1,0 +1,14 @@
+# ActivityLogged → DispatchWebhooks: server-scope and global configurations get
+# a ProcessWebhook delivery (inline with the sync queue) for matching activities.
+name: webhooks/activity-dispatch
+fixtures: [base, infra, client-users]
+rows:
+  webhook_configurations:
+    - { id: 1, endpoint: "http://wings.test:8080/hook/server", name: srv, description: null, events: ["server:power.start", "server:console.command"], scope: server, server_id: 1, type: regular, payload: null, headers: { "X-Webhook-Event": "{{event}}", "X-Server": "{{subjects.0.id}}" }, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00", deleted_at: null }
+    - { id: 2, endpoint: "http://wings.test:8080/hook/global", name: glob, description: d, events: ["server:power.start", "user:account.email-changed"], scope: global, server_id: null, type: regular, payload: null, headers: [], created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00", deleted_at: null }
+    - { id: 3, endpoint: "http://wings.test:8080/hook/all", name: all, description: null, events: ["App\\Events\\ActivityLogged"], scope: global, server_id: null, type: regular, payload: null, headers: null, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00", deleted_at: null }
+    - { id: 4, endpoint: "http://wings.test:8080/hook/deleted", name: gone, description: null, events: ["server:power.start"], scope: server, server_id: 1, type: regular, payload: null, headers: null, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00", deleted_at: "2026-01-02 00:00:00" }
+steps:
+  - { method: POST, path: /api/client/servers/0b5c6a0e/power, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { signal: start }, expect_status: 204 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/command, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { command: "say hi" } }
+  - { method: PUT, path: /api/client/account/email, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { email: changed@example.com, password: password } }

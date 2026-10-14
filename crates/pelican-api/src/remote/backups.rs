@@ -15,6 +15,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::input::{In, php_boolean};
 use crate::json::no_content;
 use crate::pipeline::Ctx;
+use crate::services::LogActivity;
 use crate::validation::Validator;
 
 async fn find_backup(st: &AppState, uuid: &str) -> ApiResult<(backups::Model, servers::Model)> {
@@ -137,7 +138,7 @@ pub async fn status(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
         .subject(morph::BACKUP, backup.id.0)
         .subject(morph::SERVER, server.id.0)
         .property("name", backup.name.clone())
-        .save_in(&txn)
+        .log_in(&st, &txn)
         .await?;
     txn.commit().await?;
     let fresh = backups::Entity::find_by_id(backup.id).one(&st.db).await?.ok_or_else(ApiError::model_not_found)?;
@@ -174,7 +175,7 @@ pub async fn restore(State(st): State<AppState>, Extension(ctx): Extension<Ctx>,
         .subject(morph::BACKUP, backup.id.0)
         .subject(morph::SERVER, server.id.0)
         .property("name", backup.name.clone())
-        .save(&st.db)
+        .log(&st)
         .await?;
     Ok(no_content())
 }

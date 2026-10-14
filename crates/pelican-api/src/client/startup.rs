@@ -18,6 +18,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::input::In;
 use crate::json::PhpJson;
 use crate::pipeline::Ctx;
+use crate::services::LogActivity;
 use crate::validation::Validator;
 
 async fn bundle(st: &AppState, ctx: &Ctx) -> ApiResult<ServerBundle> {
@@ -153,7 +154,7 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
             .property("variable", var.env_variable.clone())
             .property("old", original.clone().map(Value::String).unwrap_or(Value::Null))
             .property("new", if raw_value.is_null() { json!("") } else { raw_value.clone() })
-            .save(db)
+            .log(&st)
             .await?;
     }
     // After refresh() the joined server_value is gone and replaced by the raw input.

@@ -21,6 +21,7 @@ use crate::input::{In, Input, parse_query, php_boolean};
 use crate::json::{PhpJson, no_content};
 use crate::pipeline::Ctx;
 use crate::resources::atom;
+use crate::services::LogActivity;
 use crate::validation::Validator;
 
 /// `BackupData` (resource `backup`).
@@ -172,7 +173,7 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         .subject(morph::BACKUP, backup.id.0)
         .property("name", name)
         .property("locked", php_boolean(input.get("is_locked")))
-        .save_in(&txn)
+        .log_in(&st, &txn)
         .await?;
     txn.commit().await?;
     Ok(PhpJson::ok(backup_item(&backup)).into_response())
@@ -357,7 +358,7 @@ pub async fn download(State(st): State<AppState>, Extension(ctx): Extension<Ctx>
     ctx.activity("server:backup.download")
         .subject(morph::BACKUP, backup.id.0)
         .property("name", backup.name.clone())
-        .save(&st.db)
+        .log(&st)
         .await?;
     Ok(PhpJson::ok(json!({"object": "signed_url", "attributes": {"url": url}})).into_response())
 }
@@ -385,7 +386,7 @@ pub async fn rename(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
             .subject(morph::BACKUP, backup.id.0)
             .property("old_name", old)
             .property("new_name", new_name)
-            .save(&st.db)
+            .log(&st)
             .await?;
     }
     Ok(PhpJson::ok(backup_item(&backup)).into_response())
@@ -405,7 +406,7 @@ pub async fn lock(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) ->
         .await?;
     backup.is_locked = SmallBool(!backup.is_locked.0);
     backup.updated_at = Some(now);
-    ctx.activity(event).subject(morph::BACKUP, backup.id.0).property("name", backup.name.clone()).save(&st.db).await?;
+    ctx.activity(event).subject(morph::BACKUP, backup.id.0).property("name", backup.name.clone()).log(&st).await?;
     Ok(PhpJson::ok(backup_item(&backup)).into_response())
 }
 
@@ -449,7 +450,7 @@ pub async fn restore(State(st): State<AppState>, Extension(ctx): Extension<Ctx>,
         .subject(morph::BACKUP, backup.id.0)
         .property("name", backup.name.clone())
         .property("truncate", truncate_raw)
-        .save_in(&txn)
+        .log_in(&st, &txn)
         .await?;
     txn.commit().await?;
     Ok(no_content())
@@ -465,7 +466,7 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
         .subject(morph::BACKUP, backup.id.0)
         .property("name", backup.name.clone())
         .property("failed", !backup.is_successful.0)
-        .save(&st.db)
+        .log(&st)
         .await?;
     Ok(no_content())
 }

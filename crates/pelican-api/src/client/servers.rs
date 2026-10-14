@@ -17,6 +17,7 @@ use crate::input::In;
 use crate::json::{PhpJson, no_content};
 use crate::pipeline::Ctx;
 use crate::query;
+use crate::services::LogActivity;
 use crate::validation::Validator;
 
 /// `Subuser::allPermissionKeys()` (app/Enums/SubuserPermission.php order).
@@ -378,7 +379,7 @@ pub async fn command(State(st): State<AppState>, Extension(ctx): Extension<Ctx>,
         .send_commands(&conn, &server.uuid, std::slice::from_ref(&command))
         .await
         .map_err(|e| ApiError::internal(e.code()))?;
-    ctx.activity("server:console.command").property("command", command).save(&st.db).await?;
+    ctx.activity("server:console.command").property("command", command).log(&st).await?;
     Ok(no_content())
 }
 
@@ -402,6 +403,6 @@ pub async fn power(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         .ok_or_else(|| ApiError::internal("ErrorException"))?;
     let conn = st.node_conn(&node).map_err(|_| ApiError::internal("DecryptException"))?;
     st.wings.power(&conn, &server.uuid, &signal).await.map_err(|e| ApiError::internal(e.code()))?;
-    ctx.activity(&format!("server:power.{}", signal.to_lowercase())).save(&st.db).await?;
+    ctx.activity(&format!("server:power.{}", signal.to_lowercase())).log(&st).await?;
     Ok(no_content())
 }

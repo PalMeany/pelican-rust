@@ -27,6 +27,7 @@ use sea_orm::EntityTrait;
 
 use crate::binding::{self, Bound};
 use crate::error::{ApiError, ApiResult, Kind};
+use crate::services::LogActivity;
 
 /// Per-request context stored in request extensions.
 #[derive(Clone)]
@@ -226,7 +227,7 @@ async fn pipeline(
                     "identifier",
                     key.identifier.clone().map(serde_json::Value::String).unwrap_or(serde_json::Value::Null),
                 )
-                .save(&st.db)
+                .log(&st)
                 .await?;
             return Err(ApiError::access_denied(format!(
                 "This IP address ({ip}) does not have permission to access the API using these credentials."

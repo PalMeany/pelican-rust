@@ -418,6 +418,17 @@ async fn process_webhook(
     event_name: &str,
     event_data: &Value,
 ) -> ApiResult<()> {
+    process_webhook_in(st, &st.db, wh, event_name, event_data).await
+}
+
+/// `ProcessWebhook` on the caller's connection (dispatched inside a transaction).
+pub(crate) async fn process_webhook_in<C: sea_orm::ConnectionTrait>(
+    st: &AppState,
+    db: &C,
+    wh: &webhook_configurations::Model,
+    event_name: &str,
+    event_data: &Value,
+) -> ApiResult<()> {
     let data = normalize_event_data(Some(event_data), event_name);
     // RegularSchema.preparePayload = identity (FallbackSchema arrives with M6 plugins).
     let payload = data;
@@ -430,7 +441,7 @@ async fn process_webhook(
         .map(|_| Timestamp(pelican_core::time::now()));
     let now = Timestamp(pelican_core::time::now());
     pelican_db::write::insert(
-        &st.db,
+        db,
         webhooks::ActiveModel {
             webhook_configuration_id: Set(wh.id),
             event: Set(event_name.to_string()),

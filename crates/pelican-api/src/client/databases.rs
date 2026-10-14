@@ -21,6 +21,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::input::In;
 use crate::json::{PhpJson, no_content};
 use crate::pipeline::Ctx;
+use crate::services::LogActivity;
 use crate::validation::{CustomRule, Validator};
 
 fn host_err(e: HostError) -> ApiError {
@@ -182,7 +183,7 @@ pub async fn rotate_password(State(st): State<AppState>, Extension(ctx): Extensi
     ctx.activity("server:database.rotate-password")
         .subject(morph::DATABASE, db.id.0)
         .property("name", db.database.clone())
-        .save_in(&txn)
+        .log_in(&st, &txn)
         .await?;
     txn.commit().await?;
 
@@ -265,7 +266,7 @@ pub async fn create_database_in<C: ConnectionTrait>(
     ctx.activity("server:database.create")
         .subject(morph::DATABASE, created.id.0)
         .property("name", database.to_string())
-        .save_in(txn)
+        .log_in(st, txn)
         .await?;
     Ok(created)
 }
@@ -329,7 +330,7 @@ pub async fn delete_database_in<C: ConnectionTrait>(
     ctx.activity("server:database.delete")
         .subject(morph::DATABASE, db.id.0)
         .property("name", db.database.clone())
-        .save_in(txn)
+        .log_in(st, txn)
         .await?;
     databases::Entity::delete_by_id(db.id).exec(txn).await?;
     Ok(())
