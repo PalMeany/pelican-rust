@@ -25,7 +25,8 @@ for p in $(docker compose ls -a --format json 2>/dev/null | grep -o "pelican-dif
     (cd "'"$REPO"'/difftest" && docker compose -p "$p" down -v >/dev/null 2>&1) && echo "removed difftest env $env"
   fi
 done
-docker builder prune -f >/dev/null 2>&1 || true
+docker builder prune -af >/dev/null 2>&1 || true
 docker image prune -f >/dev/null 2>&1 || true
+sudo fstrim -a >/dev/null 2>&1 || true
 df -h / | tail -1
 '

@@ -46,9 +46,11 @@
   Механические ресурсы/эндпоинты отдавать воркерам по шаблону (см. scripts/worker/*.md).
 
 ## Диск (просьба пользователя)
-Сборки живут в docker-томах VM (`pelican-rs-target*`, десятки ГБ). После каждой вехи/пачки воркеров
-запускать `scripts/clean.sh` (cargo clean в незанятых target-томах, удаление томов/окружений удалённых
-worktree, prune кэша docker). Проверка: `limactl shell pelican -- df -h /`.
+На хосте мало места (~15–30 ГБ свободно). Сборки живут в docker-томах VM (`pelican-rs-target*`).
+Кэш НЕ беречь: после каждой вехи/пачки воркеров — `scripts/clean.sh` (cargo clean в target-томах,
+удаление томов/окружений удалённых worktree, prune кэша docker) и `limactl shell pelican -- sudo fstrim -av`
+(иначе образ диска VM на хосте не уменьшится). Профиль dev/test без debug-инфо и incremental.
+Проверка: `df -h /Users/tazik`, `du -sh ~/.lima/pelican`. Пользователь предлагал отдельный сервер для сборок.
 
 ## Грабли (важно)
 - Python-замены в исходниках после `cargo fmt` молча не срабатывают — всегда `assert old in s`.
