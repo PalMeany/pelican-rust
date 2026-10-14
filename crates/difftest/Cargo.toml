@@ -16,6 +16,8 @@ base64.workspace = true
 sea-orm.workspace = true
 pelican-db = { path = "../pelican-db" }
 laravel-compat = { path = "../laravel-compat" }
+pelican = { path = "../pelican" }
+pelican-core = { path = "../pelican-core" }
 axum = "0.8"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde_yaml = "0.9"

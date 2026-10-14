@@ -1,5 +1,11 @@
 //! `Illuminate\Hashing\BcryptHasher` (PHP `password_hash(PASSWORD_BCRYPT)`).
 
+/// PHP `hash_equals` (constant time for equal lengths).
+pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    use subtle::ConstantTimeEq;
+    a.len() == b.len() && bool::from(a.ct_eq(b))
+}
+
 /// Default `hashing.bcrypt.rounds` (`BCRYPT_ROUNDS`), as in Laravel 13.
 pub const DEFAULT_ROUNDS: u32 = 12;
 

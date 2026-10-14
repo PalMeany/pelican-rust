@@ -27,32 +27,35 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] Docker-окружение (lima VM `pelican`), образ оригинала `pelican-orig:dev` из `../panel/Dockerfile.dev`
 - [x] `difftest/compose.yml`: оригинал + MariaDB + PostgreSQL (+ SQLite через общий каталог)
 - [x] Эталонные схемы всех трёх СУБД сняты с оригинала
-- [ ] Спеки `docs/spec/*.md` (remote/client/application API, auth-crypto, models-services, eggs, background, plugins, ui)
-- [ ] ADR 0001–0010
-- [ ] Cargo workspace, CI-скрипт `scripts/check.sh` (fmt, clippy, test)
-- [ ] `CLAUDE.md` с конвенциями для воркеров
-- [ ] Mock Wings (запись входящих запросов, заготовленные ответы)
-- [ ] Харнесс диф-тестов: снапшот/восстановление БД, сценарии (YAML), нормализация, сравнение ответа + дампа БД + вызовов Wings
-- [ ] Smoke диф-тест (`GET /api/client` без auth → 401) зелёный
+- [x] Спеки `docs/spec/*.md` (remote/client/application API, auth-crypto, models-services, eggs, background, plugins, ui)
+- [x] ADR 0001–0010
+- [x] Cargo workspace, сборка/тесты в Linux-контейнере (`scripts/cargo`)
+- [x] `CLAUDE.md` с конвенциями для воркеров
+- [x] Mock Wings (запись входящих запросов, заготовленные ответы)
+- [x] Харнесс диф-тестов: сброс БД + фикстуры, сценарии (YAML), нормализация, сравнение ответа + изменений БД + вызовов Wings; `--self-check`
+- [x] Первые диф-тесты зелёные на 4 СУБД (auth/*)
 
 ### M1 — Схема БД и слой данных (`pelican-db`)
-- [ ] Подключение к MySQL/MariaDB, PostgreSQL, SQLite по `DB_*` из `.env` (как в `config/database.php`)
-- [ ] Гибкие типы колонок (bool/int/json/timestamp расходятся между СУБД) — ADR-0004
-- [ ] Сущности SeaORM для всех 40 таблиц
-- [ ] Установка схемы «с нуля» из эталонных дампов + заполнение `migrations` (оригинал сможет принять БД)
-- [ ] Проверка схемы при старте: все 255 миграций оригинала применены, иначе понятная ошибка
-- [ ] Тесты: чтение/запись каждой сущности на всех трёх СУБД; БД, созданная оригиналом, читается
+- [x] Подключение к MySQL/MariaDB, PostgreSQL, SQLite по `DB_*` из `.env` (как в `config/database.php`)
+- [x] Гибкие типы колонок (bool/int/json/timestamp расходятся между СУБД) — ADR-0004
+- [x] Сущности SeaORM для всех 42 таблиц (+ порядок колонок по СУБД `column_order.rs`)
+- [x] Установка схемы «с нуля» из эталонных дампов + заполнение `migrations` (`pelican db:install`)
+- [x] Проверка схемы при старте: все 255 миграций оригинала применены, иначе понятная ошибка
+- [x] Тесты: запись/чтение и SELECT всех сущностей на 4 СУБД; БД оригинала читается (диф-тесты)
 
 ### M2 — Совместимость Laravel и аутентификация (`laravel-compat`, `pelican-core::auth`)
-- [ ] Laravel Encrypter (AES-256-CBC + HMAC, `APP_PREVIOUS_KEYS`), PHP `serialize`/`unserialize` для строк
-- [ ] PHP-совместимый JSON-энкодер (`\/`, `\uXXXX`, пустые массивы) — ADR-0006
-- [ ] bcrypt (`$2y$`), rehash
-- [ ] API-ключи (client/application), формат токена, `allowed_ips`, `last_used_at`
+- [x] Laravel Encrypter (AES-256-CBC + HMAC, `APP_PREVIOUS_KEYS`), PHP `serialize`/`unserialize` — сверено с PHP 8.5
+- [x] PHP-совместимый JSON-энкодер (`\/`, `\uXXXX`, float как zend_gcvt) — ADR-0006
+- [x] bcrypt (`$2y$`), needs_rehash
+- [x] API-ключи: bearer-парсинг Sanctum, `allowed_ips` (IPTools), `last_used_at` (dirty-check), expiry, тип ключа
 - [ ] TOTP (секрет, окно, recovery-коды), старые форматы 2FA
-- [ ] Права: spatie roles/permissions, root admin, права сабюзеров, политики
+- [~] Права: spatie roles/permissions, root admin, node restrictions (AuthUser) — сабюзеры/политики с M4
 - [ ] Сессии/логин/троттлинг (для UI) — хранение в таблице `sessions` (ADR)
-- [ ] Обработчик ошибок в формате оригинала (`{"errors":[...]}`), валидация с сообщениями Laravel
-- [ ] Диф-тесты: 401/403/404/422 для client/application API, логин с bcrypt, 2FA
+- [x] Обработчик ошибок в формате оригинала (pretty/compact по типу, redirect без Accept: json)
+- [ ] Валидация с сообщениями Laravel (`lang/en/validation.php`) + TrimStrings/ConvertEmptyStringsToNull
+- [x] Диф-тесты auth/*: 401 (неверный/просроченный/битый токен), 403 (app-ключ на client, IP), 404 маршрута
+- [ ] Application API ACL (биты ключа, root+account key) — с первыми маршрутами M5
+- [ ] Логин/2FA/сессии/CSRF — вместе с UI (M6)
 
 ### M3 — Remote API для Wings (`/api/remote/*`) и клиент Wings
 - [ ] DaemonAuthenticate

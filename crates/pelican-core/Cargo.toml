@@ -1,0 +1,30 @@
+[package]
+name = "pelican-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Domain logic of pelican-rs: config, auth, permissions, services"
+
+[dependencies]
+pelican-db = { path = "../pelican-db" }
+laravel-compat = { path = "../laravel-compat" }
+sea-orm.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+rand.workspace = true
+uuid.workspace = true
+dotenvy = "0.15"
+parking_lot = "0.12"
+md-5 = "0.10"
+sha1 = "0.10"
+sha2 = "0.10"
+hex = "0.4"
+indexmap = { version = "2", features = ["serde"] }
+
+[dev-dependencies]
+pelican-db = { path = "../pelican-db", features = ["testing"] }

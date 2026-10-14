@@ -1,0 +1,59 @@
+name: auth/client-key-account
+description: Valid account key → user resource; last_used_at/updated_at are bumped.
+fixtures: [base]
+steps:
+  - path: /api/client/account
+    bearer: pacc_admin000001AdminClientSecret000000000000001
+    expect_status: 200
+  - path: /api/client/account
+    bearer: pacc_user0000001UserClientSecret0000000000000001
+    expect_status: 200
+---
+name: auth/wrong-secret
+fixtures: [base]
+steps:
+  - path: /api/client/account
+    bearer: pacc_admin000001AdminClientSecret000000000000002
+    expect_status: 401
+  - path: /api/client/account
+    bearer: pacc_nope
+  - path: /api/client/account
+    headers: { Authorization: "Bearer " }
+  - path: /api/client/account
+    bearer: "12|pacc_admin000001AdminClientSecret000000000000001"
+  - path: /api/client/account
+    headers: { Authorization: "Basic abc, Bearer pacc_admin000001AdminClientSecret000000000000001" }
+---
+name: auth/application-key-on-client-api
+fixtures: [base]
+steps:
+  - path: /api/client/account
+    bearer: papp_admin000001AdminAppSecret000000000000000001
+    expect_status: 403
+---
+name: auth/ip-blocked
+description: allowed_ips mismatch writes auth:ip-blocked activity and returns 403.
+fixtures: [base]
+steps:
+  - path: /api/client/account
+    bearer: pacc_iplocked001IpLockedSecret00000000000000001
+    expect_status: 403
+  - path: /api/client/account
+    bearer: pacc_iplocked001IpLockedSecret00000000000000001
+    headers: { X-Forwarded-For: 192.168.0.77 }
+    expect_status: 200
+---
+name: auth/expired-key
+fixtures: [base]
+steps:
+  - path: /api/client/account
+    bearer: pacc_expired0001ExpiredSecret000000000000000001
+    expect_status: 401
+---
+name: auth/route-not-found
+fixtures: [base]
+steps:
+  - path: /api/client/does-not-exist
+    expect_status: 404
+  - path: /api/client/does-not-exist
+    bearer: pacc_admin000001AdminClientSecret000000000000001

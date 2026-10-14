@@ -1,0 +1,25 @@
+[package]
+name = "pelican-api"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "HTTP layer of pelican-rs: remote, client and application APIs"
+
+[dependencies]
+pelican-core = { path = "../pelican-core" }
+pelican-db = { path = "../pelican-db" }
+laravel-compat = { path = "../laravel-compat" }
+sea-orm.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+indexmap = { version = "2", features = ["serde"] }
+axum = { version = "0.8", features = ["macros"] }
+tower = "0.5"
+http-body-util = "0.1"
+bytes = "1"
+md-5 = "0.10"
+hex = "0.4"

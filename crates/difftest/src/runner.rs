@@ -70,7 +70,16 @@ pub async fn run(ctx: &Ctx<'_>, s: &Scenario, base_url: &str) -> Result<RunResul
     for (i, st) in s.steps.iter().enumerate() {
         let url = format!("{}{}", base_url.trim_end_matches('/'), st.path);
         let method = reqwest::Method::from_bytes(st.method.as_bytes())?;
+        // Both panels trust all proxies (TRUSTED_PROXIES=0.0.0.0/0), so the
+        // client IP is taken from X-Forwarded-For unless the step overrides it.
         let mut req = ctx.http.request(method, &url).header("Host", HOST);
+        if !st
+            .headers
+            .keys()
+            .any(|k| k.eq_ignore_ascii_case("x-forwarded-for"))
+        {
+            req = req.header("X-Forwarded-For", "10.0.0.1");
+        }
         if st.accept_json {
             req = req.header("Accept", "application/json");
         }

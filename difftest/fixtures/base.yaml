@@ -1,0 +1,82 @@
+# Base fixture: users, roles, API keys. Bearer tokens (identifier + secret):
+#   admin  client key : pacc_admin000001AdminClientSecret000000000000001
+#   user   client key : pacc_user0000001UserClientSecret0000000000000001
+#   admin  app key    : papp_admin000001AdminAppSecret000000000000000001
+#   user   ip-locked  : pacc_iplocked001IpLockedSecret00000000000000001
+#   user   expired    : pacc_expired0001ExpiredSecret000000000000000001
+users:
+  - id: 1
+    uuid: 6b9e5a5e-1111-4a5b-9c1d-000000000001
+    username: admin
+    email: admin@example.com
+    password: "@bcrypt:password"
+    language: en
+    timezone: UTC
+    created_at: "2026-01-01 00:00:00"
+    updated_at: "2026-01-01 00:00:00"
+  - id: 2
+    uuid: 6b9e5a5e-2222-4a5b-9c1d-000000000002
+    username: user
+    email: user@example.com
+    password: "@bcrypt:password"
+    language: en
+    timezone: UTC
+    created_at: "2026-01-02 00:00:00"
+    updated_at: "2026-01-02 03:04:05"
+roles:
+  - { id: 1, name: Root Admin, guard_name: web, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+model_has_roles:
+  - { role_id: 1, model_type: user, model_id: 1 }
+api_keys:
+  - id: 1
+    user_id: 1
+    key_type: 1
+    identifier: pacc_admin000001
+    token: "@encrypt:AdminClientSecret000000000000001"
+    allowed_ips: []
+    memo: admin client key
+    permissions: []
+    created_at: "2026-01-01 00:00:00"
+    updated_at: "2026-01-01 00:00:00"
+  - id: 2
+    user_id: 2
+    key_type: 1
+    identifier: pacc_user0000001
+    token: "@encrypt:UserClientSecret0000000000000001"
+    allowed_ips: []
+    memo: user client key
+    permissions: []
+    last_used_at: "2026-01-05 00:00:00"
+    created_at: "2026-01-02 00:00:00"
+    updated_at: "2026-01-02 00:00:00"
+  - id: 3
+    user_id: 1
+    key_type: 2
+    identifier: papp_admin000001
+    token: "@encrypt:AdminAppSecret000000000000000001"
+    allowed_ips: []
+    memo: admin application key
+    permissions: { server: 3, node: 3, allocation: 3, user: 3, egg: 3, database_host: 3, server_database: 3, mount: 3, role: 3, plugin: 3, webhook: 3 }
+    created_at: "2026-01-01 00:00:00"
+    updated_at: "2026-01-01 00:00:00"
+  - id: 4
+    user_id: 2
+    key_type: 1
+    identifier: pacc_iplocked001
+    token: "@encrypt:IpLockedSecret00000000000000001"
+    allowed_ips: ["192.168.0.0/24", "10.1.2.3"]
+    memo: ip locked
+    permissions: []
+    created_at: "2026-01-02 00:00:00"
+    updated_at: "2026-01-02 00:00:00"
+  - id: 5
+    user_id: 2
+    key_type: 1
+    identifier: pacc_expired0001
+    token: "@encrypt:ExpiredSecret000000000000000001"
+    allowed_ips: []
+    memo: expired
+    permissions: []
+    expires_at: "2026-01-03 00:00:00"
+    created_at: "2026-01-02 00:00:00"
+    updated_at: "2026-01-02 00:00:00"

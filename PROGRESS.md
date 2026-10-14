@@ -22,8 +22,20 @@
   (Int/Bool/SmallBool/Json/Timestamp), установка схемы с нуля, проверка миграций, сущность `nodes`;
   тест на 4 СУБД зелёный. Спеки `docs/spec/*` пишутся агентами.
 
+- 2026-10-14: спеки готовы (9 шт., ~12k строк). `laravel-compat` (Encrypter, serialize, bcrypt,
+  json_encode) сверен с PHP 8.5 из контейнера оригинала. Все 42 сущности (GLM-воркеры, ревью).
+  Харнесс диф-тестов + mock Wings (`scripts/difftest --backend all`). Каркас: `pelican-core`
+  (env/config как Laravel, лимитер, client IP/TrustProxies, IpRange, auth/AuthUser, activity),
+  `pelican-api` (ошибки, PhpJson, конвейер middleware, bindings), бинарь `pelican`.
+  Диф-тесты auth/* зелёные на MariaDB, MySQL, PostgreSQL, SQLite.
+
+## Как запускать диф-тесты
+`scripts/difftest --backend mariadb|mysql|pgsql|sqlite|all [--filter <name>] [--show] [--self-check]`.
+Сценарии `difftest/scenarios/*.yaml`, фикстуры `difftest/fixtures/*.yaml` (токены ключей — в шапке base.yaml).
+`--self-check` сравнивает оригинал сам с собой (проверка нормализации).
+
 ## Где остановился / что дальше
-- Дождаться спек, вычитать.
-- `laravel-compat`: Encrypter, PHP serialize, PHP-JSON.
-- Сущности для всех 40 таблиц (по эталонной PG-схеме → выбор Bool/SmallBool).
-- Mock Wings + харнесс диф-тестов + smoke-тест.
+- M2 хвосты: валидация (сообщения Laravel, TrimStrings/ConvertEmptyStringsToNull).
+- M3: Remote API (spec remote-api.md): DaemonAuthenticate уже есть; GET /servers и /servers/{uuid}
+  (конфигурация сервера), install, sftp/auth, activity, transfer, backups; клиент Wings + JWT.
+  Нужна фикстура `infra` (нода wings.test:8080, egg, сервер, аллокации).

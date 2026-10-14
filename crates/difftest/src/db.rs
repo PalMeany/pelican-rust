@@ -173,7 +173,10 @@ impl TestDb {
         }
         if self.backend == DbBackend::Postgres {
             // Advance sequences past explicitly inserted ids.
-            for table in rows.keys() {
+            for (table, list) in rows {
+                if !list.iter().any(|r| r.contains_key("id")) {
+                    continue;
+                }
                 let sql = format!(
                     "SELECT setval(pg_get_serial_sequence('{table}', 'id'), COALESCE((SELECT MAX(id) FROM {}), 0) + 1, false) \
                      WHERE pg_get_serial_sequence('{table}', 'id') IS NOT NULL",
