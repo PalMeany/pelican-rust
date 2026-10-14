@@ -1,0 +1,61 @@
+{# Server › Users list (app/Filament/Server/Resources/Subusers
+   SubuserResource::defaultTable): the toolbar invite action and per-row
+   edit/delete actions (edit reopens via /users/{id} which marks one dialog
+   as `open`). #}
+{% extends "layouts/panel.html" %}
+{% import "components/table.html" as tbl %}
+{% import "components/forms.html" as f %}
+{% from "server/users/_perms.html" import perms_tabs %}
+{% block head %}<script src="{{ asset('js/users.js') }}" defer></script>{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if can_create %}
+    <button type="button" class="btn" data-modal-open="invite-user"
+      title="{{ trans('server/user.invite_user') }}" aria-label="{{ trans('server/user.invite_user') }}">
+      {{ icon('user-plus', 'icon-sm') }}</button>
+    {% endif %}
+  </div>
+</div>
+{{ tbl.render(table, csrf) }}
+
+{# Invite: CreateAction `invite` — email + permission tabs, submit label `action`. #}
+{% if can_create %}
+<dialog id="invite-user" class="modal">
+  <form method="post" action="{{ base }}/users">
+    {{ csrf_field() }}
+    <div class="modal-head"><h2 class="row">{{ icon('user-plus', 'icon-sm') }}{{ trans('server/user.invite_user') }}</h2></div>
+    <div class="modal-body stack">
+      <div class="row">
+        <div style="flex:1">{{ f.text('email', trans('server/user.email'), v_email, v_errors, required=true, attrs='maxlength="255"', autocomplete='off') }}</div>
+        <button type="button" class="btn btn-gray" data-assign-all>{{ trans('server/user.assign_all') }}</button>
+      </div>
+      {{ perms_tabs(invite_groups) }}
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+      <button type="submit" class="btn">{{ icon('user-plus', 'icon-sm') }}{{ trans('server/user.action') }}</button></div>
+  </form>
+</dialog>
+{% endif %}
+
+{# EditAction modals (`editing` heading, disabled email, pre-filled permissions);
+   the one requested through /users/{id} carries data-dialog-open for users.js. #}
+{% for d in dialogs %}
+<dialog id="edit-user-{{ d.id }}" class="modal"{% if d.open %} data-dialog-open{% endif %}>
+  <form method="post" action="{{ base }}/users/{{ d.id }}/update">
+    {{ csrf_field() }}
+    <div class="modal-head"><h2>{{ trans('server/user.editing', user=d.email) }}</h2></div>
+    <div class="modal-body stack">
+      <div class="row">
+        <div style="flex:1">{{ f.text('email', trans('server/user.email'), d.email, {}, disabled=true) }}</div>
+        <button type="button" class="btn btn-gray" data-assign-all>{{ trans('server/user.assign_all') }}</button>
+      </div>
+      {{ perms_tabs(d.groups) }}
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+      <button type="submit" class="btn">{{ icon('device-floppy', 'icon-sm') }}{{ trans('filament-actions::edit.single.modal.actions.save.label') }}</button></div>
+  </form>
+</dialog>
+{% endfor %}
+{% endblock %}

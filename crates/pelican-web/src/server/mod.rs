@@ -6,6 +6,7 @@ mod console;
 mod databases;
 mod files;
 mod network;
+mod users;
 
 use std::collections::HashSet;
 
@@ -30,6 +31,7 @@ pub fn routes() -> Router<AppState> {
         .merge(databases::routes())
         .merge(files::routes())
         .merge(network::routes())
+        .merge(users::routes())
 }
 
 /// A request inside a server's panel: the tenant, its node and what the user may do there.

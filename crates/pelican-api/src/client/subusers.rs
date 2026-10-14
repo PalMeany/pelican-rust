@@ -81,7 +81,7 @@ fn cleaned_permissions(input: &Input) -> Vec<String> {
 }
 
 /// Service filter: keep `websocket.connect` and what the requester HAS, sorted.
-async fn service_permissions(
+pub async fn service_permissions(
     st: &AppState,
     ctx: &Ctx,
     server: &servers::Model,
@@ -146,7 +146,7 @@ fn bound(ctx: &Ctx) -> ApiResult<(&subusers::Model, &users::Model)> {
 }
 
 /// `UserCreationService::handle(['email' => ..., 'root_admin' => false])`.
-async fn create_user<C: ConnectionTrait>(st: &AppState, db: &C, email: &str) -> ApiResult<(users::Model, String)> {
+pub async fn create_user<C: ConnectionTrait>(st: &AppState, db: &C, email: &str) -> ApiResult<(users::Model, String)> {
     let random_password = pelican_wings::jwt::str_random(30);
     let hash = laravel_compat::hashing::make(&random_password, st.config.bcrypt_rounds)
         .map_err(|_| ApiError::internal("RuntimeException"))?;

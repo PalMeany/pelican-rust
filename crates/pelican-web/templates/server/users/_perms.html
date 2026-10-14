@@ -1,0 +1,20 @@
+{# Permission tabs shared by the invite and edit dialogs (SubuserResource
+   `$tabs`: one Tab per permission group, checkbox list with descriptions). #}
+
+{% macro perms_tabs(groups) %}
+<div data-tabs-root="1" data-tabs-local="1" class="stack">
+  <nav class="tabs">
+    {% for g in groups %}
+    <button type="button" data-tab="perm-{{ g.key }}" class="{{ 'active' if loop.first }}">{{ icon(g.icon, 'icon-sm') }}{{ g.label }}</button>
+    {% endfor %}
+  </nav>
+  {% for g in groups %}
+  <fieldset class="card card-body grid grid-2" data-tab-panel="perm-{{ g.key }}"{% if not loop.first %} hidden{% endif %} style="margin:0;align-content:start">
+    <p class="muted small span-full">{{ g.desc }}</p>
+    {% for o in g.options %}
+    <label class="check"><input type="checkbox" name="perm_{{ g.key }}[]" value="{{ o.value }}"{% if o.checked %} checked{% endif %}><span>{{ o.label }} <span class="muted small">{{ o.desc }}</span></span></label>
+    {% endfor %}
+  </fieldset>
+  {% endfor %}
+</div>
+{% endmacro %}
