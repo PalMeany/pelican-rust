@@ -44,8 +44,16 @@
   (реальный DDL на хосте MariaDB из difftest-сети), network (воркер), schedules+tasks (RunTaskJob,
   sync-очередь как SyncQueue, ADR-0012), cron-php (воркер, 1840/1840 векторов PHP). Всё зелёное на 4 СУБД.
 
+- 2026-10-14 (поздний вечер): M5 в основном готова (ветка `m5`, worktree `.worktrees/m5`): Application API
+  users/roles/nodes(+allocations, configuration, deployable)/servers(все операции, создание с deploy)/
+  database-hosts/mounts/eggs (импорт + экспорт JSON/YAML побайтно: порт Symfony YAML Dumper, 528 векторов).
+  Фон: планировщик с задачами обслуживания, почта (lettre), хук Server::saved. Харнесс: шаг `command`
+  (artisan через Docker API), PG без autovacuum, `distinct_seconds`.
+
 ## Где остановился / что дальше
-- M4: принять settings от воркера (`.worktrees/settings`), затем закрыть веху (полный прогон `--backend all`).
+- M5: принять webhooks от воркера (`.worktrees/webhooks`), слить `m5` в main, полный прогон `--backend all`.
+- M5 хвосты: доставка/диспатч вебхуков по активности и событиям моделей, egg check-updates/update-index,
+  plugins API (привязка к M7), S3-бэкапы (MinIO).
 - Харнесс: шаг «artisan-команда» (запуск `p:schedule:process` в panel-orig и `pelican schedule:process`),
   чтобы диф-тестировать раннер расписаний и прочие консольные команды M5.
 - M3 хвосты: S3-бэкапы (MinIO в compose + presign), удаление сабюзера-владельца (`Server::saved`).
