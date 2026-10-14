@@ -81,11 +81,17 @@ Application API → UI → плагины → PHP-sidecar.
 - [ ] Раннер расписаний (`p:schedule:process`, тикер в serve) — реализован, диф-теста нет (нужен шаг «artisan-команда» в харнессе)
 
 ### M5 — Application API (`/api/application/*`)
-- [ ] users, nodes (+configuration, deployable), allocations, servers (+details/build/startup/suspend/reinstall/transfer/delete), databases
-- [ ] eggs (view/export/import/delete) — формат eggs (ADR, спека eggs.md)
-- [ ] database-hosts, mounts, roles, webhooks, plugins
-- [ ] Фоновые задачи: планировщик расписаний, вебхуки, очистка (spec background.md)
-- [ ] Диф-тесты на каждый маршрут
+- [x] Каркас: ACL (биты ключа, root+account), includes с allowsAdmin, пагинация (per_page/page как в PHP), привязки моделей
+- [x] users (+roles assign/remove, spatie-семантика), nodes (+configuration, deployable, порядок ключей Eloquent), allocations (CIDR)
+- [x] servers: list/view/external/details/build/startup/suspend/reinstall/transfer(+cancel)/delete(+force), создание (deploy, выбор аллокации), databases
+- [x] eggs: list/view/delete, экспорт JSON, импорт (legacy-форматы, зарезервированные переменные)
+- [ ] eggs: экспорт YAML (порт Symfony YAML Dumper — воркер, 528 эталонных векторов)
+- [x] database-hosts, mounts, roles (воркеры + свои)
+- [ ] webhooks (воркер)
+- [ ] plugins — привязать к собственной системе плагинов в M7 (оригинальные — PHP/Composer)
+- [ ] Вебхуки: доставка (ProcessWebhook), диспатч по активности (server scope, ActivityLogged); события моделей eloquent.* — отдельный этап
+- [ ] Фоновые задачи: prune activity/webhooks, prune/clean backups, prune images, egg check-updates/update-index, почта (уведомления)
+- [x] Диф-тесты на каждый маршрут (app/*), 4 СУБД
 
 ### M6 — UI (паритет функций)
 - [ ] Каркас: SSR (minijinja) + htmx, декларативные ресурсы (таблица/форма/действия) — ADR-0005

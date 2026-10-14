@@ -70,7 +70,9 @@ impl Target<'_> {
     async fn command(&self, name: &str) -> Result<i64> {
         match self {
             Target::Orig { container: Some(c), .. } => {
-                crate::docker::exec(c, &["php", "/var/www/html/artisan", name]).await
+                let mut argv = vec!["php", "/var/www/html/artisan"];
+                argv.extend(name.split_whitespace());
+                crate::docker::exec(c, &argv).await
             }
             Target::Rust { state: Some(st), .. } => crate::rust_target::command(st, name).await,
             _ => anyhow::bail!("`command` steps need PELICAN_ORIG_CONTAINER and an in-process pelican-rs"),

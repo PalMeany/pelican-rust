@@ -401,16 +401,15 @@ pub async fn process_runnable(st: &AppState) -> ApiResult<usize> {
     Ok(ran)
 }
 
-/// Run `process_runnable` at the start of every minute (Laravel's `everyMinute()`).
+/// The panel scheduler (`schedule:run` every minute): server schedules plus the
+/// maintenance tasks of `app/Console/Kernel.php`.
 pub fn spawn_scheduler(st: AppState) {
     tokio::spawn(async move {
         loop {
             let now = chrono::Utc::now();
             let wait = 60 - (now.timestamp() % 60) as u64;
             tokio::time::sleep(Duration::from_secs(wait)).await;
-            if let Err(e) = process_runnable(&st).await {
-                tracing::error!(error = ?e.errors.first().map(|o| &o.code), "schedule processing failed");
-            }
+            run_schedule(&st, chrono::Utc::now()).await;
         }
     });
 }
@@ -447,6 +446,102 @@ pub async fn revoke_sftp_access(st: &AppState, user: &pelican_db::entities::user
         }
     }
     Ok(())
+}
+
+// --- maintenance (app/Console/Kernel.php schedule) ------------------------------
+
+/// `p:maintenance:prune-backups`: uncompleted backups older than `BACKUP_PRUNE_AGE`
+/// minutes (default 360) are marked failed. Returns how many were updated.
+pub async fn prune_backups(st: &AppState, minutes: i64) -> ApiResult<u64> {
+    let b = st.db.get_database_backend();
+    let now = pelican_core::time::now();
+    let since = Timestamp(now - chrono::Duration::minutes(minutes));
+    let falsy: sea_orm::Value = if b == sea_orm::DbBackend::Postgres { false.into() } else { 0.into() };
+    let res = st
+        .db
+        .execute_raw(raw::stmt(
+            b,
+            "update {backups} set {is_successful} = ?, {completed_at} = ?, {updated_at} = ? where {completed_at} is null and {created_at} <= ?",
+            vec![falsy, Timestamp(now).into(), Timestamp(now).into(), since.into()],
+        ))
+        .await?;
+    Ok(res.rows_affected())
+}
+
+/// `model:prune` for `ActivityLog` (`timestamp`) / `Webhook` (`created_at`):
+/// mass deletion without model events (subjects cascade).
+pub async fn prune_table(st: &AppState, table: &str, column: &str, days: i64) -> ApiResult<u64> {
+    let b = st.db.get_database_backend();
+    let before = Timestamp(pelican_core::time::now() - chrono::Duration::days(days));
+    let sql = format!("delete from {{{table}}} where {{{column}}} <= ?");
+    Ok(st.db.execute_raw(raw::stmt(b, &sql, vec![before.into()])).await?.rows_affected())
+}
+
+/// `p:maintenance:prune-images`: `DELETE /api/system/docker/image/prune` on every
+/// node (bare daemon client, 5 s connect / 30 s timeout; errors only logged).
+pub async fn prune_images(st: &AppState) -> ApiResult<()> {
+    let all = pelican_db::entities::nodes::Entity::find().all(&st.db).await?;
+    for node in all {
+        let Ok(conn) = st.node_conn(&node) else { continue };
+        let mut call =
+            pelican_wings::client::Call::new(pelican_wings::client::Method::DELETE, "/api/system/docker/image/prune");
+        call.throw = false;
+        call.connect_timeout = Some(Duration::from_secs(5));
+        call.timeout = Some(Duration::from_secs(30));
+        if let Err(e) = st.wings.send(&conn, call).await {
+            tracing::warn!(node = node.id.0, error = %e, "pruning docker images failed");
+        }
+    }
+    Ok(())
+}
+
+/// `p:maintenance:clean-service-backups`: `storage/app/services/.bak` files older than 5 minutes.
+pub fn clean_service_backups(st: &AppState) {
+    let dir = st.config.base_path.join("storage/app/services/.bak");
+    let Ok(entries) = std::fs::read_dir(&dir) else { return };
+    for e in entries.flatten() {
+        let old = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok());
+        if old.is_some_and(|d| d > Duration::from_secs(5 * 60)) {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
+}
+
+/// Everything `app/Console/Kernel.php` schedules, for the minute `now` (UTC).
+async fn run_schedule(st: &AppState, now: chrono::DateTime<chrono::Utc>) {
+    use chrono::Timelike;
+    let log = |what: &str, e: ApiError| tracing::error!(task = what, error = ?e.errors.first().map(|o| &o.code), "scheduled maintenance failed");
+    if let Err(e) = process_runnable(st).await {
+        log("p:schedule:process", e);
+    }
+    let env = &st.config.env;
+    let (hour, minute) = (now.hour(), now.minute());
+    if minute % 30 == 0 {
+        let age = env.int_or("BACKUP_PRUNE_AGE", 360);
+        if age > 0 {
+            if let Err(e) = prune_backups(st, age).await {
+                log("p:maintenance:prune-backups", e);
+            }
+        }
+    }
+    if hour == 0 && minute == 0 {
+        clean_service_backups(st);
+        if let Err(e) = prune_images(st).await {
+            log("p:maintenance:prune-images", e);
+        }
+        let activity_days = env.int_or("APP_ACTIVITY_PRUNE_DAYS", 90);
+        if activity_days > 0 {
+            if let Err(e) = prune_table(st, "activity_logs", "timestamp", activity_days).await {
+                log("model:prune ActivityLog", e);
+            }
+        }
+        let webhook_days = env.int_or("APP_WEBHOOK_PRUNE_DAYS", 30);
+        if webhook_days > 0 {
+            if let Err(e) = prune_table(st, "webhooks", "created_at", webhook_days).await {
+                log("model:prune Webhook", e);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

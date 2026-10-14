@@ -51,6 +51,24 @@ pub async fn command(state: &pelican_core::state::AppState, name: &str) -> anyho
                 .map_err(|e| anyhow::anyhow!("{:?}", e.errors.first().map(|o| &o.code)))?;
             Ok(0)
         }
+        "p:maintenance:prune-backups" => {
+            pelican_api::jobs::prune_backups(state, 360)
+                .await
+                .map_err(|e| anyhow::anyhow!("{:?}", e.errors.first().map(|o| &o.code)))?;
+            Ok(0)
+        }
+        "model:prune --model=App\\Models\\ActivityLog" => {
+            pelican_api::jobs::prune_table(state, "activity_logs", "timestamp", 90)
+                .await
+                .map_err(|e| anyhow::anyhow!("{:?}", e.errors.first().map(|o| &o.code)))?;
+            Ok(0)
+        }
+        "p:maintenance:prune-images" => {
+            pelican_api::jobs::prune_images(state)
+                .await
+                .map_err(|e| anyhow::anyhow!("{:?}", e.errors.first().map(|o| &o.code)))?;
+            Ok(0)
+        }
         other => anyhow::bail!("no pelican-rs equivalent for `{other}`"),
     }
 }

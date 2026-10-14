@@ -11,3 +11,15 @@ steps:
   - { command: "p:schedule:process" }
   - { command: "p:schedule:process" }
   - { path: /api/client/servers/0b5c6a0e/schedules, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+---
+name: console/maintenance
+fixtures: [base, infra, client-users]
+rows:
+  backups:
+    - { id: 1, server_id: 1, uuid: 9a9a9a9a-0000-4000-8000-0000000000a1, name: stale, ignored_files: [], is_successful: 0, is_locked: 0, is_scheduled: 0, checksum: null, bytes: 0, upload_id: null, backup_host_id: 1, completed_at: null, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+    - { id: 2, server_id: 1, uuid: 9a9a9a9a-0000-4000-8000-0000000000a2, name: fresh, ignored_files: [], is_successful: 0, is_locked: 0, is_scheduled: 0, checksum: null, bytes: 0, upload_id: null, backup_host_id: 1, completed_at: null, created_at: "@now", updated_at: "@now" }
+    - { id: 3, server_id: 1, uuid: 9a9a9a9a-0000-4000-8000-0000000000a3, name: done, ignored_files: [], is_successful: 1, is_locked: 0, is_scheduled: 0, checksum: "sha1:x", bytes: 10, upload_id: null, backup_host_id: 1, completed_at: "2026-01-01 01:00:00", created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+steps:
+  - { command: "p:maintenance:prune-backups" }
+  - { command: "model:prune --model=App\\Models\\ActivityLog" }
+  - { command: "p:maintenance:prune-images" }
