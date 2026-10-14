@@ -23,7 +23,8 @@
 - Переводы: в Rust `web.t("admin/node.nav_title")`, `web.t_with(key, &[("label", "…")])`,
   `crate::i18n::trans_choice(&locale, key, n, &[])`; в шаблонах `trans('key', name=value)`, `trans_choice('key', n)`.
   Ключи — ровно как в оригинале (`trans('admin/node.…')`, `filament-actions::…`, `filament-panels::…`).
-  Дамп всех переводов — `crates/pelican-web/data/lang.json`. Никаких захардкоженных английских строк, если в оригинале есть ключ.
+  Английские строки по группам (форматированный JSON) — `docs/i18n-en.json`: `grep -n '"admin/user": {' -A80 docs/i18n-en.json`.
+  Не разбирай `crates/pelican-web/data/lang.json` (3 МБ, одна строка). Никаких захардкоженных английских строк, если в оригинале есть ключ.
 - Уведомления (Filament `Notification::make()`): `web.flash_success(title)`, `web.flash_danger(title, Some(body))`,
   `web.session.flash("warning", title, body)`. Показываются на следующей странице.
 - Редирект после POST: `Ok(web.redirect("/admin/x"))` (работает и для htmx). Возврат на список из действия

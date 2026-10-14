@@ -1,3 +1,4 @@
 target
 .worker-out
 .worktrees
+docs/i18n-en.json
