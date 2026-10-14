@@ -106,6 +106,24 @@ impl<'a> Normalizer<'a> {
                 .and_then(|p| base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(p).ok())
                 .and_then(|b| String::from_utf8(b).ok())
                 .unwrap_or_default();
+            // Unix time claims relative to the run start, random `unique_id` masked.
+            let claims = match serde_json::from_str::<serde_json::Value>(&claims) {
+                Ok(serde_json::Value::Object(mut obj)) => {
+                    let start = self.start.and_utc().timestamp();
+                    for k in ["iat", "nbf", "exp"] {
+                        if let Some(t) = obj.get(k).and_then(|v| v.as_i64()) {
+                            let bucket = ((t - start) as f64 / 10.0).round() as i64 * 10;
+                            obj.insert(k.into(), serde_json::Value::String(format!("<unix{bucket:+}>")));
+                        }
+                    }
+                    if let Some(u) = obj.get("unique_id").and_then(|v| v.as_str()) {
+                        let len = u.len();
+                        obj.insert("unique_id".into(), serde_json::Value::String(format!("<rand:{len}>")));
+                    }
+                    serde_json::Value::Object(obj).to_string()
+                }
+                _ => claims,
+            };
             self.scan(&claims);
             let c = self.apply(&claims);
             self.register(&m, "jwt", &c);

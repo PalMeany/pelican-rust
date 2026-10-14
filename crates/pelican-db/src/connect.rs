@@ -183,7 +183,9 @@ fn version_ge(v: &str, min: (u32, u32, u32)) -> bool {
 /// Open a connection pool configured the way Laravel configures its sessions:
 /// MySQL `SET NAMES <charset> COLLATE <collation>` and the non-strict
 /// `sql_mode`, but NO forced `time_zone` (Laravel leaves the server default,
-/// which determines how TIMESTAMP columns round-trip); PostgreSQL search_path;
+/// which determines how TIMESTAMP columns round-trip); PostgreSQL search_path and
+/// `plan_cache_mode=force_custom_plan` (PDO plans every execution with the real
+/// values; generic plans of cached statements change natural row order, ADR-0011);
 /// SQLite foreign keys per `DB_FOREIGN_KEYS` and the file's own journal mode.
 pub async fn connect(cfg: &DbConfig) -> Result<DatabaseConnection, DbErr> {
     let mut opts = ConnectOptions::new(cfg.url());
@@ -222,7 +224,9 @@ pub async fn connect(cfg: &DbConfig) -> Result<DatabaseConnection, DbErr> {
         }
         Driver::Pgsql => {
             let schema = cfg.schema.clone();
-            opts.map_sqlx_postgres_opts(move |o| o.options([("search_path", schema.as_str())]));
+            opts.map_sqlx_postgres_opts(move |o| {
+                o.options([("search_path", schema.as_str()), ("plan_cache_mode", "force_custom_plan")])
+            });
         }
         Driver::Sqlite => {
             let fk = cfg.foreign_keys;

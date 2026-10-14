@@ -3,7 +3,7 @@
 
 use axum::extract::RawPathParams;
 use pelican_core::state::AppState;
-use pelican_db::entities::{servers, users};
+use pelican_db::entities::{allocations, backups, databases, schedules, servers, subusers, tasks, users};
 use pelican_db::{Driver, Int};
 use sea_orm::{ColumnTrait, Condition, EntityTrait, QueryFilter};
 
@@ -15,6 +15,13 @@ use crate::pipeline::Group;
 pub struct Bound {
     pub server: Option<servers::Model>,
     pub user: Option<users::Model>,
+    pub database: Option<databases::Model>,
+    pub schedule: Option<schedules::Model>,
+    pub task: Option<tasks::Model>,
+    pub allocation: Option<allocations::Model>,
+    pub backup: Option<backups::Model>,
+    /// Client `{user:uuid}`: the subuser row of the bound user.
+    pub subuser: Option<subusers::Model>,
     /// Raw parameters by name (for string parameters and late lookups).
     pub raw: Vec<(String, String)>,
 }
@@ -70,8 +77,86 @@ pub async fn resolve(st: &AppState, group: Group, params: &RawPathParams) -> Api
                 b.user =
                     Some(users::Entity::find_by_id(Int(id)).one(&st.db).await?.ok_or_else(ApiError::model_not_found)?);
             }
+            (Group::Client, child) => bind_client_child(st, &mut b, child, value).await?,
             _ => {}
         }
     }
     Ok(b)
+}
+
+/// Scoped child bindings of `/api/client/servers/{server}/...` (`scopeBindings()`).
+async fn bind_client_child(st: &AppState, b: &mut Bound, name: &str, value: &str) -> ApiResult<()> {
+    let Some(server_id) = b.server.as_ref().map(|s| s.id) else { return Ok(()) };
+    let id = || -> ApiResult<i64> { bind_id(value, st.driver)?.ok_or_else(ApiError::model_not_found) };
+    match name {
+        "database" => {
+            b.database = Some(
+                databases::Entity::find()
+                    .filter(databases::Column::ServerId.eq(server_id))
+                    .filter(databases::Column::Id.eq(id()?))
+                    .one(&st.db)
+                    .await?
+                    .ok_or_else(ApiError::model_not_found)?,
+            );
+        }
+        "schedule" => {
+            b.schedule = Some(
+                schedules::Entity::find()
+                    .filter(schedules::Column::ServerId.eq(server_id))
+                    .filter(schedules::Column::Id.eq(id()?))
+                    .one(&st.db)
+                    .await?
+                    .ok_or_else(ApiError::model_not_found)?,
+            );
+        }
+        "task" => {
+            let Some(schedule_id) = b.schedule.as_ref().map(|s| s.id) else { return Ok(()) };
+            b.task = Some(
+                tasks::Entity::find()
+                    .filter(tasks::Column::ScheduleId.eq(schedule_id))
+                    .filter(tasks::Column::Id.eq(id()?))
+                    .one(&st.db)
+                    .await?
+                    .ok_or_else(ApiError::model_not_found)?,
+            );
+        }
+        "allocation" => {
+            b.allocation = Some(
+                allocations::Entity::find()
+                    .filter(allocations::Column::ServerId.eq(server_id))
+                    .filter(allocations::Column::Id.eq(id()?))
+                    .one(&st.db)
+                    .await?
+                    .ok_or_else(ApiError::model_not_found)?,
+            );
+        }
+        "backup" => {
+            b.backup = Some(
+                backups::Entity::find()
+                    .filter(backups::Column::ServerId.eq(server_id))
+                    .filter(backups::Column::Uuid.eq(value))
+                    .one(&st.db)
+                    .await?
+                    .ok_or_else(ApiError::model_not_found)?,
+            );
+        }
+        "user" => {
+            // Server::resolveChildRouteBinding: subusers()->whereRelation('user','uuid',$v)->firstOrFail()->user
+            let user = users::Entity::find()
+                .filter(users::Column::Uuid.eq(value))
+                .one(&st.db)
+                .await?
+                .ok_or_else(ApiError::model_not_found)?;
+            let sub = subusers::Entity::find()
+                .filter(subusers::Column::ServerId.eq(server_id))
+                .filter(subusers::Column::UserId.eq(user.id))
+                .one(&st.db)
+                .await?
+                .ok_or_else(ApiError::model_not_found)?;
+            b.subuser = Some(sub);
+            b.user = Some(user);
+        }
+        _ => {}
+    }
+    Ok(())
 }

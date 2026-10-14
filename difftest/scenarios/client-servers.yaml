@@ -1,0 +1,61 @@
+name: client/server-list
+fixtures: [base, infra, client-users]
+steps:
+  - { path: /api/client, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { path: "/api/client?include=egg,subusers&per_page=1&page=2&x=1", bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: "/api/client?type=admin", bearer: pacc_admin000001AdminClientSecret000000000000001 }
+  - { path: "/api/client?type=admin-all&per_page=2", bearer: pacc_admin000001AdminClientSecret000000000000001 }
+  - { path: "/api/client?type=admin", bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: "/api/client?type=owner", bearer: pacc_admin000001AdminClientSecret000000000000001 }
+  - { path: "/api/client?filter[name]=SURV", bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: "/api/client?filter[*]=0b5c", bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: "/api/client?filter[*]=0.0.0.0:2556", bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: "/api/client?filter[*]=:30000", bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: "/api/client?filter[nope]=1&filter[x]=2", bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client, bearer: pacc_user3key001User3ClientSecret000000000001 }
+  - { path: /api/client/permissions, bearer: pacc_user3key001User3ClientSecret000000000001 }
+---
+name: client/server-view
+fixtures: [base, infra, client-users]
+steps:
+  - { path: /api/client/servers/0b5c6a0e, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { path: "/api/client/servers/0b5c6a0e?include=egg,subusers", bearer: pacc_admin000001AdminClientSecret000000000000001 }
+  - { path: "/api/client/servers/0b5c6a0e-3f0e-4c1e-9d55-6c1d7c0a2d11?include=subusers", bearer: pacc_user3key001User3ClientSecret000000000001 }
+  - { path: /api/client/servers/0b5c6a0e, bearer: pacc_user4key001User4ClientSecret000000000001 }
+  - { path: /api/client/servers/1c6d7b1f, bearer: pacc_admin000001AdminClientSecret000000000000001 }
+  - { path: /api/client/servers/2d7e8c2a, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/servers/2d7e8c2a/resources, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/servers/nope, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+---
+name: client/server-websocket-resources
+fixtures: [base, infra, client-users]
+wings:
+  responses:
+    - { method: GET, path: /api/servers/0b5c6a0e-3f0e-4c1e-9d55-6c1d7c0a2d11, json: { state: running, is_suspended: false, utilization: { memory_bytes: 1048576, cpu_absolute: 12.5, disk_bytes: 2048, network: { rx_bytes: 10, tx_bytes: 20 }, uptime: 3600 } } }
+steps:
+  - { path: /api/client/servers/0b5c6a0e/websocket, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { path: /api/client/servers/0b5c6a0e/websocket, bearer: pacc_admin000001AdminClientSecret000000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/websocket, bearer: pacc_user3key001User3ClientSecret000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/resources, bearer: pacc_user3key001User3ClientSecret000000000001 }
+  - { path: /api/client/servers/1c6d7b1f/websocket, bearer: pacc_admin000001AdminClientSecret000000000000001 }
+---
+name: client/server-power-command
+fixtures: [base, infra, client-users]
+steps:
+  - { method: POST, path: /api/client/servers/0b5c6a0e/power, bearer: pacc_user3key001User3ClientSecret000000000001, json: { signal: start }, expect_status: 204 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/power, bearer: pacc_user3key001User3ClientSecret000000000001, json: { signal: kill } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/power, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { signal: boom } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/power, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { signal: RESTART } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/command, bearer: pacc_user3key001User3ClientSecret000000000001, json: { command: "say hello/world" } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/command, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { command: "" } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/command, bearer: pacc_user0000001UserClientSecret0000000000000001, body: "{bad json", headers: { Content-Type: application/json } }
+---
+name: client/activity
+fixtures: [base, infra, client-users]
+steps:
+  - { path: /api/client/servers/0b5c6a0e/activity, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { path: "/api/client/servers/0b5c6a0e/activity?sort=-timestamp&include=actor&per_page=2", bearer: pacc_user3key001User3ClientSecret000000000001 }
+  - { path: "/api/client/servers/0b5c6a0e/activity?filter[event]=FILE&sort=timestamp", bearer: pacc_admin000001AdminClientSecret000000000000001 }
+  - { path: "/api/client/servers/0b5c6a0e/activity?sort=nope", bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/account/activity, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: "/api/client/account/activity?include=actor", bearer: pacc_admin000001AdminClientSecret000000000000001 }

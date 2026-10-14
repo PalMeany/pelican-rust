@@ -96,3 +96,22 @@ pub async fn has_server_permission<C: ConnectionTrait>(
     }
     Ok(perms.iter().any(|p| p.as_str() == Some(permission)))
 }
+
+/// `$user->can($perm, [$server])` — Gate with array arguments (client-api.md §5.4):
+/// root admin, a spatie permission literally named `$perm`, the owner, or a
+/// subuser holding `$perm`.
+pub async fn gate_server_permission<C: ConnectionTrait>(
+    db: &C,
+    user: &AuthUser,
+    server: &servers::Model,
+    permission: &str,
+) -> Result<bool, DbErr> {
+    if user.gate_before(permission) {
+        return Ok(true);
+    }
+    if server.owner_id.0 == user.id() {
+        return Ok(true);
+    }
+    let Some(perms) = subuser_permissions(db, server.id.0, user.id()).await? else { return Ok(false) };
+    Ok(perms.iter().any(|p| p.as_str() == Some(permission)))
+}

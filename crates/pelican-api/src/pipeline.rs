@@ -37,6 +37,8 @@ pub struct Ctx {
     pub node: Option<Arc<pelican_db::entities::nodes::Model>>,
     /// Laravel `Request::url()` base: `{scheme}://{host}`.
     pub root: String,
+    /// Default activity subject (`AccountSubject` / `ServerSubject`).
+    pub subject: Option<(&'static str, i64)>,
 }
 
 impl Ctx {
@@ -54,7 +56,29 @@ impl Ctx {
         if let Some(u) = &self.user {
             a = a.actor(morph::USER, u.id());
         }
+        if let Some((kind, id)) = self.subject {
+            a = a.subject(kind, id);
+        }
         a
+    }
+
+    /// `HAS(perm)`: `$user->can($perm, $server)` for the bound server.
+    pub async fn can(&self, st: &AppState, permission: &str) -> ApiResult<bool> {
+        let user = self.user()?;
+        let server = self.bound.server()?;
+        Ok(pelican_core::permissions::has_server_permission(&st.db, user, server, permission).await?)
+    }
+
+    /// `GATE(perm)`: Gate with array arguments (include resolvers, activity).
+    pub async fn gate(&self, st: &AppState, permission: &str) -> ApiResult<bool> {
+        let user = self.user()?;
+        let server = self.bound.server()?;
+        Ok(pelican_core::permissions::gate_server_permission(&st.db, user, server, permission).await?)
+    }
+
+    /// FormRequest `authorize()` with a `permission()`: 403 when missing.
+    pub async fn authorize(&self, st: &AppState, permission: &str) -> ApiResult<()> {
+        if self.can(st, permission).await? { Ok(()) } else { Err(ApiError::unauthorized_action()) }
     }
 }
 
@@ -143,7 +167,14 @@ async fn pipeline(
 
     if group == Group::Remote {
         let node = daemon_authenticate(st, req.headers()).await?;
-        req.extensions_mut().insert(Ctx { ip, user: None, bound: Arc::new(bound), node: Some(Arc::new(node)), root });
+        req.extensions_mut().insert(Ctx {
+            ip,
+            user: None,
+            bound: Arc::new(bound),
+            node: Some(Arc::new(node)),
+            root,
+            subject: None,
+        });
         return Ok(next.run(req).await);
     }
 
@@ -227,13 +258,89 @@ async fn pipeline(
     }
 
     let mut req = req;
-    req.extensions_mut().insert(Ctx { ip, user: Some(Arc::new(user)), bound: Arc::new(bound), node: None, root });
-    let _ = template;
-    let mut resp = next.run(req).await;
+    let method = req.method().clone();
+    let user = Arc::new(user);
+    let mut ctx = Ctx { ip, user: Some(user.clone()), bound: Arc::new(bound), node: None, root, subject: None };
+    let inner = async {
+        if group == Group::Client { client_route_checks(st, &mut ctx, &method, template, unix).await } else { Ok(None) }
+    };
+    let mut resp = match inner.await {
+        Err(e) => e.into_response(),
+        Ok(route_throttle) => {
+            req.extensions_mut().insert(ctx);
+            let mut r = next.run(req).await;
+            if let Some(Throttle::Allowed { limit, remaining }) = route_throttle {
+                add_rate_limit_headers(r.headers_mut(), limit, remaining);
+            }
+            r
+        }
+    };
     if let Throttle::Allowed { limit, remaining } = throttle {
         add_rate_limit_headers(resp.headers_mut(), limit, remaining);
     }
     Ok(resp)
+}
+
+/// `ResourceLimit` (app/Enums/ResourceLimit.php): per-server throttles by route.
+fn resource_limit(
+    st: &AppState,
+    method: &Method,
+    template: &str,
+) -> Option<(&'static str, pelican_core::config::RateLimit)> {
+    let rl = &st.config.rate_limits;
+    let t = template.strip_prefix("/api/client/servers/{server}").unwrap_or("");
+    match (method.as_str(), t) {
+        ("GET", "/websocket") => Some(("Websocket", rl.websocket)),
+        ("POST", "/network/allocations") => Some(("AllocationCreate", rl.default)),
+        ("POST", "/backups/{backup}/restore") => Some(("BackupRestore", rl.backup_restore)),
+        ("POST", "/databases") => Some(("DatabaseCreate", rl.database_create)),
+        ("POST", "/schedules") => Some(("ScheduleCreate", rl.default)),
+        ("POST", "/users") => Some(("SubuserCreate", rl.subuser_create)),
+        ("POST", "/files/pull") => Some(("FilePull", rl.file_pull)),
+        _ => None,
+    }
+}
+
+/// Steps 9–10 of the client pipeline: `AccountSubject` / `ServerSubject`,
+/// `AuthenticateServerAccess`, then the per-route `ResourceLimit` throttle.
+async fn client_route_checks(
+    st: &AppState,
+    ctx: &mut Ctx,
+    method: &Method,
+    template: &str,
+    unix: i64,
+) -> ApiResult<Option<Throttle>> {
+    let user = ctx.user()?.clone();
+    if template.starts_with("/api/client/account") {
+        ctx.subject = Some((morph::USER, user.id()));
+    }
+    let Some(server) = ctx.bound.server.clone() else { return Ok(None) };
+    ctx.subject = Some((morph::SERVER, server.id.0));
+    // AuthenticateServerAccess
+    let admin_update = user.gate_before("update server");
+    if server.owner_id.0 != user.id()
+        && !admin_update
+        && pelican_core::permissions::subuser_permissions(&st.db, server.id.0, user.id()).await?.is_none()
+    {
+        return Err(ApiError::not_found("The requested resource does not exist on this server."));
+    }
+    if let Some(detail) = pelican_core::server_state::conflict(&st.db, &server).await? {
+        let is_view = method == Method::GET && template == "/api/client/servers/{server}";
+        let is_ws = template == "/api/client/servers/{server}/websocket";
+        let is_files = template.starts_with("/api/client/servers/{server}/files/");
+        if !(is_view || ((is_ws || is_files) && admin_update)) {
+            return Err(ApiError::new(409, "ServerStateConflictException", detail, crate::error::Style::Pretty));
+        }
+    }
+    if let Some((name, limit)) = resource_limit(st, method, template) {
+        let key = format!("api.client:server-resource:{name}|{}", server.uuid);
+        let t = st.limiter.attempt(&key, limit.max, limit.decay_seconds(), unix);
+        if let Throttle::Exceeded { limit, retry_after, reset_at } = t {
+            return Err(too_many(limit, retry_after, reset_at));
+        }
+        return Ok(Some(t));
+    }
+    Ok(None)
 }
 
 pub fn too_many(limit: u32, retry_after: i64, reset_at: i64) -> ApiError {

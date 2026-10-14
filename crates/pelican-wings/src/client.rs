@@ -3,7 +3,7 @@
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use reqwest::Method;
+pub use reqwest::Method;
 use serde_json::Value;
 
 /// Connection data of a node (token already decrypted).

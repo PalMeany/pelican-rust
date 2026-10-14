@@ -224,3 +224,24 @@ impl AuthUser {
         self.is_root_admin() || (self.can_target_node(node_id) && self.web_permissions.contains("view server"))
     }
 }
+
+/// `User::isRootAdmin()` for an arbitrary user id (role named `Root Admin`).
+pub async fn is_root_admin<C: ConnectionTrait>(db: &C, user_id: i64) -> Result<bool, DbErr> {
+    let role_ids: Vec<Int> = model_has_roles::Entity::find()
+        .select_only()
+        .column(model_has_roles::Column::RoleId)
+        .filter(model_has_roles::Column::ModelType.eq("user"))
+        .filter(model_has_roles::Column::ModelId.eq(user_id))
+        .into_tuple()
+        .all(db)
+        .await?;
+    if role_ids.is_empty() {
+        return Ok(false);
+    }
+    Ok(roles::Entity::find()
+        .filter(roles::Column::Id.is_in(role_ids))
+        .filter(roles::Column::Name.eq(ROOT_ADMIN_ROLE))
+        .one(db)
+        .await?
+        .is_some())
+}

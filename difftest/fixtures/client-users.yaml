@@ -1,0 +1,23 @@
+# A third (non-admin) user who is a limited subuser of server 1, plus their key.
+#   user3 client key: pacc_user3key001User3ClientSecret000000000001
+users:
+  - { id: 3, uuid: 6b9e5a5e-3333-4a5b-9c1d-000000000003, username: sub_user, email: Sub.User@Example.com, password: "@bcrypt:password", language: de, timezone: UTC, created_at: "2026-01-03 00:00:00", updated_at: "2026-01-03 00:00:00" }
+  - { id: 4, uuid: 6b9e5a5e-4444-4a5b-9c1d-000000000004, username: stranger, email: stranger@example.com, password: "@bcrypt:password", language: en, timezone: UTC, created_at: "2026-01-03 00:00:00", updated_at: "2026-01-03 00:00:00" }
+api_keys:
+  - { id: 10, user_id: 3, key_type: 1, identifier: pacc_user3key001, token: "@encrypt:User3ClientSecret000000000001", allowed_ips: [], memo: user3, permissions: [], created_at: "2026-01-03 00:00:00", updated_at: "2026-01-03 00:00:00" }
+  - { id: 11, user_id: 4, key_type: 1, identifier: pacc_user4key001, token: "@encrypt:User4ClientSecret000000000001", allowed_ips: [], memo: user4, permissions: [], created_at: "2026-01-03 00:00:00", updated_at: "2026-01-03 00:00:00" }
+subusers:
+  - { id: 2, user_id: 3, server_id: 1, permissions: ["websocket.connect", "control.console", "control.start", "activity.read"], created_at: "2026-01-03 00:00:00", updated_at: "2026-01-03 00:00:00" }
+activity_logs:
+  - { id: 1, event: "server:file.rename", ip: "10.9.9.9", description: null, actor_type: user, actor_id: 2, properties: { directory: "a//b", files: [{ from: x, to: y }], to: "z" }, timestamp: "2026-01-05 10:00:00", api_key_id: null }
+  - { id: 2, event: "server:console.command", ip: "10.9.9.8", description: null, actor_type: user, actor_id: 3, properties: { command: "<b>say</b> hi" }, timestamp: "2026-01-04 10:00:00", api_key_id: 10 }
+  - { id: 3, event: "server:file.upload", ip: "10.9.9.7", description: null, actor_type: user, actor_id: 2, properties: { file: a }, timestamp: "2026-01-06 10:00:00", api_key_id: null }
+  - { id: 4, event: "user:api-key.create", ip: "10.9.9.6", description: null, actor_type: user, actor_id: 2, properties: { identifier: pacc_x, extra: 1 }, timestamp: "2026-01-06 11:00:00", api_key_id: null }
+  - { id: 5, event: "server:file.delete", ip: "10.9.9.5", description: null, actor_type: null, actor_id: null, properties: { directory: "/", files: ["a.txt", "b.txt"] }, timestamp: "2026-01-06 12:00:00", api_key_id: null }
+activity_log_subjects:
+  - { id: 1, activity_log_id: 1, subject_type: server, subject_id: 1 }
+  - { id: 2, activity_log_id: 2, subject_type: server, subject_id: 1 }
+  - { id: 3, activity_log_id: 3, subject_type: server, subject_id: 1 }
+  - { id: 4, activity_log_id: 4, subject_type: user, subject_id: 2 }
+  - { id: 5, activity_log_id: 5, subject_type: server, subject_id: 1 }
+  - { id: 6, activity_log_id: 1, subject_type: user, subject_id: 2 }

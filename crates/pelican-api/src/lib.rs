@@ -3,11 +3,13 @@
 
 pub mod binding;
 pub mod client;
+pub mod envelope;
 pub mod error;
 pub mod input;
 pub mod json;
 pub mod paginate;
 pub mod pipeline;
+pub mod query;
 pub mod remote;
 pub mod resources;
 pub mod validation;
