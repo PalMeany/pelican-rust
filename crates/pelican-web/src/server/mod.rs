@@ -2,6 +2,7 @@
 //! subuser permissions, navigation and the console.
 
 mod activity;
+mod backups;
 mod console;
 mod databases;
 mod files;
@@ -28,6 +29,7 @@ use crate::error::{WebError, WebResult};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .merge(activity::routes())
+        .merge(backups::routes())
         .merge(console::routes())
         .merge(databases::routes())
         .merge(files::routes())

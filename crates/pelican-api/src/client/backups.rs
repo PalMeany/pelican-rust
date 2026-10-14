@@ -307,7 +307,7 @@ pub async fn view(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) ->
 }
 
 /// Wings download URL (`WingsBackupSchema::getDownloadLink`).
-async fn download_link(
+pub async fn download_link(
     st: &AppState,
     ctx: &Ctx,
     server: &servers::Model,

@@ -1,0 +1,96 @@
+{# Server › Backups (app/Filament/Server/Resources/Backups::defaultTable):
+   list with the toolbar create action, the Notification Settings header
+   action and the per-row rename/restore modals. #}
+{% extends "layouts/panel.html" %}
+{% import "components/table.html" as tbl %}
+{% import "components/forms.html" as f %}
+{% block head %}<script src="{{ asset('js/backups.js') }}" defer></script>{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    <button type="button" class="btn btn-gray" data-modal-open="backup-notifications"
+      title="{{ trans('server/backup.notifications.action') }}" aria-label="{{ trans('server/backup.notifications.action') }}">
+      {{ icon('bell', 'icon-sm') }}{{ trans('server/backup.notifications.action') }}</button>
+    {% if can_create %}
+      {% if at_limit %}
+      <button type="button" class="btn btn-danger" disabled
+        title="{{ trans('server/backup.actions.create.limit') }}"
+        aria-label="{{ trans('server/backup.actions.create.title') }}">{{ icon('plus', 'icon-sm') }}</button>
+      {% else %}
+      <button type="button" class="btn" data-modal-open="create-backup"
+        title="{{ trans('server/backup.actions.create.title') }}" aria-label="{{ trans('server/backup.actions.create.title') }}">
+        {{ icon('plus', 'icon-sm') }}</button>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+{{ tbl.render(table, csrf) }}
+
+{# Toolbar CreateAction: name, ignored files, lock (with `backup.delete`). #}
+{% if can_create and not at_limit %}
+<dialog id="create-backup" class="modal"{% if create_open %} data-dialog-open{% endif %}>
+  <form method="post" action="{{ base }}/backups">
+    {{ csrf_field() }}
+    <div class="modal-head"><h2>{{ trans('server/backup.actions.create.title') }}</h2></div>
+    <div class="modal-body stack">
+      {{ f.text('name', trans('server/backup.actions.create.name'), v_name, v_errors, attrs='maxlength="255"', autocomplete='off') }}
+      {{ f.textarea('ignored', trans('server/backup.actions.create.ignored'), '', v_errors, rows=3) }}
+      {% if locked_field %}
+      {{ f.toggle('locked', trans('server/backup.actions.create.locked'), false, hint=trans('server/backup.actions.create.lock_helper')) }}
+      {% endif %}
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+      <button type="submit" class="btn">{{ icon('plus', 'icon-sm') }}{{ trans('filament-actions::create.single.modal.actions.create.label') }}</button></div>
+  </form>
+</dialog>
+{% endif %}
+
+{# Header action: per-user notification toggles (updateServerSetting). #}
+<dialog id="backup-notifications" class="modal">
+  <form method="post" action="{{ base }}/backups/notifications">
+    {{ csrf_field() }}
+    <input type="hidden" name="_back" value="{{ base }}/backups">
+    <div class="modal-head"><h2>{{ trans('server/backup.notifications.action') }}</h2></div>
+    <div class="modal-body stack">
+      {{ f.toggle('toggle_manual', trans('server/backup.notifications.toggle_manual'), manual, hint=trans('server/backup.notifications.helper_manual')) }}
+      {{ f.toggle('toggle_scheduled', trans('server/backup.notifications.toggle_scheduled'), scheduled, hint=trans('server/backup.notifications.helper_scheduled')) }}
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+      <button type="submit" class="btn">{{ icon('check', 'icon-sm') }}{{ trans('filament-actions::edit.single.modal.actions.save.label') }}</button></div>
+  </form>
+</dialog>
+
+{# RenameAction modal per successful backup. #}
+{% for d in rename_dialogs %}
+<dialog id="rename-backup-{{ d.id }}" class="modal"{% if d.open %} data-dialog-open{% endif %}>
+  <form method="post" action="{{ base }}/backups/{{ d.id }}/rename">
+    {{ csrf_field() }}
+    <input type="hidden" name="_back" value="{{ base }}/backups">
+    <div class="modal-head"><h2>{{ trans('server/backup.actions.rename.title') }}</h2></div>
+    <div class="modal-body">
+      {{ f.text('name', trans('server/backup.actions.rename.new_name'), d.value, {'name': d.error} if d.error else {}, required=true, attrs='maxlength="255"', autocomplete='off') }}
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+      <button type="submit" class="btn">{{ icon('device-floppy', 'icon-sm') }}{{ trans('filament-actions::edit.single.modal.actions.save.label') }}</button></div>
+  </form>
+</dialog>
+{% endfor %}
+
+{# RestoreAction modal: helper text + truncate checkbox. #}
+{% for d in restore_dialogs %}
+<dialog id="restore-backup-{{ d.id }}" class="modal"{% if d.open %} data-dialog-open{% endif %}>
+  <form method="post" action="{{ base }}/backups/{{ d.id }}/restore">
+    {{ csrf_field() }}
+    <input type="hidden" name="_back" value="{{ base }}/backups">
+    <div class="modal-head"><h2 class="row">{{ icon('reload', 'icon-sm') }}{{ trans('server/backup.actions.restore.title') }}</h2></div>
+    <div class="modal-body stack">
+      <p class="muted small">{{ trans('server/backup.actions.restore.helper') }}</p>
+      {{ f.toggle('truncate', trans('server/backup.actions.restore.delete_all'), false) }}
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+      <button type="submit" class="btn">{{ icon('reload', 'icon-sm') }}{{ trans('server/backup.actions.restore.title') }}</button></div>
+  </form>
+</dialog>
+{% endfor %}
+{% endblock %}
