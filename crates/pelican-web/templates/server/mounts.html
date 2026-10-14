@@ -1,0 +1,36 @@
+{% extends "layouts/panel.html" %}
+{% block head %}
+<script src="{{ asset('js/mounts.js') }}" defer></script>
+{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ title }}</h1></div>
+
+{# Filament page form: one Section with the full-width relationship
+   CheckboxList ('mounts'), live-saving on every change. #}
+<div class="card card-body stack">
+  <form method="post" action="{{ base }}/mounts/save" data-live>
+    {{ csrf_field() }}
+    <span class="field-label">{{ field_label }}</span>
+    {% if no_mounts %}
+    {# helperText when there are no options #}
+    <p class="hint muted">{{ no_mounts_hint }}</p>
+    {% else %}
+    <div class="stack">
+      {% for m in mounts %}
+      <label class="check" style="align-items: flex-start;">
+        <input type="checkbox" name="mounts[]" value="{{ m.id }}"{% if m.checked %} checked{% endif %}{% if not can_update %} disabled{% endif %}>
+        <span>{{ m.name }}
+          <br><span class="mono small muted">{{ m.path }}</span>
+          {% if m.description %}<br><span class="muted small">{{ m.description }}</span>{% endif %}
+        </span>
+      </label>
+      {% endfor %}
+    </div>
+    {# bulkToggleable(): select-all / deselect-all link actions #}
+    {% if can_update %}
+    <div><button type="button" class="btn btn-sm btn-gray" data-toggle-all data-check-label="{{ trans('filament-forms::components.checkbox_list.actions.select_all.label') }}" data-uncheck-label="{{ trans('filament-forms::components.checkbox_list.actions.deselect_all.label') }}">{{ icon('checkbox', 'icon-sm') }}<span data-toggle-all-label>{{ trans('filament-forms::components.checkbox_list.actions.select_all.label') }}</span></button></div>
+    {% endif %}
+    {% endif %}
+  </form>
+</div>
+{% endblock %}
