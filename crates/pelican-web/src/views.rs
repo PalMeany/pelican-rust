@@ -149,7 +149,9 @@ fn build(views_path: Option<PathBuf>) -> Environment<'static> {
 }
 
 pub fn init(views_path: Option<PathBuf>) {
-    let _ = ENV.set(build(views_path));
+    if ENV.get().is_none() {
+        let _ = ENV.set(build(views_path));
+    }
 }
 
 fn env() -> &'static Environment<'static> {

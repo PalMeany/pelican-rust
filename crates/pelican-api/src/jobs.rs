@@ -403,13 +403,13 @@ pub async fn process_runnable(st: &AppState) -> ApiResult<usize> {
 
 /// The panel scheduler (`schedule:run` every minute): server schedules plus the
 /// maintenance tasks of `app/Console/Kernel.php`.
-pub fn spawn_scheduler(st: AppState) {
+pub fn spawn_scheduler(live: pelican_core::state::Live) {
     tokio::spawn(async move {
         loop {
             let now = chrono::Utc::now();
             let wait = 60 - (now.timestamp() % 60) as u64;
             tokio::time::sleep(Duration::from_secs(wait)).await;
-            run_schedule(&st, chrono::Utc::now()).await;
+            run_schedule(&live.get(), chrono::Utc::now()).await;
         }
     });
 }
