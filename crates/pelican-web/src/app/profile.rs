@@ -28,7 +28,7 @@ static PHP_LISTS: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../../pelican-api/data/php-lists.json")).unwrap_or(Value::Null)
 });
 
-const TABS: [&str; 6] = ["account", "2fa", "api_keys", "ssh_keys", "activity", "customization"];
+const TABS: [&str; 7] = ["account", "2fa", "api_keys", "ssh_keys", "activity", "customization", "oauth"];
 const MFA_APP: &str = "filament-panels::auth/multi-factor/app";
 const MFA_EMAIL: &str = "filament-panels::auth/multi-factor/email";
 
@@ -47,6 +47,8 @@ pub fn routes() -> Router<AppState> {
         .route("/profile/mfa/email/disable", post(email_disable))
         .route("/profile/avatar", post(avatar_upload).layer(axum::extract::DefaultBodyLimit::max(12 * 1024 * 1024)))
         .route("/profile/avatar/delete", post(avatar_delete))
+        .route("/profile/oauth/{driver}/link", post(crate::auth::oauth::link))
+        .route("/profile/oauth/{driver}/unlink", post(oauth_unlink))
 }
 
 /// `FileUpload::make('avatar')` (png only, stored as `avatars/<id>.png` on the public disk).
@@ -63,6 +65,18 @@ async fn avatar_upload(web: Authed, body: axum::body::Bytes) -> WebResult {
     }
     std::fs::write(&path, &body).map_err(|e| WebError::internal(e.to_string()))?;
     Ok(axum::response::IntoResponse::into_response(axum::http::StatusCode::NO_CONTENT))
+}
+
+/// The profile tab's unlink action (`UserUpdateService::handle(['oauth' => …])`).
+async fn oauth_unlink(web: Authed, axum::extract::Path(driver): axum::extract::Path<String>) -> WebResult {
+    let schema = crate::auth::oauth::enabled(&web.st.config.env)
+        .into_iter()
+        .find(|s| s.id == driver)
+        .ok_or(WebError::NotFound)?;
+    if crate::auth::oauth::unlink_user(&web.st, &web.user.user, schema.id).await? {
+        web.flash_success(web.t_with("profile.unlinked", &[("name", &schema.name)]));
+    }
+    Ok(web.redirect("/profile?tab=oauth"))
 }
 
 async fn avatar_delete(web: Authed) -> WebResult {
@@ -245,6 +259,13 @@ async fn render(web: &Authed, account: &Account, errors: &Errors, extra: Mj) -> 
             tab => tab_of(web),
             managed => u.is_managed_externally.0,
             is_admin => web.user.is_admin(),
+            oauth => crate::auth::oauth::enabled(&web.st.config.env)
+                .into_iter()
+                .map(|s| {
+                    let linked = u.oauth.as_ref().and_then(|j| j.0.get(s.id)).is_some();
+                    context! { id => s.id, name => s.name, icon => s.icon, color => s.color, linked => linked }
+                })
+                .collect::<Vec<_>>(),
             avatars_uploadable => web.st.config.env.bool_or("FILAMENT_UPLOADABLE_AVATARS", false),
             has_avatar => crate::models::avatar_path(&web.st, web.user.id()).exists(),
             avatar_url => crate::models::avatar_url(&web.st, u),

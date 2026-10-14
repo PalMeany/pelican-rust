@@ -2,6 +2,7 @@
 //! (app/Filament/Pages/Auth/Login.php over Filament's `Auth\Pages\Login`).
 
 pub mod captcha;
+pub mod oauth;
 pub mod password_reset;
 pub mod totp;
 
@@ -57,6 +58,7 @@ fn render_login(web: &Web, errors: &Errors, login: &str, remember: bool) -> WebR
             errors => Value::from_serialize(errors),
             old => context! { login => login, remember => remember },
             captcha_site_key => captcha::site_key(&web.st),
+            oauth => Value::from_serialize(oauth::enabled(&web.st.config.env)),
             password_login => !web.st.config.env.bool_or("PANEL_DISABLE_PASSWORD_LOGIN", false)
                 && !web.st.config.env.bool_or("AUTH_DISABLE_PASSWORD_LOGIN", false),
         },

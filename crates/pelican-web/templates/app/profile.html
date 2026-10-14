@@ -12,7 +12,7 @@
   </div>
 </div>
 <div><nav class="tabs">
-  {% for t in [['account', 'user-cog'], ['2fa', 'shield-lock'], ['api_keys', 'key'], ['ssh_keys', 'lock-code'], ['activity', 'history'], ['customization', 'adjustments']] %}
+  {% for t in [['account', 'user-cog']] + ([['oauth', 'brand-oauth']] if oauth else []) + [['2fa', 'shield-lock'], ['api_keys', 'key'], ['ssh_keys', 'lock-code'], ['activity', 'history'], ['customization', 'adjustments']] %}
   <button type="button" data-tab="{{ t[0] }}" class="{{ 'active' if tab == t[0] }}">{{ icon(t[1], 'icon-sm') }}{{ trans('profile.tabs.' ~ t[0]) }}</button>
   {% endfor %}
 </nav></div>
@@ -64,6 +64,17 @@
   </section>
 </form>
 
+{% if oauth %}
+<section class="card card-body" data-tab-panel="oauth"{% if tab != 'oauth' %} hidden{% endif %}>
+  <div class="row" style="flex-wrap:wrap">
+    {% for o in oauth %}
+    <form method="post" action="/profile/oauth/{{ o.id }}/{{ 'unlink' if o.linked else 'link' }}" hx-boost="false">{{ csrf_field() }}
+      <button type="submit" class="btn"{% if o.color %} style="background:{{ o.color }}"{% endif %}>{{ icon('unlink' if o.linked else 'link', 'icon-sm') }}{{ trans('profile.' ~ ('unlink' if o.linked else 'link'), name=o.name) }}</button>
+    </form>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 <section class="stack" data-tab-panel="2fa"{% if tab != '2fa' %} hidden{% endif %}>
   <div class="card card-body stack">
     <div class="row"><strong>{{ trans(A ~ '/provider.management_schema.actions.label') }}</strong>

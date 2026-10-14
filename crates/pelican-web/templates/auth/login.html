@@ -18,6 +18,13 @@
   {% endif %}
   <button type="submit" class="btn btn-block">{{ trans('filament-panels::auth/pages/login.form.actions.authenticate.label') }}</button>
 </form>
+{% endif %}
+{% if oauth %}
+<div class="row" style="flex-wrap:wrap;justify-content:center;margin-top:1rem">
+  {% for o in oauth %}<a class="btn" href="/auth/oauth/redirect/{{ o.id }}" hx-boost="false"{% if o.color %} style="background:{{ o.color }}"{% endif %}>{% if o.icon %}{{ icon(o.icon, 'icon-sm') }}{% endif %}{{ o.name }}</a>{% endfor %}
+</div>
+{% endif %}
+{% if password_login %}
 <p class="sub"><a href="/password-reset/request">{{ trans('filament-panels::auth/pages/login.actions.request_password_reset.label') }}</a></p>
 {% else %}
 <p class="sub">{{ trans('auth.password_login_disabled') }}</p>

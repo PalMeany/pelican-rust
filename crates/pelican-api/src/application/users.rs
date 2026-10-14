@@ -231,6 +231,54 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
     Ok(PhpJson::with_status(StatusCode::CREATED, body).into_response())
 }
 
+/// `UserCreationService::handle(['username', 'email', 'oauth'])` without a password
+/// (OAuth sign-up): random password, reset token and the AccountCreated mail.
+pub async fn create_user(st: &AppState, username: &str, email: &str, oauth: Value) -> ApiResult<users::Model> {
+    let username = if username.is_empty() {
+        format!("{}{}", email.split('@').next().unwrap_or_default(), pelican_wings::jwt::str_random(3))
+    } else {
+        username.to_string()
+    };
+    // The saving hook lowercases both; User::$validationRules require them unique.
+    let (username, email) = (username.to_lowercase(), email.to_lowercase());
+    let taken = users::Entity::find()
+        .filter(
+            sea_orm::Condition::any()
+                .add(users::Column::Username.eq(username.clone()))
+                .add(users::Column::Email.eq(email.clone())),
+        )
+        .one(&st.db)
+        .await?
+        .is_some();
+    if taken || username.chars().count() > 255 || email.chars().count() > 255 {
+        return Err(ApiError::internal("ValidationException"));
+    }
+    let now = Timestamp(pelican_core::time::now());
+    let txn = st.db.begin().await?;
+    let am = users::ActiveModel {
+        external_id: Set(None),
+        is_managed_externally: Set(Bool(false)),
+        email: Set(email.clone()),
+        username: Set(username),
+        password: Set(hash(st, &pelican_wings::jwt::str_random(30))?),
+        language: Set("en".into()),
+        timezone: Set(st.config.env.string_or("APP_TIMEZONE", "UTC")),
+        uuid: Set(uuid::Uuid::new_v4().to_string()),
+        mfa_app_secret: Set(None),
+        mfa_app_recovery_codes: Set(None),
+        mfa_email_enabled: Set(Bool(false)),
+        oauth: Set(Some(pelican_db::Json(oauth))),
+        created_at: Set(Some(now)),
+        updated_at: Set(Some(now)),
+        ..Default::default()
+    };
+    let user = pelican_db::write::insert(&txn, am).await?;
+    let token = crate::passwords::create_token(st, &txn, &email).await?;
+    txn.commit().await?;
+    crate::services::account_created(st, &user, Some(&token)).await?;
+    Ok(user)
+}
+
 /// `PATCH /users/{user}` (`UserUpdateService`).
 pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, In(input): In) -> ApiResult<Response> {
     ctx.acl("user", WRITE)?;

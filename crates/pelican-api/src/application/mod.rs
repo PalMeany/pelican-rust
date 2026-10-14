@@ -8,7 +8,7 @@ pub mod nodes;
 mod roles;
 pub mod servers;
 pub mod servers_write;
-mod users;
+pub mod users;
 pub mod webhooks;
 
 use axum::Router;
