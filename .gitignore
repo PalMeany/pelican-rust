@@ -2,3 +2,5 @@ target
 .worker-out
 .worktrees
 docs/i18n-en.json
+# Read-only copy of the original panel for workers (scripts/worker/run.sh)
+.panel/
