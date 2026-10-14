@@ -402,7 +402,9 @@ pub fn node_attributes(driver: pelican_db::Driver, n: &nodes::Model) -> ApiResul
             "daemon_sftp_alias" => json!(n.daemon_sftp_alias),
             "daemon_base" => json!(n.daemon_base),
             "daemon_connect" => json!(n.daemon_connect.0),
-            "tags" => pelican_core::server_config::php_assoc(n.tags.as_ref().map(|t| t.0.clone()).unwrap_or(Value::Null)),
+            "tags" => {
+                pelican_core::server_config::php_assoc(n.tags.as_ref().map(|t| t.0.clone()).unwrap_or(Value::Null))
+            }
             "created_at" => ts(n.created_at.as_ref())?,
             "updated_at" => ts(n.updated_at.as_ref())?,
             "daemon_token" | "daemon_token_id" => continue,
@@ -536,8 +538,14 @@ pub fn egg_item<'a>(st: &'a AppState, ctx: &'a Ctx, e: &'a eggs::Model, inc: &'a
         a.insert("author".into(), json!(e.author));
         a.insert("description".into(), json!(e.description));
         a.insert("icon".into(), egg_icon(st, e));
-        a.insert("features".into(), e.features.as_ref().map(|j| pelican_core::server_config::php_assoc(j.0.clone())).unwrap_or(Value::Null));
-        a.insert("tags".into(), e.tags.as_ref().map(|j| pelican_core::server_config::php_assoc(j.0.clone())).unwrap_or(Value::Null));
+        a.insert(
+            "features".into(),
+            e.features.as_ref().map(|j| pelican_core::server_config::php_assoc(j.0.clone())).unwrap_or(Value::Null),
+        );
+        a.insert(
+            "tags".into(),
+            e.tags.as_ref().map(|j| pelican_core::server_config::php_assoc(j.0.clone())).unwrap_or(Value::Null),
+        );
         a.insert("docker_image".into(), first_value(images.as_ref()));
         a.insert("docker_images".into(), images.clone().unwrap_or(Value::Null));
         a.insert(
@@ -578,7 +586,11 @@ pub fn egg_item<'a>(st: &'a AppState, ctx: &'a Ctx, e: &'a eggs::Model, inc: &'a
                 vec![e.id.into()],
             )
             .await?;
-            Ok(list(vs.iter().map(|v| item("egg_variable", Value::Object(egg_variable_attributes(st.driver, v, None)), vec![])).collect()))
+            Ok(list(
+                vs.iter()
+                    .map(|v| item("egg_variable", Value::Object(egg_variable_attributes(st.driver, v, None)), vec![]))
+                    .collect(),
+            ))
         })
         .await?;
         Ok(collect("egg", Value::Object(a), rel))
@@ -642,7 +654,11 @@ fn server_variable_item(
     if inc.is_requested("parent") {
         rel.push((
             "parent",
-            if ctx.allows_admin("egg") { item("variable", Value::Object(attrs.clone()), vec![]) } else { null_resource() },
+            if ctx.allows_admin("egg") {
+                item("variable", Value::Object(attrs.clone()), vec![])
+            } else {
+                null_resource()
+            },
         ));
     }
     Ok(collect("server_variable", Value::Object(attrs), rel))

@@ -9,7 +9,9 @@ use axum::response::{IntoResponse, Response};
 use pelican_core::state::AppState;
 use pelican_db::entities::{password_resets, roles, users};
 use pelican_db::{Bool, Int, Timestamp, raw};
-use sea_orm::{ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, QueryFilter, TransactionTrait};
+use sea_orm::{
+    ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, QueryFilter, TransactionTrait,
+};
 use serde_json::{Value, json};
 
 use super::data::{user_item, user_roles};
@@ -27,7 +29,8 @@ static PHP_LISTS: LazyLock<Value> =
 
 /// `in:` parameter list of `ResourceBundle::getLocales('')` / `DateTimeZone::listIdentifiers()`.
 fn in_rule(key: &str) -> String {
-    let items: Vec<&str> = PHP_LISTS[key].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    let items: Vec<&str> =
+        PHP_LISTS[key].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
     format!("in:{}", items.join(","))
 }
 
@@ -68,7 +71,11 @@ pub async fn index(
     };
     let total_row = st
         .db
-        .query_one_raw(raw::stmt(b, &format!("select count(*) as {{aggregate}} from {{users}}{where_sql}"), vals.clone()))
+        .query_one_raw(raw::stmt(
+            b,
+            &format!("select count(*) as {{aggregate}} from {{users}}{where_sql}"),
+            vals.clone(),
+        ))
         .await?;
     let total = total_row.and_then(|r| r.try_get::<Int>("", "aggregate").ok()).map(|i| i.0).unwrap_or(0);
     let mut data = Vec::new();
@@ -147,7 +154,8 @@ async fn validate_user(st: &AppState, input: &Input, ignore: Option<i64>) -> Api
     v.validate()
 }
 
-const FIELDS: [&str; 7] = ["email", "external_id", "is_managed_externally", "username", "password", "language", "timezone"];
+const FIELDS: [&str; 7] =
+    ["email", "external_id", "is_managed_externally", "username", "password", "language", "timezone"];
 
 /// `$request->validated()`: present keys that have rules.
 fn validated(input: &Input) -> Vec<(&'static str, Value)> {
@@ -199,7 +207,10 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
     let user = pelican_db::write::insert(&txn, am).await?;
     if reset {
         // Password broker: delete existing tokens for the email, insert a hashed random token.
-        password_resets::Entity::delete_many().filter(password_resets::Column::Email.eq(email.clone())).exec(&txn).await?;
+        password_resets::Entity::delete_many()
+            .filter(password_resets::Column::Email.eq(email.clone()))
+            .exec(&txn)
+            .await?;
         let token = hash(&st, &pelican_wings::jwt::str_random(64))?;
         txn.execute_raw(raw::stmt(
             st.db.get_database_backend(),
@@ -329,13 +340,22 @@ async fn validate_roles(st: &AppState, input: &Input) -> ApiResult<()> {
                 }
             }
         };
-        v.custom(&path, CustomRule::precomputed("exists", (!exists).then(|| "The selected :attribute is invalid.".into())));
+        v.custom(
+            &path,
+            CustomRule::precomputed("exists", (!exists).then(|| "The selected :attribute is invalid.".into())),
+        );
     }
     v.validate()
 }
 
-/// Role ids from the input; strings are kept apart for the strict `=== rootAdminId` guard.
-fn role_inputs(input: &Input) -> Vec<(i64, bool)> {
+/// The `roles` input as PHP sees it: ints stay ints, strings are role *names*
+/// for spatie (`getStoredRole`: `is_int` → findById, `is_string` → findByName).
+enum RoleRef {
+    Id(i64),
+    Name(String),
+}
+
+fn role_inputs(input: &Input) -> Vec<RoleRef> {
     let vals: Vec<Value> = match input.get("roles") {
         Some(Value::Array(a)) => a.clone(),
         Some(Value::Object(m)) => m.values().cloned().collect(),
@@ -343,11 +363,21 @@ fn role_inputs(input: &Input) -> Vec<(i64, bool)> {
     };
     vals.iter()
         .filter_map(|v| match v {
-            Value::Number(n) => n.as_i64().map(|i| (i, true)),
-            Value::String(s) => s.trim().parse::<i64>().ok().map(|i| (i, false)),
+            Value::Number(n) => n.as_i64().map(RoleRef::Id),
+            Value::String(s) => Some(RoleRef::Name(s.clone())),
             _ => None,
         })
         .collect()
+}
+
+/// `Role::findById/findByName($x, 'web')` → `RoleDoesNotExist` (500) when missing.
+async fn stored_role(st: &AppState, r: &RoleRef) -> ApiResult<roles::Model> {
+    let q = roles::Entity::find().filter(roles::Column::GuardName.eq("web"));
+    let found = match r {
+        RoleRef::Id(id) => q.filter(roles::Column::Id.eq(Int(*id))).one(&st.db).await?,
+        RoleRef::Name(n) => q.filter(roles::Column::Name.eq(n.clone())).one(&st.db).await?,
+    };
+    found.ok_or_else(|| ApiError::internal("RoleDoesNotExist"))
 }
 
 async fn change_roles(st: &AppState, ctx: &Ctx, input: &Input, assign: bool) -> ApiResult<Response> {
@@ -357,10 +387,11 @@ async fn change_roles(st: &AppState, ctx: &Ctx, input: &Input, assign: bool) -> 
     if !pelican_core::auth::is_root_admin(&st.db, u.id.0).await? {
         let root = root_admin_role(st).await?;
         let b = st.db.get_database_backend();
-        for (role, is_int) in role_inputs(input) {
-            if is_int && role == root.id.0 {
+        for r in role_inputs(input) {
+            if matches!(r, RoleRef::Id(id) if id == root.id.0) {
                 continue;
             }
+            let role = stored_role(st, &r).await?.id.0;
             let held = user_roles(&st.db, u.id.0).await?.iter().any(|r| r.id.0 == role);
             if assign && !held {
                 st.db
@@ -385,12 +416,20 @@ async fn change_roles(st: &AppState, ctx: &Ctx, input: &Input, assign: bool) -> 
 }
 
 /// `PATCH /users/{user}/roles/assign`.
-pub async fn assign_roles(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, In(input): In) -> ApiResult<Response> {
+pub async fn assign_roles(
+    State(st): State<AppState>,
+    Extension(ctx): Extension<Ctx>,
+    In(input): In,
+) -> ApiResult<Response> {
     change_roles(&st, &ctx, &input, true).await
 }
 
 /// `PATCH /users/{user}/roles/remove`.
-pub async fn remove_roles(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, In(input): In) -> ApiResult<Response> {
+pub async fn remove_roles(
+    State(st): State<AppState>,
+    Extension(ctx): Extension<Ctx>,
+    In(input): In,
+) -> ApiResult<Response> {
     change_roles(&st, &ctx, &input, false).await
 }
 

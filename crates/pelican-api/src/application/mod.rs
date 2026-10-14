@@ -22,7 +22,11 @@ const KEY_TYPE_APPLICATION: i64 = 2;
 
 fn key_permission(ctx: &Ctx, resource: &str) -> i64 {
     let Some(key) = ctx.user.as_ref().and_then(|u| u.api_key()) else { return 0 };
-    key.permissions.0.get(resource).map(|v| pelican_core::php::intval(&pelican_core::php::string(v))).unwrap_or(0)
+    key.permissions
+        .as_ref()
+        .and_then(|p| p.0.get(resource))
+        .map(|v| pelican_core::php::intval(&pelican_core::php::string(v)))
+        .unwrap_or(0)
 }
 
 impl Ctx {
@@ -82,7 +86,11 @@ impl Page {
     /// ` limit N offset M` (no limit for a negative page size).
     pub fn sql(&self) -> String {
         let offset = ((self.page - 1) * self.per_page).max(0);
-        if self.per_page >= 0 { format!(" limit {} offset {offset}", self.per_page) } else { format!(" offset {offset}") }
+        if self.per_page >= 0 {
+            format!(" limit {} offset {offset}", self.per_page)
+        } else {
+            format!(" offset {offset}")
+        }
     }
 
     /// `{"object":"list","data":[...],"meta":{"pagination":...}}`; links carry only `page`.

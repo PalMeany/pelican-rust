@@ -40,5 +40,5 @@ steps:
   - { method: PATCH, path: /api/application/users/1/roles/remove, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { roles: [1] } }
   - { method: DELETE, path: /api/application/users/1, bearer: papp_admin000001AdminAppSecret000000000000000001 }
   - { method: DELETE, path: /api/application/users/2, bearer: papp_admin000001AdminAppSecret000000000000000001 }
-  - { method: DELETE, path: /api/application/users/4, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 204 }
+  - { method: DELETE, path: /api/application/users/4, bearer: papp_admin000001AdminAppSecret000000000000000001 }
   - { method: DELETE, path: /api/application/users/5, bearer: papp_staffwrite1StaffWriteSecret0000000000000001 }

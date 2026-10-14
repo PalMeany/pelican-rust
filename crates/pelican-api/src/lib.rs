@@ -1,6 +1,7 @@
 //! HTTP layer of pelican-rs (ADR-0001/0002): `/api/remote`, `/api/client`,
 //! `/api/application`, with the original middleware order and error formats.
 
+pub mod application;
 pub mod binding;
 pub mod client;
 pub mod envelope;
@@ -27,9 +28,11 @@ use crate::error::ApiError;
 pub fn router(state: AppState) -> Router {
     let client = client::routes(&state);
     let remote = remote::routes(&state);
+    let application = application::routes(&state);
     let inner = Router::new()
         .nest("/api/client", client)
         .nest("/api/remote", remote)
+        .nest("/api/application", application)
         .fallback(route_not_found)
         .with_state(state);
     // Error negotiation must see responses after axum finalised them (e.g. the
