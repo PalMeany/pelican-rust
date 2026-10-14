@@ -9,6 +9,13 @@
   {{ f.text('login', trans('filament-panels::auth/pages/login.title'), old.login, errors, required=true, autofocus=true, autocomplete='username') }}
   {{ f.password('password', trans('filament-panels::auth/pages/login.form.password.label'), errors, required=true) }}
   {{ f.checkbox('remember', trans('filament-panels::auth/pages/login.form.remember.label'), old.remember) }}
+  {% if captcha_site_key is not none %}
+  <div class="field{% if errors.captcha %} has-error{% endif %}" style="align-items:center">
+    <div class="cf-turnstile" data-sitekey="{{ captcha_site_key }}"></div>
+    {{ f.error(errors, 'captcha') }}
+  </div>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  {% endif %}
   <button type="submit" class="btn btn-block">{{ trans('filament-panels::auth/pages/login.form.actions.authenticate.label') }}</button>
 </form>
 <p class="sub"><a href="/password-reset/request">{{ trans('filament-panels::auth/pages/login.actions.request_password_reset.label') }}</a></p>

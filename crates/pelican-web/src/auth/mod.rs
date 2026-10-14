@@ -1,6 +1,7 @@
 //! Sign-in, multi-factor challenge and sign-out
 //! (app/Filament/Pages/Auth/Login.php over Filament's `Auth\Pages\Login`).
 
+pub mod captcha;
 pub mod password_reset;
 pub mod totp;
 
@@ -55,6 +56,7 @@ fn render_login(web: &Web, errors: &Errors, login: &str, remember: bool) -> WebR
         context! {
             errors => Value::from_serialize(errors),
             old => context! { login => login, remember => remember },
+            captcha_site_key => captcha::site_key(&web.st),
             password_login => !web.st.config.env.bool_or("PANEL_DISABLE_PASSWORD_LOGIN", false)
                 && !web.st.config.env.bool_or("AUTH_DISABLE_PASSWORD_LOGIN", false),
         },
@@ -133,6 +135,15 @@ pub async fn login(web: Web, form: Form) -> WebResult {
                 &[("attribute", &web.t(&format!("{LOGIN}.form.password.label")).to_lowercase())],
             ),
         );
+    }
+    // The captcha field (required + Turnstile rule) is validated with the form.
+    if captcha::site_key(&web.st).is_some() {
+        let token = form.get("cf-turnstile-response");
+        if token.is_empty() {
+            errors.add("captcha", web.t_with("validation.required", &[("attribute", "turnstile")]));
+        } else if let Err(msg) = captcha::validate(&web.st, token).await {
+            errors.add("captcha", msg);
+        }
     }
     if !errors.is_empty() {
         return render_login(&web, &errors, &login, remember);
