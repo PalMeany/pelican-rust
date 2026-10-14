@@ -21,6 +21,15 @@
   {{ csrf_field() }}
   <input type="hidden" name="_tab" value="{{ tab }}">
   <section class="card card-body form" data-tab-panel="account"{% if tab != 'account' %} hidden{% endif %}>
+    {% if avatars_uploadable %}
+    <div class="field"><label>Avatar</label>
+      <div class="row">
+        <span class="avatar" style="width:4rem;height:4rem;font-size:1.25rem">{{ user.avatar }}<img src="{{ avatar_url }}" alt="" referrerpolicy="no-referrer" onerror="this.remove()"></span>
+        <input class="input" type="file" accept="image/png" data-upload="/profile/avatar" style="max-width:20rem">
+        {% if has_avatar %}<button type="submit" class="btn btn-gray btn-sm" formaction="/profile/avatar/delete" formnovalidate>{{ icon('trash', 'icon-sm') }}</button>{% endif %}
+      </div>
+    </div>
+    {% endif %}
     {{ f.text('username', trans('profile.username'), v.username, errors, required=true, disabled=managed, attrs='maxlength="255"', autocomplete='username') }}
     {{ f.text('email', trans('profile.email'), v.email, errors, type='email', required=true, disabled=managed, attrs='maxlength="255"', autocomplete='email') }}
     {% if not managed %}

@@ -55,6 +55,7 @@ struct UserView<'a> {
     root_admin: bool,
     admin: bool,
     avatar: String,
+    avatar_url: String,
 }
 
 /// Gravatar-like initials avatar (Filament's default `ui-avatars` provider, inlined).
@@ -111,6 +112,7 @@ impl Web {
                 root_admin: u.is_root_admin(),
                 admin: u.is_admin(),
                 avatar: avatar(&u.user.username),
+                avatar_url: crate::models::avatar_url(&self.st, &u.user),
             })
         });
         let flash = self.session.take_flash();

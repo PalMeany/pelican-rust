@@ -96,3 +96,23 @@ pub async fn serve_storage(State(st): State<AppState>, UrlPath(path): UrlPath<St
     resp.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=300"));
     resp
 }
+
+/// `AvatarService::getAvatarUrl()`: an uploaded `avatars/<id>.png` (when uploads are
+/// enabled), else the configured provider (Gravatar; UI Avatars is Filament's default).
+pub fn avatar_url(st: &AppState, u: &pelican_db::entities::users::Model) -> String {
+    if st.config.env.bool_or("FILAMENT_UPLOADABLE_AVATARS", false) && avatar_path(st, u.id.0).exists() {
+        return format!("/storage/avatars/{}.png", u.id.0);
+    }
+    if st.config.env.string_or("FILAMENT_AVATAR_PROVIDER", "gravatar") == "gravatar" {
+        use md5::Digest;
+        return format!("https://gravatar.com/avatar/{}", hex::encode(md5::Md5::digest(u.email.as_bytes())));
+    }
+    let initials: Vec<String> =
+        u.username.trim().split(' ').map(|w| w.chars().next().map(String::from).unwrap_or_default()).collect();
+    let name: String = form_urlencoded::byte_serialize(initials.join(" ").as_bytes()).collect();
+    format!("https://ui-avatars.com/api/?name={name}&color=FFFFFF&background=09090b")
+}
+
+pub fn avatar_path(st: &AppState, user_id: i64) -> PathBuf {
+    public_disk(st).join(format!("avatars/{user_id}.png"))
+}

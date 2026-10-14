@@ -279,6 +279,22 @@
   document.addEventListener('DOMContentLoaded', () => restoreDetails(document));
   document.addEventListener('htmx:afterSwap', (e) => restoreDetails(e.target));
 
+  // Direct file uploads: <input type=file data-upload="/url"> posts the raw file, then reloads.
+  document.addEventListener('change', async (e) => {
+    const input = e.target.closest?.('input[type=file][data-upload]');
+    const file = input?.files?.[0];
+    if (!file) return;
+    try {
+      const r = await fetch(input.dataset.upload, {
+        method: 'POST', body: file,
+        headers: { 'X-CSRF-TOKEN': csrf(), 'Content-Type': file.type || 'application/octet-stream' },
+      });
+      if (r.ok) { window.location.reload(); return; }
+    } catch (_) { /* reported below */ }
+    input.value = '';
+    input.setCustomValidity('Upload failed'); input.reportValidity(); input.setCustomValidity('');
+  });
+
   // Reveal / hide password inputs.
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-reveal]');

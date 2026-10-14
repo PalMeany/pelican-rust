@@ -45,6 +45,29 @@ pub fn routes() -> Router<AppState> {
         .route("/profile/mfa/email/setup", get(email_setup_form).post(email_setup))
         .route("/profile/mfa/email/resend", post(email_resend))
         .route("/profile/mfa/email/disable", post(email_disable))
+        .route("/profile/avatar", post(avatar_upload).layer(axum::extract::DefaultBodyLimit::max(12 * 1024 * 1024)))
+        .route("/profile/avatar/delete", post(avatar_delete))
+}
+
+/// `FileUpload::make('avatar')` (png only, stored as `avatars/<id>.png` on the public disk).
+async fn avatar_upload(web: Authed, body: axum::body::Bytes) -> WebResult {
+    if !web.st.config.env.bool_or("FILAMENT_UPLOADABLE_AVATARS", false) {
+        return Err(WebError::Forbidden);
+    }
+    if !body.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err(WebError::Unprocessable);
+    }
+    let path = crate::models::avatar_path(&web.st, web.user.id());
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| WebError::internal(e.to_string()))?;
+    }
+    std::fs::write(&path, &body).map_err(|e| WebError::internal(e.to_string()))?;
+    Ok(axum::response::IntoResponse::into_response(axum::http::StatusCode::NO_CONTENT))
+}
+
+async fn avatar_delete(web: Authed) -> WebResult {
+    let _ = std::fs::remove_file(crate::models::avatar_path(&web.st, web.user.id()));
+    Ok(web.redirect("/profile"))
 }
 
 fn now() -> i64 {
@@ -222,6 +245,9 @@ async fn render(web: &Authed, account: &Account, errors: &Errors, extra: Mj) -> 
             tab => tab_of(web),
             managed => u.is_managed_externally.0,
             is_admin => web.user.is_admin(),
+            avatars_uploadable => web.st.config.env.bool_or("FILAMENT_UPLOADABLE_AVATARS", false),
+            has_avatar => crate::models::avatar_path(&web.st, web.user.id()).exists(),
+            avatar_url => crate::models::avatar_url(&web.st, u),
             v => context! {
                 username => account.username, email => account.email,
                 timezone => account.timezone, language => account.language,

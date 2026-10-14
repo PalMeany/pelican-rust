@@ -36,7 +36,7 @@
       <div class="spacer"></div>
       {% if user %}
       <details class="dropdown">
-        <summary aria-label="{{ trans('filament-panels::layout.actions.open_user_menu.label') }}"><span class="avatar" title="{{ user.username }}">{{ user.avatar }}</span></summary>
+        <summary aria-label="{{ trans('filament-panels::layout.actions.open_user_menu.label') }}"><span class="avatar" title="{{ user.username }}">{{ user.avatar }}{% if user.avatar_url %}<img src="{{ user.avatar_url }}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}</span></summary>
         <div class="dropdown-menu">
           <div class="head"><div style="font-weight:600">{{ user.username }}</div><div class="muted small truncate">{{ user.email }}</div></div>
           <a href="/profile">{{ icon('user', 'icon-sm') }}{{ trans('profile.title') }}</a>
