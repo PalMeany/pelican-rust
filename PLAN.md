@@ -42,19 +42,21 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] Установка схемы «с нуля» из эталонных дампов + заполнение `migrations` (`pelican db:install`)
 - [x] Проверка схемы при старте: все 255 миграций оригинала применены, иначе понятная ошибка
 - [x] Тесты: запись/чтение и SELECT всех сущностей на 4 СУБД; БД оригинала читается (диф-тесты)
+- [ ] «Нулевые» даты MySQL (`0000-00-00 00:00:00`) читать как NULL (Q5)
+- [ ] (после MVP, Q1) SpacetimeDB как отдельный бэкенд хранения — сначала ADR с оценкой
 
 ### M2 — Совместимость Laravel и аутентификация (`laravel-compat`, `pelican-core::auth`)
 - [x] Laravel Encrypter (AES-256-CBC + HMAC, `APP_PREVIOUS_KEYS`), PHP `serialize`/`unserialize` — сверено с PHP 8.5
 - [x] PHP-совместимый JSON-энкодер (`\/`, `\uXXXX`, float как zend_gcvt) — ADR-0006
 - [x] bcrypt (`$2y$`), needs_rehash
 - [x] API-ключи: bearer-парсинг Sanctum, `allowed_ips` (IPTools), `last_used_at` (dirty-check), expiry, тип ключа
-- [ ] TOTP (секрет, окно, recovery-коды), старые форматы 2FA
+- [x] TOTP (google2fa, окно 8, защита от повтора), recovery-коды (bcrypt в encrypted:array) — в pelican-web
 - [~] Права: spatie roles/permissions, root admin, node restrictions (AuthUser) — сабюзеры/политики с M4
-- [ ] Сессии/логин/троттлинг (для UI) — хранение в таблице `sessions` (ADR)
+- [x] Сессии/логин/троттлинг (для UI) — хранение в таблице `sessions` (ADR-0013)
 - [x] Обработчик ошибок в формате оригинала (pretty/compact по типу, redirect без Accept: json)
-- [ ] Валидация с сообщениями Laravel (`lang/en/validation.php`) + TrimStrings/ConvertEmptyStringsToNull
+- [x] Валидация с сообщениями Laravel (`lang/en/validation.php`) + TrimStrings/ConvertEmptyStringsToNull
 - [x] Диф-тесты auth/*: 401 (неверный/просроченный/битый токен), 403 (app-ключ на client, IP), 404 маршрута
-- [ ] Application API ACL (биты ключа, root+account key) — с первыми маршрутами M5
+- [x] Application API ACL (биты ключа, root+account key) — с первыми маршрутами M5
 - [~] Логин/2FA/сессии/CSRF — вместе с UI (M6): сессии, CSRF, логин, TOTP/recovery/email-код готовы в pelican-web
 
 ### M3 — Remote API для Wings (`/api/remote/*`) и клиент Wings
