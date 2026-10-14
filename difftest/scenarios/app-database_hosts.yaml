@@ -1,0 +1,69 @@
+name: app/database-hosts-read
+description: DatabaseHostController index/view — pagination, filters, sorts, includes, ACL.
+fixtures: [base, infra, databases, app-extra, app-database_hosts]
+steps:
+  - { path: /api/application/database-hosts, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 200 }
+  - { path: "/api/application/database-hosts?per_page=1&page=2", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/database-hosts?filter[name]=OTHER&sort=-id", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/database-hosts?filter[name]=maria", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/database-hosts?filter[host]=other-db.local", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/database-hosts?filter[nope]=x&sort=nope", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/database-hosts?sort=name,id", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/database-hosts?sort=-host", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/database-hosts?sort=port", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/database-hosts?per_page=abc", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/database-hosts?per_page=10abc", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/database-hosts?per_page=-1&page=2", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/database-hosts?per_page=0", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/database-hosts/1?include=databases,nodes", bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 200 }
+  - { path: "/api/application/database-hosts/1?include=databases.host", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/database-hosts/2?include=databases,nodes", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  # Mixed ACL key: server_database readable (list rendered), node write-only (null_resource).
+  - { path: "/api/application/database-hosts/2?include=databases,nodes", bearer: papp_dhostmix001DbHostMixSecret00000000000000001 }
+  - { path: /api/application/database-hosts/999, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 404 }
+  - { path: /api/application/database-hosts/abc, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  # staffread01 carries `user: R` only — the database_host ACL denies.
+  - { path: /api/application/database-hosts, bearer: papp_staffread01StaffReadSecret00000000000000001, expect_status: 403 }
+  - { path: /api/application/database-hosts, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 403 }
+  # WRITE alone never implies READ.
+  - { path: /api/application/database-hosts/1, bearer: papp_dhostwrite1DbHostWriteSecret000000000000001, expect_status: 403 }
+---
+name: app/database-hosts-write
+description: DatabaseHostController store/update/delete with HostCreationService/HostUpdateService.
+fixtures: [base, infra, databases, app-extra, app-database_hosts]
+steps:
+  - { method: POST, path: "/api/application/database-hosts?include=databases,nodes", bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: "Test Host One", host: mariadb, port: "3306", username: root, password: root, node_ids: [1, 2] }, expect_status: 201 }
+  - { method: POST, path: /api/application/database-hosts, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Bare host, host: mariadb, port: 3306, username: root, password: root }, expect_status: 201 }
+  - { method: POST, path: /api/application/database-hosts, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Bad Nodes, host: mariadb, port: 3306, username: root, password: root, node_ids: [999, x] } }
+  - { method: POST, path: /api/application/database-hosts, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Ghost Node, host: mariadb, port: 3306, username: root, password: root, node_ids: [3] } }
+  - { method: POST, path: /api/application/database-hosts, bearer: papp_admin000001AdminAppSecret000000000000000001, json: {} }
+  - { method: POST, path: /api/application/database-hosts, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, host: "", port: "12a", username: averyveryverylongdatabasenamehere } }
+  - { method: POST, path: /api/application/database-hosts, bearer: papp_staffwrite1StaffWriteSecret0000000000000001, json: { name: Denied, host: mariadb, port: 3306, username: root, password: root }, expect_status: 403 }
+  - { method: POST, path: /api/application/database-hosts, bearer: papp_staffread01StaffReadSecret00000000000000001, json: { name: Denied Too, host: mariadb, port: 3306, username: root, password: root }, expect_status: 403 }
+  # WRITE without READ may still store.
+  - { method: POST, path: /api/application/database-hosts, bearer: papp_dhostwrite1DbHostWriteSecret000000000000001, json: { name: Write Only Host, host: mariadb, port: 3306, username: root, password: root }, expect_status: 201 }
+  # A missing password reaches the NOT NULL column at insert time.
+  - { method: POST, path: /api/application/database-hosts, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: No Password, host: mariadb, port: 3306, username: root } }
+  # Connection-test failure against an unreachable host: rolled back.
+  - { method: POST, path: /api/application/database-hosts, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Bad Connection, host: nope.invalid, port: 3306, username: root, password: root } }
+  # All four core fields are required on every PATCH.
+  - { method: PATCH, path: /api/application/database-hosts/1, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Renamed Primary } }
+  - { method: PATCH, path: /api/application/database-hosts/1, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Renamed Primary, host: mariadb, port: 3306, username: root }, expect_status: 200 }
+  # Same payload again: clean save — no UPDATE, updated_at untouched.
+  - { method: PATCH, path: /api/application/database-hosts/1, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Renamed Primary, host: mariadb, port: 3306, username: root }, expect_status: 200 }
+  # Password rewrite rolls back when the NEW credentials cannot connect (root/newroot123 is wrong): 500 PDOException on both.
+  - { method: PATCH, path: /api/application/database-hosts/1, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Renamed Primary, host: mariadb, port: 3306, username: root, password: newroot123 } }
+  # node_ids is not fillable: ignored on update (empty diff apart from nothing).
+  - { method: PATCH, path: /api/application/database-hosts/1, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Renamed Primary, host: mariadb, port: 3306, username: root, node_ids: [2] }, expect_status: 200 }
+  - { method: PATCH, path: /api/application/database-hosts/1, bearer: papp_admin000001AdminAppSecret000000000000000001, json: {} }
+  - { method: PATCH, path: /api/application/database-hosts/2, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Other-mariaDB, host: other-db.local, port: "70000", username: other } }
+  # A mixed-permission key (database_host: 3) may write too.
+  - { method: PATCH, path: /api/application/database-hosts/1, bearer: papp_dhostmix001DbHostMixSecret00000000000000001, json: {}, expect_status: 422 }
+  - { method: PATCH, path: /api/application/database-hosts/1, bearer: papp_staffwrite1StaffWriteSecret0000000000000001, json: { name: No }, expect_status: 403 }
+  - { method: DELETE, path: /api/application/database-hosts/4, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 204 }
+  - { method: DELETE, path: /api/application/database-hosts/3, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 204 }
+  # The databases fixture references host 1 — the FK violation surfaces as a 500.
+  - { method: DELETE, path: /api/application/database-hosts/1, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  # Binding (404) precedes the ACL check even for a read-only key.
+  - { method: DELETE, path: /api/application/database-hosts/999, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 404 }
+  - { method: DELETE, path: /api/application/database-hosts/998, bearer: papp_staffread01StaffReadSecret00000000000000001, expect_status: 404 }

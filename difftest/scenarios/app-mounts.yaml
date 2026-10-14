@@ -1,0 +1,57 @@
+name: app/mounts-read
+fixtures: [base, infra, app-extra, app-mounts]
+steps:
+  - { path: /api/application/mounts, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 200 }
+  - { path: "/api/application/mounts?per_page=1&page=2", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/mounts?filter[name]=EGG&filter[uuid]=7a7a7a7a-0000-4000-8000-000000000002", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/mounts?filter[nope]=x&sort=name", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/mounts?sort=description,-id", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/mounts?per_page=abc", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/mounts?per_page=10abc", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/mounts?per_page=-1&page=3", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/mounts?per_page=0", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/mounts/2, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/mounts/999, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/mounts/abc, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/mounts/1?include=eggs,nodes,servers", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/mounts/3?include=nodes.eggs", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/mounts, bearer: pacc_admin000001AdminClientSecret000000000000001 }
+  - { path: "/api/application/mounts/3?include=nodes", bearer: pacc_admin000001AdminClientSecret000000000000001 }
+  - { path: /api/application/mounts, bearer: papp_mountonly01MountOnlySecret00000000000000001 }
+  - { path: "/api/application/mounts/1?include=eggs,nodes,servers", bearer: papp_mountonly01MountOnlySecret00000000000000001 }
+  - { path: /api/application/mounts/1/eggs, bearer: papp_mountonly01MountOnlySecret00000000000000001 }
+  - { path: /api/application/mounts/3/nodes, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/mounts/1/servers, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/mounts/4/nodes, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/mounts, bearer: papp_staffread01StaffReadSecret00000000000000001 }
+  - { path: /api/application/mounts/1/eggs, bearer: papp_staffread01StaffReadSecret00000000000000001 }
+  - { path: /api/application/mounts/1/servers, bearer: papp_staffwrite1StaffWriteSecret0000000000000001 }
+  - { path: /api/application/mounts, bearer: pacc_staffacct01StaffAcctSecret00000000000000001 }
+---
+name: app/mounts-write
+fixtures: [base, infra, app-extra, app-mounts]
+normalize:
+  random_columns: [mounts.uuid]
+steps:
+  - { method: POST, path: /api/application/mounts, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: " Fresh Mount ", source: /mnt/fresh, target: /fresh }, expect_status: 201 }
+  - { method: POST, path: /api/application/mounts, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: shared, source: /mnt/dup, target: /dup } }
+  - { method: POST, path: /api/application/mounts, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: a, source: /etc/pelican, target: /home/container } }
+  - { method: POST, path: /api/application/mounts, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Bad Bool Mount, source: /src, target: /tgt, read_only: maybe } }
+  - { method: POST, path: /api/application/mounts, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: With Desc, description: long text mount, source: /src2, target: /tgt2, read_only: "1", user_mountable: true } }
+  - { method: POST, path: /api/application/mounts, bearer: papp_staffwrite1StaffWriteSecret0000000000000001, json: { name: Staff Mount, source: /staff, target: /staff } }
+  - { method: PATCH, path: /api/application/mounts/2, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: renamed-mount, description: null } }
+  - { method: PATCH, path: /api/application/mounts/2, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: shared } }
+  - { method: PATCH, path: /api/application/mounts/2, bearer: papp_staffread01StaffReadSecret00000000000000001, json: { name: staff-rename } }
+  - { method: POST, path: /api/application/mounts/3/nodes, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { nodes: [2] } }
+  - { method: POST, path: /api/application/mounts/3/nodes, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { nodes: [99] } }
+  - { method: POST, path: /api/application/mounts/3/nodes, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { nodes: ["two"] } }
+  - { method: POST, path: /api/application/mounts/3/eggs, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { eggs: [2] } }
+  - { method: POST, path: /api/application/mounts/3/eggs, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { eggs: [2] } }
+  - { method: POST, path: /api/application/mounts/2/servers, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { servers: [2] } }
+  - { method: DELETE, path: /api/application/mounts/2/eggs/1, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: DELETE, path: /api/application/mounts/2/eggs/1, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: DELETE, path: /api/application/mounts/2/nodes/abc, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: DELETE, path: /api/application/mounts/1, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: DELETE, path: /api/application/mounts/4, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: DELETE, path: /api/application/mounts/999, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: DELETE, path: /api/application/mounts/3/servers/1, bearer: papp_mountonly01MountOnlySecret00000000000000001 }

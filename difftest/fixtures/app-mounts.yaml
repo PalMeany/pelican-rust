@@ -1,0 +1,10 @@
+# Application API mounts: extra relations + a mount-only application key.
+#   mount-only app key : papp_mountonly01MountOnlySecret00000000000000001  (user: 5, perm mount:R/W only)
+mounts:
+  - { id: 3, uuid: 7a7a7a7a-0000-4000-8000-000000000003, name: node-mount, description: nodes only, source: /mnt/node, target: /node, read_only: 0, user_mountable: 1 }
+  - { id: 4, uuid: 7a7a7a7a-0000-4000-8000-000000000004, name: spare, source: /mnt/spare, target: /spare, read_only: 0, user_mountable: 0 }
+mountables:
+  - { mount_id: 1, mountable_type: egg, mountable_id: 1 }
+  - { mount_id: 3, mountable_type: node, mountable_id: 1 }
+api_keys:
+  - { id: 30, user_id: 5, key_type: 2, identifier: papp_mountonly01, token: "@encrypt:MountOnlySecret00000000000000001", allowed_ips: [], memo: mount only, permissions: { mount: 3 }, created_at: "2026-01-04 00:00:00", updated_at: "2026-01-04 00:00:00" }

@@ -1,6 +1,8 @@
 //! Application API (`routes/api-application.php`, docs/spec/application-api.md).
 
 pub mod data;
+mod database_hosts;
+mod mounts;
 mod nodes;
 mod roles;
 mod users;
@@ -134,6 +136,19 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route("/nodes/{node}/configuration", p(get(nodes::config)))
         .route("/nodes/{node}/allocations", p(get(nodes::allocations_index).post(nodes::allocations_store)))
         .route("/nodes/{node}/allocations/{allocation}", p(delete(nodes::allocations_delete)))
+        .route("/database-hosts", p(get(database_hosts::index).post(database_hosts::store)))
+        .route(
+            "/database-hosts/{database_host}",
+            p(get(database_hosts::view).patch(database_hosts::update).delete(database_hosts::delete)),
+        )
+        .route("/mounts", p(get(mounts::index).post(mounts::store)))
+        .route("/mounts/{mount}", p(get(mounts::view).patch(mounts::update).delete(mounts::delete)))
+        .route("/mounts/{mount}/eggs", p(get(mounts::get_eggs).post(mounts::add_eggs)))
+        .route("/mounts/{mount}/nodes", p(get(mounts::get_nodes).post(mounts::add_nodes)))
+        .route("/mounts/{mount}/servers", p(get(mounts::get_servers).post(mounts::add_servers)))
+        .route("/mounts/{mount}/eggs/{egg_id}", p(delete(mounts::delete_egg)))
+        .route("/mounts/{mount}/nodes/{node_id}", p(delete(mounts::delete_node)))
+        .route("/mounts/{mount}/servers/{server_id}", p(delete(mounts::delete_server)))
         .route("/roles", p(get(roles::index).post(roles::store)))
         .route("/roles/{role}", p(get(roles::view).patch(roles::update).delete(roles::delete)))
 }

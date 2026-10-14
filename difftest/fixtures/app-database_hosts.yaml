@@ -1,0 +1,9 @@
+# Application API database hosts: a second host (unreachable, for read paths)
+# and application keys with partial database_host ACLs.
+#   mixed ACL (dbhost R+W, server_database R, node W) : papp_dhostmix001DbHostMixSecret00000000000000001  (user: 5)
+#   write-only dbhost                                  : papp_dhostwrite1DbHostWriteSecret000000000000001  (user: 5)
+database_hosts:
+  - { id: 2, name: Other-mariaDB, host: other-db.local, port: 33306, username: other, password: "@encrypt:hunter2pass", max_databases: 5, created_at: "2026-01-03 00:00:00", updated_at: "2026-01-03 04:05:06" }
+api_keys:
+  - { id: 30, user_id: 5, key_type: 2, identifier: papp_dhostmix001, token: "@encrypt:DbHostMixSecret00000000000000001", allowed_ips: [], memo: db host mixed, permissions: { database_host: 3, server_database: 1, node: 2 }, created_at: "2026-01-04 00:00:00", updated_at: "2026-01-04 00:00:00" }
+  - { id: 31, user_id: 5, key_type: 2, identifier: papp_dhostwrite1, token: "@encrypt:DbHostWriteSecret000000000000001", allowed_ips: [], memo: db host write only, permissions: { database_host: 2 }, created_at: "2026-01-04 00:00:00", updated_at: "2026-01-04 00:00:00" }
