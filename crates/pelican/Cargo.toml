@@ -13,6 +13,9 @@ pelican-db = { path = "../pelican-db" }
 anyhow.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+chrono-tz = "0.10"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4", features = ["derive"] }
 axum = "0.8"

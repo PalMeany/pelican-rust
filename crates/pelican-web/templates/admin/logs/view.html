@@ -1,0 +1,29 @@
+{% extends "layouts/panel.html" %}
+{% import "components/table.html" as tbl %}
+{% set L = 'filament-log-viewer::log.table.' %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    <a class="btn btn-gray" href="/admin/logs" title="{{ trans(L ~ 'actions.close.label') }}">{{ icon('arrow-left', 'icon-sm') }}</a>
+    <form method="post" action="/admin/logs/{{ date }}/delete" data-confirm="{{ trans('filament-actions::modal.confirmation') }}" data-confirm-title="{{ trans(L ~ 'actions.delete.label', log=pretty) }}">
+      {{ csrf_field() }}<button class="btn btn-danger" type="submit" title="{{ trans(L ~ 'actions.delete.label', log=pretty) }}">{{ icon('trash', 'icon-sm') }}</button></form>
+    <a class="btn btn-gray" href="/admin/logs/{{ date }}/download" hx-boost="false" title="{{ trans(L ~ 'actions.download.label', log=pretty) }}">{{ icon('file-download', 'icon-sm') }}</a>
+    <form method="post" action="/admin/logs/{{ date }}/upload" data-confirm="{{ trans('admin/log.actions.upload_logs_description', file=date, url='https://logs.pelican.dev') }}" data-confirm-title="{{ trans('admin/log.actions.upload_logs') }}">
+      {{ csrf_field() }}<input type="hidden" name="_back" value="/admin/logs/{{ date }}"><button class="btn btn-gray" type="submit" title="{{ trans('admin/log.actions.upload_tooltip', url='logs.pelican.dev') }}">{{ icon('world-upload', 'icon-sm') }}</button></form>
+  </div>
+</div>
+<section class="card">
+  <div class="card-head"><h2>{{ trans(L ~ 'detail.title') }}</h2></div>
+  <div class="card-body stack">
+    <dl class="kv"><dt>{{ trans(L ~ 'detail.file_path') }}</dt><dd class="mono">{{ file_path }}</dd></dl>
+    <dl class="kv" style="grid-template-columns: repeat(4, max-content 1fr)">
+      <dt>{{ trans(L ~ 'detail.log_entries') }}</dt><dd>{{ entries }}</dd>
+      <dt>{{ trans(L ~ 'detail.size') }}</dt><dd>{{ size | bytes }}</dd>
+      <dt>{{ trans(L ~ 'detail.created_at') }}</dt><dd>{{ created_at }} <small class="muted">({{ app_tz }})</small></dd>
+      <dt>{{ trans(L ~ 'detail.updated_at') }}</dt><dd>{{ updated_at }} <small class="muted">({{ app_tz }})</small></dd>
+    </dl>
+  </div>
+</section>
+{{ tbl.render(table, csrf) }}
+{% endblock %}

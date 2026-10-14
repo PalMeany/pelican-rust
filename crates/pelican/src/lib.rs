@@ -1,5 +1,7 @@
 //! Bootstrapping shared by the binary and the difftest harness.
 
+pub mod logfile;
+
 use std::net::SocketAddr;
 use std::path::Path;
 

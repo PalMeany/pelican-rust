@@ -6,6 +6,7 @@ mod dashboard;
 mod database_hosts;
 mod eggs;
 mod health;
+mod logs;
 mod mounts;
 mod nodes;
 mod roles;
@@ -35,6 +36,7 @@ pub fn routes() -> Router<AppState> {
         .merge(database_hosts::routes())
         .merge(eggs::routes())
         .merge(health::routes())
+        .merge(logs::routes())
         .merge(mounts::routes())
         .merge(nodes::routes())
         .merge(roles::routes())
