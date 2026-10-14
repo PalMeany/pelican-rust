@@ -108,16 +108,22 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] Ресурсный фреймворк: таблица (колонки/фильтры/сортировка/пагинация, действия строк, опрос через htmx), формы (поля+валидация Laravel), модалки/подтверждения, вкладки; руководство `docs/ui-guide.md`
 - [ ] Массовые действия таблиц (bulk delete)
 - [~] Auth: логин (email/username, троттлинг 5/мин, auth:success/auth:fail), MFA-челлендж (TOTP google2fa окно 8 + защита от повтора, recovery-коды bcrypt, email-код 4 мин) — готово; сброс пароля, passkeys, OAuth, капча — нет
-- [ ] Профиль: аккаунт, 2FA (настройка/отключение, recovery), API-ключи, SSH-ключи, активити, OAuth, кастомизация, passkeys
+- [x] Профиль: аккаунт, 2FA (TOTP с QR, recovery-коды, email-коды; настройка/отключение/перевыпуск), API-ключи, SSH-ключи, активити, кастомизация
+- [ ] Профиль: OAuth-привязки, passkeys, загрузка аватара
 - [ ] RequireTwoFactorAuthentication (уровни none/admin/all)
 - [~] Admin: каркас (доступ isAdmin, сайдбар с группами и бейджами по правам spatie)
   - [x] mounts (эталон)
   - [ ] воркеры: database hosts, webhooks, api keys (ui-a); users, roles, backup hosts (ui-b)
-  - [ ] nodes, servers (создание-мастер, редактирование), eggs (импорт/экспорт, переменные), dashboard, settings, health, logs, plugins
+  - [~] servers: список (группировка, inline основная аллокация), редактирование (5 вкладок, переменные, маунты, синхронизация с Wings), действия (установка, suspend, reinstall, смена яйца, удаление/force) — готово; создание, перенос, отношения allocations/databases — нет
+  - [ ] nodes, eggs (импорт/экспорт, переменные), dashboard, settings, health, logs, plugins
 - [x] App: список серверов (вкладки my/other/all, таблица/сетка по кастомизации, ресурсы из Wings с кешем 15 с, power-действия, фильтры egg/owner, per_page в кастомизации)
-- [ ] Server: консоль (xterm.js + websocket Wings), файлы (CodeMirror), БД, расписания, сабюзеры, бэкапы, сеть, startup, настройки, активити
+- [~] Server: каркас (доступ к тенанту, права сабюзера, навигация, баннер конфликта)
+  - [x] консоль (xterm.js 5.5 + WebSocket Wings, power через set state, история команд, графики)
+  - [x] файлы (список, массовые действия, права, архивы, загрузка напрямую в Wings, поиск, редактор CodeMirror 5)
+  - [ ] воркеры (ui-c): databases, network, activity, startup, settings, mounts
+  - [ ] users (сабюзеры), backups, schedules, webhooks
 - [ ] Инсталлятор
-- [ ] E2E-проверки ключевых сценариев в браузере
+- [ ] E2E-проверки ключевых сценариев в браузере (нужен настоящий Wings в VM: консоль, файлы, power, установка)
 
 ### M7 — Плагины (WASM)
 - [ ] WIT-API, покрывающий хуки оригинала (spec plugins.md): события, расширения (avatar, captcha, oauth, backup, tasks, features), UI-регистрация (ресурсы/страницы/виджеты/навигация), роуты, настройки, права, переводы
