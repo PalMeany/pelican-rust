@@ -12,8 +12,9 @@
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VM="${PELICAN_VM:-pelican}"
-NET="pelican-difftest_default"
+NET="${PELICAN_NET:-pelican-difftest-main_default}"
 DATA="$(cd "$REPO/.." && pwd)/.difftest"
+# PELICAN_NET picks the difftest network; PELICAN_TARGET_VOLUME separates target dirs of parallel runs.
 
 envs=()
 while IFS='=' read -r k _; do
@@ -30,5 +31,5 @@ exec limactl shell --workdir "$PWD" "$VM" -- sh -c '
   [ -n "'"${PELICAN_NET_ALIAS:-}"'" ] && [ -n "$net" ] && alias="--network-alias '"${PELICAN_NET_ALIAS:-}"'"
   exec docker run --rm -i '"${tty[*]:-}"' $net $alias \
     -v "'"$REPO"'":"'"$REPO"'" -v "'"$DATA"'":"'"$DATA"'" -w "$PWD" \
-    -v pelican-rs-target:/target -v pelican-rs-registry:/usr/local/cargo/registry \
+    -v '"${PELICAN_TARGET_VOLUME:-pelican-rs-target}"':/target -v pelican-rs-registry:/usr/local/cargo/registry \
     '"${envs[*]:-}"' "$@"' sh pelican-rs-dev cargo "$@"

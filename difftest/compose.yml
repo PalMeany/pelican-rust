@@ -1,9 +1,8 @@
 # Differential-testing environment: the ORIGINAL Pelican panel + databases.
-# Runs inside the lima VM "pelican" (see difftest/README.md). Ports are
-# forwarded by lima to the macOS host's 127.0.0.1.
+# Runs inside the lima VM "pelican" (see difftest/README.md). One compose
+# project per isolated environment: `-p pelican-difftest-<env>` (scripts/difftest).
 #
 #   DB_CONNECTION=mariadb|pgsql|sqlite  selects the database for panel-orig.
-name: pelican-difftest
 
 x-panel-env: &panel-env
   APP_ENV: "production"
@@ -37,7 +36,6 @@ services:
       MARIADB_USER: pelican
       MARIADB_PASSWORD: pelican
     command: ["--max-connections=500"]
-    ports: ["13306:3306"]
     tmpfs: ["/var/lib/mysql"]
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
@@ -52,7 +50,6 @@ services:
       MYSQL_USER: pelican
       MYSQL_PASSWORD: pelican
     command: ["--max-connections=500"]
-    ports: ["13307:3306"]
     tmpfs: ["/var/lib/mysql"]
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
@@ -65,7 +62,6 @@ services:
       POSTGRES_USER: pelican
       POSTGRES_PASSWORD: pelican
       POSTGRES_DB: panel
-    ports: ["15432:5432"]
     tmpfs: ["/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "pelican"]
@@ -77,9 +73,8 @@ services:
     environment:
       <<: *panel-env
       XDG_DATA_HOME: /pelican-data
-    ports: ["18000:80"]
     volumes:
-      - /Users/tazik/Desktop/Code/claude/pelican/.difftest/sqlite:/pelican-data/database
+      - ${DIFFTEST_DATA:-/Users/tazik/Desktop/Code/claude/pelican/.difftest/main}/sqlite:/pelican-data/database
     # No cron/queue workers: nothing may mutate the DB outside a request.
     command: ["sh", "-c", "php-fpm -D && exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"]
     depends_on:

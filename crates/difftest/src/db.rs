@@ -12,7 +12,15 @@ use sea_orm::{
 
 use crate::scenario::Rows;
 
-pub const SQLITE_PATH: &str = "/Users/tazik/Desktop/Code/claude/pelican/.difftest/sqlite/database.sqlite";
+/// SQLite file shared with panel-orig (`TEST_DIFFTEST_SQLITE`, set by scripts/difftest).
+pub fn sqlite_path() -> String {
+    std::env::var("TEST_DIFFTEST_SQLITE")
+        .unwrap_or_else(|_| "/Users/tazik/Desktop/Code/claude/pelican/.difftest/main/sqlite/database.sqlite".into())
+}
+
+fn sqlite_path_static() -> &'static str {
+    Box::leak(sqlite_path().into_boxed_str())
+}
 
 /// Connection settings for the database panel-orig uses (see scripts/difftest).
 pub fn config_for(backend: &str) -> Result<DbConfig> {
@@ -20,7 +28,7 @@ pub fn config_for(backend: &str) -> Result<DbConfig> {
         "mariadb" => (Driver::Mariadb, "mariadb", 3306, "root", "root", "panel"),
         "mysql" => (Driver::Mysql, "mysql", 3306, "root", "root", "panel"),
         "pgsql" => (Driver::Pgsql, "postgres", 5432, "pelican", "pelican", "panel"),
-        "sqlite" => (Driver::Sqlite, "", 0, "", "", SQLITE_PATH),
+        "sqlite" => (Driver::Sqlite, "", 0, "", "", sqlite_path_static()),
         other => return Err(anyhow!("unknown backend {other}")),
     };
     DbConfig::from_lookup(
