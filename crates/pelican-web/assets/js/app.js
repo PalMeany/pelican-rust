@@ -150,9 +150,12 @@
   // In-page tabs: buttons [data-tab=id] and panels [data-tab-panel=id] inside [data-tabs-root].
   function showTab(b) {
     const root = b.closest('[data-tabs-root]') || document;
-    root.querySelectorAll('[data-tab]').forEach((x) => x.classList.toggle('active', x === b));
-    root.querySelectorAll('[data-tab-panel]').forEach((p) => { p.hidden = p.dataset.tabPanel !== b.dataset.tab; });
-    root.querySelectorAll('input[name="_tab"]').forEach((i) => { i.value = b.dataset.tab; });
+    // Only this root's own tabs/panels (roots can nest).
+    const own = (sel) => [...root.querySelectorAll(sel)].filter((x) => (x.closest('[data-tabs-root]') || document) === root
+      || (x.parentElement?.closest('[data-tabs-root]') || document) === root && x.matches('[data-tabs-root]'));
+    own('[data-tab]').forEach((x) => x.classList.toggle('active', x === b));
+    own('[data-tab-panel]').forEach((p) => { p.hidden = p.dataset.tabPanel !== b.dataset.tab; });
+    own('input[name="_tab"]').forEach((i) => { i.value = b.dataset.tab; });
     if (root !== document && root.hasAttribute('data-tabs-local')) return;
     try { const u = new URL(window.location.href); u.searchParams.set('tab', b.dataset.tab); history.replaceState(null, '', u); } catch (_) { /* ignore */ }
   }

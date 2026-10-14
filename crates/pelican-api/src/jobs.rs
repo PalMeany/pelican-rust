@@ -532,6 +532,11 @@ async fn run_schedule(st: &AppState, now: chrono::DateTime<chrono::Utc>) {
         }
     }
     if hour == 0 && minute == 0 {
+        // CheckEggUpdatesCommand / UpdateEggIndexCommand (daily).
+        crate::egg_index::check_updates(st).await;
+        if let Err(e) = crate::egg_index::update_index(st).await {
+            tracing::warn!(error = %e, "p:egg:update-index failed");
+        }
         clean_service_backups(st);
         if let Err(e) = prune_images(st).await {
             log("p:maintenance:prune-images", e);

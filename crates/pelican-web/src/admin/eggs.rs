@@ -140,7 +140,8 @@ async fn index(admin: Admin) -> WebResult {
                 format!("/admin/eggs/{}/export/yaml", e.id.0),
             ));
         }
-        if admin.can("import egg") && e.update_url.is_some() {
+        // UpdateEggAction::visible(): an update was found by p:egg:check-updates.
+        if admin.can("import egg") && e.uuid.as_deref().is_some_and(pelican_api::egg_index::has_update) {
             row.group.push(
                 Action::post(
                     crate::i18n::trans_choice(&admin.locale(), "admin/egg.update", 1.0, &[]),
@@ -191,7 +192,7 @@ async fn index(admin: Admin) -> WebResult {
         .page(
             SLUG,
             "admin/eggs/list.html",
-            context! { title => t("admin/egg.model_label_plural"), table => Mj::from_serialize(&table), create => create, can_import => admin.can("import egg") },
+            context! { title => t("admin/egg.model_label_plural"), table => Mj::from_serialize(&table), create => create, can_import => admin.can("import egg"), egg_index => Mj::from_serialize(pelican_api::egg_index::index_or_fetch(st).await) },
         )
         .await
 }
@@ -208,6 +209,19 @@ fn truncate_bytes(s: &str, n: usize) -> &str {
 async fn import(admin: Admin, form: Form) -> WebResult {
     admin.authorize("import egg")?;
     let st = &admin.st;
+    // GitHub tab: the selected index eggs install in the background (InstallEgg jobs).
+    let github: Vec<String> = form.list("eggs").into_iter().filter(|u| !u.is_empty()).collect();
+    if !github.is_empty() {
+        for url in &github {
+            let (st, url) = (st.clone(), url.clone());
+            tokio::spawn(async move { pelican_api::egg_index::install_from_url(&st, &url).await });
+        }
+        admin.session.flash(
+            "success",
+            admin.t("installer.egg.background_install_started"),
+            Some(admin.t_with("installer.egg.background_install_description", &[("count", &github.len().to_string())])),
+        );
+    }
     let mut sources: Vec<(String, Result<String, String>)> = Vec::new();
     let mut urls: Vec<String> =
         form.list("urls").into_iter().map(|u| u.trim().to_string()).filter(|u| !u.is_empty()).collect();
@@ -909,6 +923,9 @@ async fn action(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
             };
             match result {
                 Ok(_) => {
+                    if let Some(uuid) = &e.uuid {
+                        pelican_api::egg_index::forget_update(uuid);
+                    }
                     let body = admin.t_with("admin/egg.updated_from", &[("url", &url)]);
                     admin.session.flash(
                         "success",

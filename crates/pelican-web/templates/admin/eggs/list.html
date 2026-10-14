@@ -11,5 +11,5 @@
   </div>
 </div>
 {{ tbl.render(table, csrf) }}
-{% if can_import %}{{ imp.modal(true) }}{% endif %}
+{% if can_import %}{{ imp.modal(true, '', egg_index) }}{% endif %}
 {% endblock %}

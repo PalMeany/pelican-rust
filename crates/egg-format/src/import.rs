@@ -50,6 +50,11 @@ const UPGRADE_VARIABLES: &[(&str, &str)] = &[
 ];
 
 /// YAML → JSON value as `Yaml::parse()` returns it (maps become PHP arrays).
+/// `Yaml::parse()` of a document into JSON values (as `parse` sees it, before normalisation).
+pub fn parse_yaml(content: &str) -> Result<Value, ImportError> {
+    serde_yaml::from_str::<serde_yaml::Value>(content).map(yaml_to_json).map_err(|e| ImportError::Parse(e.to_string()))
+}
+
 fn yaml_to_json(v: serde_yaml::Value) -> Value {
     use serde_yaml::Value as Y;
     match v {

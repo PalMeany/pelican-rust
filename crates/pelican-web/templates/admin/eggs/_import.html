@@ -1,5 +1,5 @@
 {# ImportEggAction modal: file (read client-side into contents[]) and URL tabs. #}
-{% macro modal(multiple=true, url='') %}
+{% macro modal(multiple=true, url='', index=none) %}
 {% set E = 'admin/egg.import' %}
 <dialog id="egg-import" class="modal" style="width:min(56rem, 100% - 2rem)">
   <form method="post" action="/admin/eggs/import" data-egg-import data-tabs-root data-tabs-local>
@@ -7,9 +7,24 @@
     <div class="modal-head"><h2>{{ trans('filament-actions::import.modal.actions.import.label') }}</h2></div>
     <div class="modal-body stack">
       <div><nav class="tabs">
+        {% if index is not none %}<button type="button" data-tab="github">{{ icon('brand-github', 'icon-sm') }}{{ trans(E ~ '.github') }}</button>{% endif %}
         <button type="button" data-tab="file" class="active">{{ icon('file-upload', 'icon-sm') }}{{ trans(E ~ '.file') }}</button>
         <button type="button" data-tab="url">{{ icon('world-upload', 'icon-sm') }}{{ trans(E ~ '.url') }}</button>
       </nav></div>
+      {% if index is not none %}
+      <section class="stack" data-tab-panel="github" hidden>
+        {% if index %}
+        <div data-tabs-root data-tabs-local class="stack">
+          <div><nav class="tabs" style="flex-wrap:wrap">{% for nest, eggs in index | items %}<button type="button" data-tab="nest-{{ loop.index }}" class="{{ 'active' if loop.first }}">{{ nest }} <span class="badge">{{ eggs | length }}</span></button>{% endfor %}</nav></div>
+          {% for nest, eggs in index | items %}
+          <div class="grid grid-4" data-tab-panel="nest-{{ loop.index }}"{% if not loop.first %} hidden{% endif %}>
+            {% for url, name in eggs | dictsort(by='value') %}<label class="check"><input type="checkbox" name="eggs[]" value="{{ url }}">{{ name }}</label>{% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}<p class="muted">{{ trans('installer.egg.exceptions.no_eggs') }}</p>{% endif %}
+      </section>
+      {% endif %}
       <section class="stack" data-tab-panel="file">
         <div class="field">
           <label>{{ trans('admin/egg.model_label') }}</label>

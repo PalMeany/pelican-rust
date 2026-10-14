@@ -4,6 +4,7 @@
 pub mod application;
 pub mod binding;
 pub mod client;
+pub mod egg_index;
 pub mod envelope;
 pub mod error;
 pub mod health;
