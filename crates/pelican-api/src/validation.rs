@@ -297,16 +297,8 @@ impl<'a> Validator<'a> {
             "required_with_all" => !p.iter().all(|f| is_required(self.other(f))) || is_required(value),
             "required_without" => !p.iter().any(|f| !is_required(self.other(f))) || is_required(value),
             "required_without_all" => !p.iter().all(|f| !is_required(self.other(f))) || is_required(value),
-            "required_if" => {
-                let other = self.other(&p[0]).map(php_string);
-                let matches = other.is_some_and(|o| p[1..].iter().any(|x| loose_eq(&o, x)));
-                !matches || is_required(value)
-            }
-            "required_unless" => {
-                let other = self.other(&p[0]).map(php_string).unwrap_or_default();
-                let matches = p[1..].iter().any(|x| loose_eq(&other, x));
-                matches || is_required(value)
-            }
+            "required_if" => !self.dependent_matches(&p[0], &p[1..]) || is_required(value),
+            "required_unless" => self.dependent_matches(&p[0], &p[1..]) || is_required(value),
             "string" => v.is_string(),
             "integer" => {
                 if p.first().map(String::as_str) == Some("strict") {
@@ -413,6 +405,29 @@ impl<'a> Validator<'a> {
                 false
             }
         }
+    }
+
+    /// `parseDependentRuleParameters` + `in_array($other, $values, is_bool||is_null)`.
+    fn dependent_matches(&self, field: &str, values: &[String]) -> bool {
+        let other = self.other(field).cloned().unwrap_or(Value::Null);
+        let other_is_bool_rule = self.attrs.iter().any(|a| {
+            a.attribute == field
+                && a.rules
+                    .iter()
+                    .any(|r| matches!(r, RuleSpec::Named { name, .. } if name == "boolean" || name == "accepted"))
+        });
+        let convert_bool = other_is_bool_rule || other.is_boolean();
+        let converted: Vec<Value> = values
+            .iter()
+            .map(|x| match x.as_str() {
+                "true" if convert_bool => Value::Bool(true),
+                "false" if convert_bool => Value::Bool(false),
+                "null" if other.is_null() => Value::Null,
+                _ => Value::String(x.clone()),
+            })
+            .collect();
+        let strict = other.is_boolean() || other.is_null();
+        converted.iter().any(|c| if strict { c == &other } else { php_loose_eq(&other, c) })
     }
 
     fn attrs_primary_for(&self, _attribute: &str) -> Option<String> {
@@ -657,6 +672,40 @@ fn loose_eq(a: &str, b: &str) -> bool {
         return a.trim().parse::<f64>().ok() == b.trim().parse::<f64>().ok();
     }
     false
+}
+
+/// PHP 8 loose `==` between two scalar JSON values.
+pub fn php_loose_eq(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::Bool(x), other) | (other, Value::Bool(x)) => *x == !php_falsy(other),
+        (Value::Null, other) | (other, Value::Null) => {
+            php_falsy(other) && !matches!(other, Value::String(s) if s == "0")
+        }
+        (Value::Number(_), Value::String(s)) | (Value::String(s), Value::Number(_)) => {
+            let n = if let Value::Number(n) = a {
+                n
+            } else if let Value::Number(n) = b {
+                n
+            } else {
+                return false;
+            };
+            is_numeric_str(s) && s.trim().parse::<f64>().ok() == n.as_f64()
+        }
+        (Value::String(x), Value::String(y)) => loose_eq(x, y),
+        (Value::Number(x), Value::Number(y)) => x.as_f64() == y.as_f64(),
+        _ => false,
+    }
+}
+
+fn php_falsy(v: &Value) -> bool {
+    match v {
+        Value::Null | Value::Bool(false) => true,
+        Value::Number(n) => n.as_f64() == Some(0.0),
+        Value::String(s) => s.is_empty() || s == "0",
+        Value::Array(a) => a.is_empty(),
+        Value::Object(m) => m.is_empty(),
+        _ => false,
+    }
 }
 
 /// `filter_var($v, FILTER_VALIDATE_INT)`.

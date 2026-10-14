@@ -1,0 +1,9 @@
+# SSH keys, backups, a transfer and backup notification opt-ins for remote API scenarios.
+user_ssh_keys:
+  - { id: 1, user_id: 2, name: laptop, fingerprint: QfiNrXNQO28JKVd5iXnW/mBHGYgay9sfXT6QJSAgisg, public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINY/Gpl4X9rAo73ku0nIm3OdxyGDAme+wYNeSj2WDR58 difftest", created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+backups:
+  - { id: 1, server_id: 1, uuid: 9a9a9a9a-0000-4000-8000-000000000001, name: nightly, ignored_files: ["*.log"], checksum: null, bytes: 0, completed_at: null, is_successful: 0, upload_id: null, is_locked: 1, backup_host_id: 1, is_scheduled: 0, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+  - { id: 2, server_id: 1, uuid: 9a9a9a9a-0000-4000-8000-000000000002, name: done, ignored_files: [], checksum: "sha1:abc", bytes: 10, completed_at: "2026-01-01 00:00:00", is_successful: 1, upload_id: null, is_locked: 0, backup_host_id: 1, is_scheduled: 1, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+  - { id: 3, server_id: 3, uuid: 9a9a9a9a-0000-4000-8000-000000000003, name: other-node, ignored_files: [], checksum: null, bytes: 0, completed_at: null, is_successful: 0, upload_id: null, is_locked: 0, backup_host_id: 1, is_scheduled: 0, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+server_user_settings:
+  - { id: 1, user_id: 2, server_id: 1, settings: { manual_backup_notifications: true }, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }

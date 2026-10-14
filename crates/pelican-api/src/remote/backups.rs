@@ -56,7 +56,8 @@ pub async fn upload_parts(
         ));
     }
     let host = backup_hosts::Entity::find_by_id(backup.backup_host_id).one(&st.db).await?;
-    if host.as_ref().map(|h| h.schema.as_str()) != Some("s3") {
+    let Some(host) = host else { return Err(ApiError::internal("ErrorException")) };
+    if host.schema != "s3" {
         return Err(ApiError::bad_request("The configured backup schema is not an S3 compatible."));
     }
     // S3 multipart presigning arrives with the backups milestone (PLAN M4).
@@ -121,7 +122,9 @@ pub async fn status(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
         .col_expr(backups::Column::UpdatedAt, Expr::value(now))
         .exec(&txn)
         .await?;
-    if host.as_ref().map(|h| h.schema.as_str()) == Some("s3") {
+    // `$model->backupHost->schema` on a missing host → ErrorException (rolled back).
+    let Some(host) = host else { return Err(ApiError::internal("ErrorException")) };
+    if host.schema == "s3" {
         if backup.upload_id.as_deref().is_none_or(str::is_empty) {
             if successful {
                 return Err(ApiError::internal("Exception"));

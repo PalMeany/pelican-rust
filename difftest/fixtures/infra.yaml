@@ -2,6 +2,8 @@
 # Daemon credentials: Authorization: Bearer difftestTokenId0.<token below>
 #   token = NodeDaemonToken0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL (64)
 # Second node (id 2) token id `otherNodeToken01`, token = OtherNodeToken...(64)
+backup_hosts:
+  - { id: 1, name: Local, schema: wings, configuration: null, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
 nodes:
   - id: 1
     uuid: 2a1b3c4d-0000-4000-8000-000000000001
