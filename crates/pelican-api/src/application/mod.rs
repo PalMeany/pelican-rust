@@ -1,11 +1,12 @@
 //! Application API (`routes/api-application.php`, docs/spec/application-api.md).
 
 pub mod data;
+mod nodes;
 mod roles;
 mod users;
 
 use axum::Router;
-use axum::routing::{MethodRouter, get, patch};
+use axum::routing::{MethodRouter, delete, get, patch};
 use pelican_core::state::AppState;
 use serde_json::{Map, Value, json};
 
@@ -127,6 +128,12 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route("/users/{user}", p(get(users::view).patch(users::update).delete(users::delete)))
         .route("/users/{user}/roles/assign", p(patch(users::assign_roles)))
         .route("/users/{user}/roles/remove", p(patch(users::remove_roles)))
+        .route("/nodes", p(get(nodes::index).post(nodes::store)))
+        .route("/nodes/deployable", p(get(nodes::deployable)))
+        .route("/nodes/{node}", p(get(nodes::view).patch(nodes::update).delete(nodes::delete)))
+        .route("/nodes/{node}/configuration", p(get(nodes::config)))
+        .route("/nodes/{node}/allocations", p(get(nodes::allocations_index).post(nodes::allocations_store)))
+        .route("/nodes/{node}/allocations/{allocation}", p(delete(nodes::allocations_delete)))
         .route("/roles", p(get(roles::index).post(roles::store)))
         .route("/roles/{role}", p(get(roles::view).patch(roles::update).delete(roles::delete)))
 }

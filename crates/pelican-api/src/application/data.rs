@@ -8,7 +8,8 @@ use std::pin::Pin;
 
 use pelican_core::state::AppState;
 use pelican_db::entities::{
-    allocations, database_hosts, databases, egg_variables, eggs, nodes, permissions, roles, servers, subusers, users,
+    allocations, database_hosts, databases, egg_variables, eggs, mounts, nodes, permissions, roles, servers, subusers,
+    users,
 };
 use pelican_db::{Timestamp, raw};
 use sea_orm::{ConnectionTrait, EntityTrait, FromQueryResult};
@@ -469,6 +470,27 @@ pub fn node_item<'a>(
         .await?;
         Ok(collect("node", Value::Object(a), rel))
     })
+}
+
+/// `Mount::toArray()` (no timestamps; casts id int, read_only/user_mountable bool).
+pub fn mount_attributes(driver: pelican_db::Driver, m: &mounts::Model) -> Map<String, Value> {
+    let cols = pelican_db::column_order::columns(driver, "mounts").unwrap_or(&[]);
+    let mut a = Map::new();
+    for c in cols {
+        let v = match *c {
+            "id" => json!(m.id.0),
+            "uuid" => json!(m.uuid),
+            "name" => json!(m.name),
+            "description" => json!(m.description),
+            "source" => json!(m.source),
+            "target" => json!(m.target),
+            "read_only" => json!(m.read_only.0),
+            "user_mountable" => json!(m.user_mountable.0),
+            _ => continue,
+        };
+        a.insert((*c).to_string(), v);
+    }
+    a
 }
 
 // --- eggs -----------------------------------------------------------------

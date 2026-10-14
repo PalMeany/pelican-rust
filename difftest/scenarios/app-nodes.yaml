@@ -1,0 +1,56 @@
+name: app/nodes-read
+fixtures: [base, infra, client-users, app-extra]
+rows:
+  mountables:
+    - { mount_id: 1, mountable_type: node, mountable_id: 1 }
+steps:
+  - { path: /api/application/nodes, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 200 }
+  - { path: "/api/application/nodes?filter[name]=ONE&sort=-memory,id&include=allocations,servers", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/nodes?filter[daemon_token_id]=other&per_page=1", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/nodes/1, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/nodes/99, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/nodes/1/configuration, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/nodes/deployable?memory=512&disk=1024", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/nodes/deployable?memory=10000&disk=1024&tags[]=eu&tags[]=asia", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/nodes/deployable?disk=x", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/nodes/1/allocations, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/nodes/1/allocations?filter[server_id]=1&include=server", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/nodes/1/allocations?filter[server_id]=false", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/nodes/1/allocations?filter[ip]=0.0.0.0&filter[port]=25565,25566", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/nodes/1/allocations?filter[ip_alias]=MC&include=node", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/nodes, bearer: papp_staffread01StaffReadSecret00000000000000001 }
+---
+name: app/nodes-write
+fixtures: [base, infra, client-users, app-extra]
+normalize:
+  random_columns: [nodes.daemon_token_id, nodes.daemon_token]
+rows:
+  mountables:
+    - { mount_id: 1, mountable_type: node, mountable_id: 2 }
+steps:
+  - { method: POST, path: /api/application/nodes, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: " New Node ", description: "", public: "1", fqdn: node3.example.com, scheme: https, behind_proxy: false, memory: "4096", memory_overallocate: "10", disk: 10240, disk_overallocate: -1, cpu: 200, cpu_overallocate: 0, daemon_sftp: 2022, daemon_sftp_alias: sftp.example.com, daemon_listen: "8443", daemon_connect: 8443, maintenance_mode: 0, upload_size: 256, tags: ["eu", "ssd"] }, expect_status: 201 }
+  - { method: POST, path: /api/application/nodes, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Mini, fqdn: mini.example.com, scheme: http, memory: 1, memory_overallocate: 0, disk: 1, disk_overallocate: 0, cpu: 0, cpu_overallocate: 0, daemon_sftp: 2022, daemon_listen: 8080, daemon_connect: 8080, daemon_base: "/srv/data" } }
+  - { method: POST, path: /api/application/nodes, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: "", fqdn: localhost, scheme: ftp, memory: -1, daemon_base: "relative/path", daemon_sftp: 70000, upload_size: 0, tags: "x" } }
+  - { method: PATCH, path: /api/application/nodes/2, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Node Two Renamed, fqdn: wings.test, scheme: http, memory: "9000", memory_overallocate: 5, disk: 51200, disk_overallocate: 0, cpu: 0, cpu_overallocate: 0, daemon_sftp: 2022, daemon_listen: 8080, daemon_connect: 8080, upload_size: "512", tags: ["x"] }, expect_status: 200 }
+  - { method: PATCH, path: /api/application/nodes/1, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Moved, fqdn: moved.invalid, scheme: https, memory: 16384, memory_overallocate: 0, disk: 102400, disk_overallocate: 0, cpu: 0, cpu_overallocate: 0, daemon_sftp: 2022, daemon_listen: 8080, daemon_connect: 8080 } }
+  - { method: DELETE, path: /api/application/nodes/1, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/nodes/2/allocations, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { ip: "10.1.0.5/30", alias: pool, ports: ["25600", "25612-25610"] }, expect_status: 204 }
+  - { method: POST, path: /api/application/nodes/2/allocations, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { ip: "10.1.0.0/24", ports: ["25600"] } }
+  - { method: POST, path: /api/application/nodes/2/allocations, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { ip: "not-an-ip", ports: ["25600"] } }
+  - { method: POST, path: /api/application/nodes/2/allocations, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { ip: "10.2.0.1", ports: ["25700", "80"] } }
+  - { method: POST, path: /api/application/nodes/2/allocations, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { ip: "10.2.0.1", ports: ["1-2"] } }
+  - { method: POST, path: /api/application/nodes/2/allocations, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { ip: "10.2.0.1", ports: [25565] } }
+  - { method: DELETE, path: /api/application/nodes/1/allocations/1, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: DELETE, path: /api/application/nodes/1/allocations/4, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 204 }
+  - { method: DELETE, path: /api/application/nodes/2/allocations/1, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+---
+name: app/nodes-update-errors
+fixtures: [base, infra, client-users, app-extra]
+normalize:
+  random_columns: [nodes.daemon_token_id, nodes.daemon_token]
+  random_patterns: ['"token_id":"([A-Za-z0-9]{16})"', '"token":"([A-Za-z0-9]{64})"']
+wings:
+  responses:
+    - { method: POST, path: /api/update, status: 500, json: { error: "boom" } }
+steps:
+  - { method: PATCH, path: /api/application/nodes/2, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Rolled Back, fqdn: wings.test, scheme: http, memory: 1, memory_overallocate: 0, disk: 1, disk_overallocate: 0, cpu: 0, cpu_overallocate: 0, daemon_sftp: 2022, daemon_listen: 8080, daemon_connect: 8080, reset_secret: true } }
