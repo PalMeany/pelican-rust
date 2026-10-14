@@ -1,0 +1,23 @@
+[package]
+name = "pelican-db"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sea-orm.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+anyhow = { workspace = true, optional = true }
+
+[features]
+testing = ["dep:anyhow"]
+
+[dev-dependencies]
+tokio.workspace = true
+anyhow.workspace = true
+pelican-db = { path = ".", features = ["testing"] }

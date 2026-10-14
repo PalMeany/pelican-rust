@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Run cargo inside the Linux dev container in the lima VM "pelican".
+# (The macOS host cannot link: Xcode license not accepted — see QUESTIONS.md Q2.)
+#
+#   scripts/cargo build | test | clippy ...      (same args as cargo)
+#
+# The repo is mounted at the same absolute path, target dir and registry live
+# in docker volumes. The container joins the difftest compose network when it
+# exists, so tests can reach mariadb/postgres/panel-orig by service name.
+# Env vars PELICAN_*, DB_*, RUST_LOG, RUST_BACKTRACE, TEST_* are forwarded.
+set -euo pipefail
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VM="${PELICAN_VM:-pelican}"
+NET="pelican-difftest_default"
+
+envs=()
+while IFS='=' read -r k _; do
+  case "$k" in PELICAN_*|DB_*|RUST_LOG|RUST_BACKTRACE|TEST_*|CARGO_TERM_COLOR) envs+=(-e "$k");; esac
+done < <(env)
+
+tty=()
+[[ -t 0 && -t 1 ]] && tty=(-t)
+
+exec limactl shell --workdir "$PWD" "$VM" -- sh -c '
+  net=""
+  docker network inspect '"$NET"' >/dev/null 2>&1 && net="--network '"$NET"'"
+  exec docker run --rm -i '"${tty[*]:-}"' $net \
+    -v "'"$REPO"'":"'"$REPO"'" -w "$PWD" \
+    -v pelican-rs-target:/target -v pelican-rs-registry:/usr/local/cargo/registry \
+    '"${envs[*]:-}"' "$@"' sh pelican-rs-dev cargo "$@"

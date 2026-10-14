@@ -1,0 +1,91 @@
+# Differential-testing environment: the ORIGINAL Pelican panel + databases.
+# Runs inside the lima VM "pelican" (see difftest/README.md). Ports are
+# forwarded by lima to the macOS host's 127.0.0.1.
+#
+#   DB_CONNECTION=mariadb|pgsql|sqlite  selects the database for panel-orig.
+name: pelican-difftest
+
+x-panel-env: &panel-env
+  APP_ENV: "production"
+  APP_DEBUG: "false"
+  APP_URL: "http://localhost:18000"
+  # Fixed test key; the Rust panel uses the same one (difftest/.env.test).
+  APP_KEY: "base64:Rm9yRGlmZmVyZW50aWFsVGVzdGluZ09ubHkhIDMyQiE="
+  APP_INSTALLED: "true"
+  APP_TIMEZONE: "UTC"
+  BEHIND_PROXY: "true"
+  TRUSTED_PROXIES: "0.0.0.0/0"
+  # Deterministic, per-request state only: nothing survives between requests
+  # except the database, so DB snapshots fully define the panel state.
+  CACHE_STORE: "array"
+  SESSION_DRIVER: "array"
+  QUEUE_CONNECTION: "sync"
+  MAIL_MAILER: "log"
+  DB_CONNECTION: "${DB_CONNECTION:-mariadb}"
+  DB_HOST: "${DB_HOST:-mariadb}"
+  DB_PORT: "${DB_PORT:-3306}"
+  DB_DATABASE: "${DB_DATABASE:-panel}"
+  DB_USERNAME: "pelican"
+  DB_PASSWORD: "pelican"
+
+services:
+  mariadb:
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: panel
+      MARIADB_USER: pelican
+      MARIADB_PASSWORD: pelican
+    command: ["--max-connections=500"]
+    ports: ["13306:3306"]
+    tmpfs: ["/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      retries: 60
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: panel
+      MYSQL_USER: pelican
+      MYSQL_PASSWORD: pelican
+    command: ["--max-connections=500"]
+    ports: ["13307:3306"]
+    tmpfs: ["/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 2s
+      retries: 60
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: pelican
+      POSTGRES_PASSWORD: pelican
+      POSTGRES_DB: panel
+    ports: ["15432:5432"]
+    tmpfs: ["/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "pelican"]
+      interval: 2s
+      retries: 60
+
+  panel-orig:
+    image: pelican-orig:dev
+    environment:
+      <<: *panel-env
+      XDG_DATA_HOME: /pelican-data
+    ports: ["18000:80"]
+    extra_hosts:
+      # Mock Wings runs on the macOS host (192.168.5.2 = host.lima.internal).
+      - "wings.test:192.168.5.2"
+    volumes:
+      - /Users/tazik/Desktop/Code/claude/pelican/.difftest/sqlite:/pelican-data/database
+    # No cron/queue workers: nothing may mutate the DB outside a request.
+    command: ["sh", "-c", "php-fpm -D && exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"]
+    depends_on:
+      mariadb: { condition: service_healthy }
+      mysql: { condition: service_healthy }
+      postgres: { condition: service_healthy }
