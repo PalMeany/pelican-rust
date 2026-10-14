@@ -1,0 +1,86 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if record and can_delete %}
+      {% if delete_enabled %}
+      <form method="post" action="{{ delete_url }}" data-confirm="{{ trans('filament-actions::modal.confirmation') }}"
+        data-confirm-title="{{ trans('filament-actions::delete.single.modal.heading', label=record.name) }}"
+        data-confirm-ok="{{ trans('filament-actions::delete.single.modal.actions.delete.label') }}">
+        {{ csrf_field() }}<button class="btn btn-danger" type="submit">{{ trans('filament-actions::delete.single.label') }}</button>
+      </form>
+      {% else %}
+      {# DeleteAction disabled: Root Admin (`root_admin_delete`) or role in use (`in_use`). #}
+      <span class="btn btn-danger" style="opacity:.55;cursor:not-allowed" title="{{ delete_tooltip }}">{{ trans('filament-actions::delete.single.label') }}</span>
+      {% endif %}
+    {% endif %}
+    {% if not readonly %}<button class="btn" type="submit" form="record-form" title="{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') if record else trans('filament-panels::resources/pages/create-record.form.actions.create.label') }}">{{ icon('device-floppy' if record else 'file-plus', 'icon-sm') }}{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') if record else trans('filament-panels::resources/pages/create-record.form.actions.create.label') }}</button>{% endif %}
+  </div>
+</div>
+<form id="record-form" method="post" action="{{ action }}" class="stack" style="max-width:1200px">
+  {{ csrf_field() }}
+  <input type="hidden" name="guard_name" value="{{ v.guard_name }}">
+  <fieldset class="card card-body"{% if readonly %} disabled{% endif %} style="margin:0">
+    {{ f.text('name', trans('admin/role.name'), v.name, errors, required=not is_root_admin, disabled=(readonly or is_root_admin), attrs='maxlength="255"') }}
+  </fieldset>
+  {% if is_root_admin %}
+  {# Root Admin: permissions fieldset/nodes select hidden, note instead (RoleResource::defaultForm). #}
+  <div class="card card-body">
+    <dl class="kv"><dt>{{ trans('admin/role.permissions') }}</dt><dd>{{ root_admin_label }}</dd></dl>
+  </div>
+  {% else %}
+  <fieldset class="card card-body"{% if readonly %} disabled{% endif %} style="margin:0;align-content:start">
+    <legend>{{ trans('admin/role.permissions') }}</legend>
+    <div class="grid grid-3">
+      {% for s in sections %}
+      <details class="card card-body"{% if s.open %} open{% endif %}>
+        <summary class="row">
+          {{ icon(s.icon, 'icon-sm') }}<span style="font-weight:600">{{ s.label }}</span>
+          <span class="badge badge-primary" data-perm-count>{{ s.count }}</span>
+        </summary>
+        {% if not readonly %}
+        <div><button type="button" class="link small" data-toggle-all
+          data-on-label="{{ trans('filament-forms::components.checkbox_list.actions.select_all.label') }}"
+          data-off-label="{{ trans('filament-forms::components.checkbox_list.actions.deselect_all.label') }}"></button></div>
+        {% endif %}
+        <div class="stack perm-list" style="align-items:start">
+          {% for o in s.options %}
+          <label class="check"><input type="checkbox" name="{{ s.field }}[]" value="{{ o[0] }}"{% if o[0] in s.selected %} checked{% endif %}{% if readonly %} disabled{% endif %}><span>{{ o[1] }}</span></label>
+          {% endfor %}
+        </div>
+      </details>
+      {% endfor %}
+    </div>
+  </fieldset>
+  <fieldset class="card card-body"{% if readonly %} disabled{% endif %} style="margin:0">
+    {{ f.select('nodes', trans('admin/role.nodes'), node_options, v.nodes, errors, multiple=true, hint=trans('admin/role.nodes_hint')) }}
+  </fieldset>
+  {% endif %}
+</form>
+{# Section count badge + bulk toggle (`CheckboxList::bulkToggleable`). #}
+<script>
+(function () {
+  document.querySelectorAll('.perm-list').forEach(function (list) {
+    var det = list.closest('details');
+    var cnt = det ? det.querySelector('[data-perm-count]') : null;
+    var tg = det ? det.querySelector('[data-toggle-all]') : null;
+    function checked() { return list.querySelectorAll('input:checked').length; }
+    function upd() {
+      var total = list.querySelectorAll('input[type=checkbox]').length;
+      if (cnt) cnt.textContent = checked();
+      if (tg) tg.textContent = checked() === total && total > 0 ? tg.dataset.offLabel : tg.dataset.onLabel;
+    }
+    det.addEventListener('change', upd);
+    if (tg) tg.addEventListener('click', function () {
+      var all = list.querySelectorAll('input[type=checkbox]');
+      var target = !(all.length > 0 && checked() === all.length);
+      all.forEach(function (b) { b.checked = target; });
+      upd();
+    });
+    upd();
+  });
+})();
+</script>
+{% endblock %}

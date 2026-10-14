@@ -6,9 +6,11 @@ mod database_hosts;
 mod eggs;
 mod mounts;
 mod nodes;
+mod roles;
 mod server_relations;
 mod servers;
 mod servers_create;
+mod users;
 mod webhooks;
 
 use axum::Router;
@@ -31,9 +33,11 @@ pub fn routes() -> Router<AppState> {
         .merge(eggs::routes())
         .merge(mounts::routes())
         .merge(nodes::routes())
+        .merge(roles::routes())
         .merge(servers_create::routes())
         .merge(servers::routes())
         .merge(server_relations::routes())
+        .merge(users::routes())
         .merge(webhooks::routes())
 }
 

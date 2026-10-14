@@ -1,0 +1,162 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% import "components/table.html" as tbl %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if record and can_delete %}
+    <form method="post" action="/admin/users/{{ record.id }}/delete" data-confirm="{{ trans('filament-actions::modal.confirmation') }}"
+      data-confirm-title="{{ trans('filament-actions::delete.single.modal.heading', label=record.name) }}" data-confirm-ok="{{ trans('filament-actions::delete.single.modal.actions.delete.label') }}">
+      {{ csrf_field() }}<button class="btn btn-danger" type="submit" {% if delete_disabled %}disabled title="{{ delete_tooltip }}"{% endif %}>
+        {{ icon('trash', 'icon-sm') }}{{ trans('filament-actions::delete.single.label') }}</button>
+    </form>
+    {% endif %}
+    {% if not readonly %}<button class="btn" type="submit" form="record-form"
+      title="{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') if record else trans('filament-panels::resources/pages/create-record.form.actions.create.label') }}">
+      {{ icon('device-floppy' if record else 'user-plus', 'icon-sm') }}
+      {{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') if record else trans('filament-panels::resources/pages/create-record.form.actions.create.label') }}</button>{% endif %}
+  </div>
+</div>
+
+<div><nav class="tabs">
+  {% for tt in [['account', 'user-cog'], ['roles', 'users-group']] + ([['keys', 'key'], ['activity', 'history']] if record else []) %}
+  <button type="button" data-tab="{{ tt[0] }}" class="{{ 'active' if tab == tt[0] }}">{{ icon(tt[1], 'icon-sm') }}{{ trans('admin/user.roles' if tt[0] == 'roles' else 'profile.tabs.' ~ tt[0]) }}</button>
+  {% endfor %}
+</nav></div>
+
+<form id="record-form" method="post" action="{{ action }}">
+  {{ csrf_field() }}
+
+  {# --- Account tab --- #}
+  <section class="card card-body grid grid-3 form" data-tab-panel="account"{% if tab != 'account' %} hidden{% endif %}{% if readonly %} disabled{% endif %} style="align-content:start">
+    {{ f.text('username', trans('admin/user.username'), v.username, errors, required=true, attrs='maxlength="255"', autocomplete='username') }}
+    {{ f.text('email', trans('admin/user.email'), v.email, errors, type='email', required=true, attrs='maxlength="255"', autocomplete='email') }}
+    {% if record %}
+    {{ f.password('password', trans('admin/user.password'), errors, autocomplete='new-password') }}
+    {% else %}
+    <div class="field"><label for="f-password">{{ trans('admin/user.password') }}</label>
+      <input class="input" id="f-password" name="password" type="password" autocomplete="new-password">
+      <p class="hint">{{ icon('question-mark', 'icon-sm') }}{{ trans('admin/user.password_help') }}</p>
+    </div>
+    {% endif %}
+    {{ f.text('external_id', trans('admin/user.external_id'), v.external_id, errors, attrs='maxlength="255"') }}
+    {{ f.toggle('is_managed_externally', trans('admin/user.is_managed_externally'), managed_external, hint=trans('admin/user.is_managed_externally_helper')) }}
+    <fieldset class="card card-body span-full stack" style="margin:0;border:1px solid var(--border)">
+      <legend class="row" style="font-weight:600">{{ icon('palette', 'icon-sm') }}{{ trans('profile.tabs.customization') }}</legend>
+      <div class="grid grid-2">
+        {{ f.select('timezone', trans('profile.timezone'), timezones, v.timezone, errors, required=true) }}
+        {{ f.select('language', trans('profile.language'), languages, v.language, errors, required=true) }}
+      </div>
+      {% if avatar_file %}
+      <div class="row" style="gap:0.75rem">
+        <img src="{{ avatar_file }}" alt="" class="server-icon" style="width:3rem;height:3rem;border-radius:50%">
+        <form method="post" action="/admin/users/{{ record.id }}/avatar/delete">{{ csrf_field() }}
+          <button class="btn btn-sm btn-danger" type="submit">{{ trans('filament-actions::delete.single.label') }}</button></form>
+      </div>
+      {% endif %}
+    </fieldset>
+    {% if record %}
+    <fieldset class="card card-body span-full stack" style="margin:0;border:1px solid var(--border)">
+      <legend class="row" style="font-weight:600">{{ icon('brand-oauth', 'icon-sm') }}{{ trans('profile.tabs.oauth') }}</legend>
+      {% if has_oauth %}
+      <div class="stack">
+        {% for o in oauth_entries %}
+        <div class="row" style="justify-content:space-between;flex-wrap:nowrap">
+          <span class="mono truncate">{{ o.identifier }}</span>
+          <form method="post" action="/admin/users/{{ record.id }}/oauth/unlink"
+            data-confirm="{{ trans('filament-actions::modal.confirmation') }}"
+            data-confirm-title="{{ trans('profile.unlink', name=o.schema) }}" data-confirm-ok="{{ trans('filament-actions::modal.actions.confirm.label') }}">
+            {{ csrf_field() }}<input type="hidden" name="schema" value="{{ o.schema }}">
+            <button class="btn btn-sm" type="submit">{{ icon('unlink', 'icon-sm') }}{{ trans('profile.unlink', name=o.schema) }}</button></form>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}<p class="muted">{{ trans('profile.no_oauth') }}</p>{% endif %}
+    </fieldset>
+    {% endif %}
+  </section>
+
+  {# --- Roles tab --- #}
+  <section class="card card-body form" data-tab-panel="roles"{% if tab != 'roles' %} hidden{% endif %}{% if readonly %} disabled{% endif %} style="align-content:start">
+    <div class="field span-full"><span class="field-label">{{ trans('admin/user.admin_roles') }}</span>
+      {% if root_target %}
+      <label class="check"><input type="checkbox" checked disabled><span>{{ 'Root Admin' }}</span></label>
+      <p class="muted small">{{ root_role_label }}</p>
+      {% else %}
+      <div class="stack" style="align-items:start">
+        {% for o in role_options %}
+        <label class="check"><input type="checkbox" name="roles[]" value="{{ o[0] }}"{% if o[0] in (v.roles | map('string') | list) %} checked{% endif %}><span>{{ o[1] }}</span></label>
+        {% endfor %}
+        {% if errors['roles'] %}<p class="error">{{ errors['roles'] }}</p>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </section>
+</form>
+
+{# --- Keys + Activity tabs (view/edit only) --- #}
+{% if record %}
+<section class="grid grid-3" data-tab-panel="keys"{% if tab != 'keys' %} hidden{% endif %}>
+  <fieldset class="card card-body span-2 form" style="margin:0;align-content:start">
+    <legend class="row" style="font-weight:600">{{ icon('key', 'icon-sm') }}{{ trans('profile.api_keys') }}</legend>
+    {% if has_api_keys %}
+    <div class="stack">
+      {% for k in api_keys %}
+      <div class="row" style="justify-content:space-between;flex-wrap:nowrap">
+        <div style="min-width:0"><div class="mono truncate">{{ k.identifier }}</div><div class="muted small truncate">{{ k.memo }}</div></div>
+        {% if can_delete_keys or not readonly %}
+        <form method="post" action="/admin/users/{{ record.id }}/api-keys/{{ k.id }}/delete" data-confirm="{{ trans('filament-actions::modal.confirmation') }}"
+          data-confirm-title="{{ trans('filament-actions::delete.single.label') }}" data-confirm-ok="{{ trans('filament-actions::delete.single.label') }}">
+          {{ csrf_field() }}<button class="icon-btn danger" type="submit" aria-label="{{ trans('filament-actions::delete.single.label') }}">{{ icon('trash', 'icon-sm') }}</button></form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="muted">{{ trans('profile.no_api_keys') }}</p>{% endif %}
+  </fieldset>
+  <fieldset class="card card-body span-2 form" style="margin:0;align-content:start">
+    <legend class="row" style="font-weight:600">{{ icon('lock-code', 'icon-sm') }}{{ trans('profile.ssh_keys') }}</legend>
+    {% if has_ssh_keys %}
+    <div class="stack">
+      {% for k in ssh_keys %}
+      <div class="row" style="justify-content:space-between;flex-wrap:nowrap">
+        <div style="min-width:0"><div class="truncate">{{ k.name }}</div><div class="muted small mono truncate">SHA256:{{ k.fingerprint }}</div></div>
+        {% if can_delete_keys or not readonly %}
+        <form method="post" action="/admin/users/{{ record.id }}/ssh-keys/{{ k.id }}/delete" data-confirm="{{ trans('filament-actions::modal.confirmation') }}"
+          data-confirm-title="{{ trans('filament-actions::delete.single.label') }}" data-confirm-ok="{{ trans('filament-actions::delete.single.label') }}">
+          {{ csrf_field() }}<button class="icon-btn danger" type="submit" aria-label="{{ trans('filament-actions::delete.single.label') }}">{{ icon('trash', 'icon-sm') }}</button></form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="muted">{{ trans('profile.no_ssh_keys') }}</p>{% endif %}
+  </fieldset>
+</section>
+
+<section class="card" data-tab-panel="activity"{% if tab != 'activity' %} hidden{% endif %}>
+  <div class="card-head"><h2>{{ trans('profile.activity_info') }}</h2></div>
+  <div class="card-body stack">
+    {% for a in activity %}{% include "components/activity_entry.html" %}{% endfor %}
+  </div>
+</section>
+
+{# --- ServersRelationManager --- #}
+<section class="stack" id="user-servers-section">
+  <div class="row" style="justify-content:space-between;flex-wrap:wrap">
+    <h2 style="font-size:1.05rem;margin:0">{{ trans('admin/user.servers') }}</h2>
+    <div class="page-actions">
+      {% if suspend_all_available %}
+      <form method="post" action="/admin/users/{{ record.id }}/suspend-all">
+        {{ csrf_field() }}<button class="btn btn-sm btn-gray" type="submit">{{ icon('power', 'icon-sm') }}{{ trans('admin/server.suspend_all') }}</button></form>
+      {% endif %}
+      {% if unsuspend_all_available %}
+      <form method="post" action="/admin/users/{{ record.id }}/unsuspend-all">
+        {{ csrf_field() }}<button class="btn btn-sm" type="submit">{{ icon('check', 'icon-sm') }}{{ trans('admin/server.unsuspend_all') }}</button></form>
+      {% endif %}
+    </div>
+  </div>
+  {{ tbl.render(servers_table, csrf) }}
+</section>
+{% endif %}
+{% endblock %}
