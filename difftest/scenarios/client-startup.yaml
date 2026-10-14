@@ -1,0 +1,16 @@
+name: client/startup
+fixtures: [base, infra, client-users]
+steps:
+  - { path: /api/client/servers/0b5c6a0e/startup, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { path: /api/client/servers/0b5c6a0e/startup, bearer: pacc_user3key001User3ClientSecret000000000001 }
+  - { path: /api/client/servers/1c6d7b1f/startup, bearer: pacc_admin000001AdminClientSecret000000000000001 }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/startup/variable, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { key: SERVER_JARFILE, value: "custom.jar" }, expect_status: 200 }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/startup/variable, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { key: SERVER_JARFILE, value: "custom.jar" } }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/startup/variable, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { key: SERVER_JARFILE, value: "bad name" } }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/startup/variable, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { key: MOTD, value: null } }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/startup/variable, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { key: MOTD, value: 42 } }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/startup/variable, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { key: MAX_PLAYERS, value: "5" } }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/startup/variable, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { key: SECRET, value: "x" } }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/startup/variable, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { key: NOPE, value: "x" } }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/startup/variable, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { key: ONLINE, value: "maybe" } }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/startup/variable, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { key: ONLINE } }

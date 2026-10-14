@@ -5,6 +5,7 @@ mod activity;
 mod backups;
 pub mod data;
 mod servers;
+mod startup;
 mod subusers;
 
 use axum::Router;
@@ -35,6 +36,8 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route("/servers/{server}/power", p(post(servers::power)))
         .route("/servers/{server}/users", p(get(subusers::index).post(subusers::store)))
         .route("/servers/{server}/backups", p(get(backups::index).post(backups::store)))
+        .route("/servers/{server}/startup", p(get(startup::index)))
+        .route("/servers/{server}/startup/variable", p(put(startup::update)))
         .route("/servers/{server}/backups/{backup}", p(get(backups::view).delete(backups::delete)))
         .route("/servers/{server}/backups/{backup}/download", p(get(backups::download)))
         .route("/servers/{server}/backups/{backup}/rename", p(put(backups::rename)))
