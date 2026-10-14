@@ -3,6 +3,7 @@
 
 mod mounts;
 mod servers;
+mod servers_create;
 
 use axum::Router;
 use axum::extract::FromRequestParts;
@@ -18,7 +19,7 @@ use crate::ctx::Authed;
 use crate::error::{WebError, WebResult};
 
 pub fn routes() -> Router<AppState> {
-    Router::new().merge(mounts::routes()).merge(servers::routes())
+    Router::new().merge(mounts::routes()).merge(servers_create::routes()).merge(servers::routes())
 }
 
 /// A request to the admin panel (`canAccessPanel(admin)` = `isAdmin()`).

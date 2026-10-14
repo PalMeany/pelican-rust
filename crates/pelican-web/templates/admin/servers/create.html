@@ -1,0 +1,69 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% set S = 'admin/server' %}
+{% block content %}
+<div class="page-head"><h1>{{ title }}</h1>
+  <div class="page-actions"><button class="btn" type="submit" form="create-form">{{ icon('file-plus', 'icon-sm') }}{{ trans('filament-panels::resources/pages/create-record.form.actions.create.label') }}</button></div>
+</div>
+{% set refresh = 'hx-get="/admin/servers/create" hx-trigger="change" hx-include="#create-form" hx-select="#create-form" hx-target="#create-form" hx-swap="outerHTML" hx-push-url="false"' %}
+<form id="create-form" method="post" action="/admin/servers/create" class="stack">
+  {{ csrf_field() }}
+  <fieldset class="fieldset"><legend>{{ icon('info-circle', 'icon-sm') }} {{ trans(S ~ '.tabs.information') }}</legend>
+    <div class="grid grid-2">
+      {{ f.text('name', trans(S ~ '.name'), v.name, errors, required=true, attrs='maxlength="255"') }}
+      {{ f.text('external_id', trans(S ~ '.external_id'), v.external_id, errors, attrs='maxlength="255"') }}
+      {{ f.select('node_id', trans(S ~ '.node'), nodes, v.node_id, errors, required=true, attrs=refresh) }}
+      {{ f.select('owner_id', trans(S ~ '.owner'), owners, v.owner_id, errors, required=true) }}
+      {{ f.select('allocation_id', trans(S ~ '.primary_allocation'), allocations, v.allocation_id, errors, placeholder=trans(S ~ '.select_allocation')) }}
+      {{ f.select('allocation_additional', trans(S ~ '.additional_allocations'), allocations, v.allocation_additional, errors, multiple=true) }}
+    </div>
+    {{ f.textarea('description', trans(S ~ '.description'), v.description, errors, rows=3) }}
+  </fieldset>
+
+  <fieldset class="fieldset"><legend>{{ icon('egg', 'icon-sm') }} {{ trans(S ~ '.tabs.egg_configuration') }}</legend>
+    <div class="grid grid-3">
+      <div class="span-2">{{ f.select('egg_id', trans(S ~ '.egg'), eggs, v.egg_id, errors, required=true, placeholder='', attrs=refresh) }}</div>
+      {{ f.radios('skip_scripts', trans(S ~ '.install_script'), [['0', trans(S ~ '.yes')], ['1', trans(S ~ '.skip')]], v.skip_scripts, errors, inline=true) }}
+    </div>
+    {{ f.radios('start_on_completion', trans(S ~ '.start_after'), [['1', trans(S ~ '.yes')], ['0', trans(S ~ '.no')]], v.start_on_completion, errors, inline=true) }}
+    {% if v.egg_id %}
+    <div class="field"><label for="f-select_startup">{{ trans(S ~ '.startup_cmd') }}</label>
+      <select class="select" id="f-select_startup" onchange="if(this.value!=='custom'){document.getElementById('f-startup').value=this.value}">
+        {% for c in startups %}<option value="{{ c[0] }}"{% if c[0] == v.startup %} selected{% endif %}>{{ c[1] }}</option>{% endfor %}
+        <option value="custom">Custom Startup</option></select></div>
+    {{ f.textarea('startup', '', v.startup, errors, required=true, rows=3, code=true) }}
+    <div class="grid grid-2">{% for var in variables %}{{ f.variable(var, errors) }}{% endfor %}</div>
+    {% else %}<p class="muted">{{ trans(S ~ '.egg') }}…</p>{% endif %}
+  </fieldset>
+
+  <fieldset class="fieldset"><legend>{{ icon('brand-docker', 'icon-sm') }} {{ trans(S ~ '.tabs.environment_configuration') }}</legend>
+    {{ f.limit('cpu', trans(S ~ '.cpu'), v.cpu, errors, suffix='%', limit_label=trans(S ~ '.cpu_limit'), hint=trans(S ~ '.cpu_helper')) }}
+    {{ f.limit('memory', trans(S ~ '.memory'), v.memory, errors, suffix='MiB' if binary else 'MB', limit_label=trans(S ~ '.memory_limit'), hint=trans(S ~ '.memory_helper')) }}
+    {{ f.limit('disk', trans(S ~ '.disk'), v.disk, errors, suffix='MiB' if binary else 'MB', limit_label=trans(S ~ '.disk_limit')) }}
+    <div class="grid grid-2">
+      {{ f.radios('cpu_pinning', trans(S ~ '.cpu_pin'), [['0', trans(S ~ '.disabled')], ['1', trans(S ~ '.enabled')]], v.cpu_pinning, errors, inline=true) }}
+      <div data-show-if="cpu_pinning=1"{% if v.cpu_pinning != '1' %} hidden{% endif %}>{{ f.text('threads', trans(S ~ '.threads'), v.threads, errors, placeholder=trans(S ~ '.pin_help')) }}</div>
+      {{ f.radios('swap_support', trans(S ~ '.swap'), [['unlimited', trans(S ~ '.unlimited')], ['limited', trans(S ~ '.limited')], ['disabled', trans(S ~ '.disabled')]], v.swap_support, errors, inline=true) }}
+      <div data-show-if="swap_support=limited"{% if v.swap_support != 'limited' %} hidden{% endif %}>{{ f.text('swap', trans(S ~ '.swap'), v.swap if v.swap != '0' else 128, errors, type='number', suffix='MiB' if binary else 'MB') }}</div>
+    </div>
+    {{ f.radios('oom_killer', trans(S ~ '.oom'), [['0', trans(S ~ '.disabled')], ['1', trans(S ~ '.enabled')]], v.oom_killer, errors, inline=true) }}
+    <div class="grid grid-3">
+      {{ f.text('allocation_limit', trans(S ~ '.allocations'), v.allocation_limit, errors, type='number', required=true, attrs='min="0"') }}
+      {{ f.text('database_limit', trans(S ~ '.databases'), v.database_limit, errors, type='number', required=true, attrs='min="0"') }}
+      {{ f.text('backup_limit', trans(S ~ '.backups'), v.backup_limit, errors, type='number', required=true, attrs='min="0"') }}
+    </div>
+    <div class="grid grid-2">
+      <div class="field"><label for="f-select_image">{{ trans(S ~ '.image_name') }}</label>
+        <select class="select" id="f-select_image" onchange="if(this.value!=='ghcr.io/custom-image'){document.getElementById('f-image').value=this.value}">
+          {% for i in images %}<option value="{{ i[0] }}"{% if i[0] == v.image %} selected{% endif %}>{{ i[1] }}</option>{% endfor %}
+          <option value="ghcr.io/custom-image">Custom Image</option></select></div>
+      {{ f.text('image', trans(S ~ '.image'), v.image, errors, required=true, placeholder=trans(S ~ '.image_placeholder')) }}
+    </div>
+    <div class="field"><span class="field-label">{{ trans(S ~ '.container_labels') }}</span>
+      <div class="stack" data-kv>{% for l in labels + [['', '']] %}<div class="grid grid-2" data-kv-row><input class="input" name="label_key[]" value="{{ l[0] }}" placeholder="{{ trans(S ~ '.title') }}"><input class="input" name="label_value[]" value="{{ l[1] }}" placeholder="{{ trans(S ~ '.description') }}"></div>{% endfor %}</div>
+      <div><button type="button" class="btn btn-sm btn-gray" data-kv-add>{{ icon('plus', 'icon-sm') }}</button></div></div>
+    {% if mounts %}<div class="field"><span class="field-label">{{ trans(S ~ '.mounts') }}</span>
+      {% for m in mounts %}<label class="check"><input type="checkbox" name="mounts[]" value="{{ m.id }}"{% if m.checked %} checked{% endif %}><span>{{ m.name }} <span class="muted small mono">{{ m.desc }}</span></span></label>{% endfor %}</div>{% endif %}
+  </fieldset>
+</form>
+{% endblock %}
