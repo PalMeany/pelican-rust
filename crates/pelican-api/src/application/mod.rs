@@ -7,7 +7,7 @@ mod mounts;
 pub mod nodes;
 mod roles;
 pub mod servers;
-mod servers_write;
+pub mod servers_write;
 mod users;
 pub mod webhooks;
 

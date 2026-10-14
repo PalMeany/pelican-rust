@@ -728,6 +728,21 @@ pub async fn transfer(
         Some(Value::Object(m)) => m.values().map(php_int).collect(),
         _ => Vec::new(),
     };
+    transfer_server(&st, &s, node_id, Some(allocation_id), additional, &[]).await?;
+    Ok(no_content())
+}
+
+/// `TransferServerService::handle()`: viability and state checks, the transfer row,
+/// allocations reserved on the target node, then the source node is notified with
+/// a `transfer` JWT for the target and the selected Wings backups.
+pub async fn transfer_server(
+    st: &AppState,
+    s: &servers::Model,
+    node_id: Int,
+    allocation_id: Option<i64>,
+    additional: Vec<i64>,
+    backup_uuids: &[String],
+) -> ApiResult<()> {
     let node = nodes::Entity::find_by_id(node_id).one(&st.db).await?.ok_or_else(ApiError::model_not_found)?;
     if !is_viable(&st.db, &node, s.memory.0, s.disk.0, s.cpu.0).await? {
         // The viability query selects no `name`, so the message has an empty node name.
@@ -765,7 +780,7 @@ pub async fn transfer(
             .filter(|id| *id != primary.0)
             .collect();
         am.old_allocation = Set(Some(primary));
-        am.new_allocation = Set(Some(Int(allocation_id)));
+        am.new_allocation = Set(allocation_id.map(Int));
         am.old_additional_allocations = Set(Some(Json(json!(others))));
         am.new_additional_allocations = Set(Some(Json(json!(additional))));
         let unassigned: Vec<i64> = allocations::Entity::find()
@@ -777,7 +792,7 @@ pub async fn transfer(
             .map(|a| a.id.0)
             .collect();
         let mut wanted = additional.clone();
-        wanted.push(allocation_id);
+        wanted.extend(allocation_id);
         let update: Vec<i64> = wanted.into_iter().filter(|a| unassigned.contains(a)).collect();
         if !update.is_empty() {
             let marks = vec!["?"; update.len()].join(", ");
@@ -812,15 +827,39 @@ pub async fn transfer(
     .sign(&new_conn.token)
     .map_err(|_| ApiError::internal("InvalidKeyProvided"))?;
     let old_conn = node_conn(&st, &st.db, s.node_id).await?;
+    let backups: Vec<String> = if backup_uuids.is_empty() {
+        Vec::new()
+    } else {
+        #[derive(sea_orm::FromQueryResult)]
+        struct U {
+            uuid: String,
+        }
+        let marks = vec!["?"; backup_uuids.len()].join(", ");
+        let mut vals: Vec<sea_orm::Value> = vec![s.id.into()];
+        vals.extend(backup_uuids.iter().map(|u| sea_orm::Value::from(u.clone())));
+        <U as sea_orm::FromQueryResult>::find_by_statement(raw::stmt(
+            st.db.get_database_backend(),
+            &format!(
+                "select {{backups.uuid}} as {{uuid}} from {{backups}} inner join {{backup_hosts}} on {{backup_hosts.id}} = {{backups.backup_host_id}} \
+                 where {{backups.server_id}} = ? and {{backups.uuid}} in ({marks}) and {{backup_hosts.schema}} = 'wings'"
+            ),
+            vals,
+        ))
+        .all(&st.db)
+        .await?
+        .into_iter()
+        .map(|u| u.uuid)
+        .collect()
+    };
     let body = json!({
         "url": format!("{}/api/transfers", new_conn.connection_address()),
         "token": format!("Bearer {token}"),
-        "backups": [],
+        "backups": backups,
         "server": {"uuid": s.uuid, "start_on_completion": false},
     });
     let path = format!("/api/servers/{}/transfer", s.uuid);
     let mut call = pelican_wings::client::Call::new(pelican_wings::client::Method::POST, &path).json(body);
     call.throw = false;
     st.wings.send(&old_conn, call).await.map_err(wings_err)?;
-    Ok(no_content())
+    Ok(())
 }

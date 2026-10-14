@@ -1,0 +1,27 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% set S = 'admin/server' %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ title }}</h1><p class="muted">{{ server.name }} — {{ server.node }}</p></div>
+  <div class="page-actions"><a class="btn btn-gray" href="/admin/servers/{{ server.id }}/edit?tab=actions">{{ icon('arrow-left', 'icon-sm') }}</a></div>
+</div>
+<div class="banner warning">{{ icon('alert-triangle') }}<div>{{ trans(S ~ '.transfer_help') | replace('<br/>', ' ') | replace('<b>', '') | replace('</b>', '') }}</div></div>
+<form id="transfer-form" method="post" action="/admin/servers/{{ server.id }}/transfer" class="card card-body stack"
+  data-confirm="{{ trans('filament-actions::modal.confirmation') }}" data-confirm-title="{{ trans(S ~ '.transfer') }}">
+  {{ csrf_field() }}
+  {% set refresh = 'hx-post="/admin/servers/' ~ server.id ~ '/transfer" hx-trigger="change" hx-include="#transfer-form" hx-vals=\'{"_refresh": "1"}\' hx-select="#transfer-form" hx-target="#transfer-form" hx-swap="outerHTML" hx-push-url="false"' %}
+  {{ f.select('node_id', trans(S ~ '.node'), nodes, node_id, errors, required=true, attrs=refresh) }}
+  {{ f.select('allocation_id', trans(S ~ '.primary_allocation'), allocations, allocation_id, errors, required=allocation_enabled, placeholder=trans(S ~ '.select_allocation'), disabled=not allocation_enabled, attrs=refresh) }}
+  {% if additional_enabled %}
+  {{ f.select('allocation_additional', trans(S ~ '.additional_allocations'), additional_options, additional, errors, required=true, multiple=true, hint=trans(S ~ '.select_additional') ~ ' (' ~ additional_count ~ ')') }}
+  {% endif %}
+  {% if backups %}
+  <fieldset class="fieldset"><legend>{{ trans(S ~ '.backups') }}</legend>
+    <div class="grid grid-4">{% for b in backups %}{{ f.checkbox('backups[]', b[1], b[0] in selected_backups, b[0]) }}{% endfor %}</div>
+    <p class="hint">{{ trans(S ~ '.warning_backups') }}</p>
+  </fieldset>
+  {% endif %}
+  <div><button type="submit" class="btn">{{ icon('arrows-sort', 'icon-sm') }}{{ trans(S ~ '.transfer') }}</button></div>
+</form>
+{% endblock %}
