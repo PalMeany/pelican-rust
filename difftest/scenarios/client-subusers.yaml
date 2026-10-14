@@ -1,0 +1,28 @@
+name: client/subusers-read
+fixtures: [base, infra, client-users]
+steps:
+  - { path: /api/client/servers/0b5c6a0e/users, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { path: /api/client/servers/0b5c6a0e/users/6b9e5a5e-3333-4a5b-9c1d-000000000003, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/users/6b9e5a5e-4444-4a5b-9c1d-000000000004, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/users, bearer: pacc_user3key001User3ClientSecret000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/users/6b9e5a5e-3333-4a5b-9c1d-000000000003, bearer: pacc_user3key001User3ClientSecret000000000001 }
+---
+name: client/subusers-create
+fixtures: [base, infra, client-users]
+normalize:
+  random_patterns: ['newperson[A-Za-z0-9]{3}']
+steps:
+  - { method: POST, path: /api/client/servers/0b5c6a0e/users, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { email: "NewPerson@Example.com", permissions: ["control.console", "file.read", "bogus.perm", "control.console"] }, expect_status: 200 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/users, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { email: stranger@example.com, permissions: ["backup.read"] } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/users, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { email: user@example.com, permissions: [] } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/users, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { email: Sub.User@Example.com, permissions: ["file.read"] } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/users, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { email: "bad", permissions: "x" } }
+---
+name: client/subusers-update-delete
+fixtures: [base, infra, client-users]
+steps:
+  - { method: POST, path: /api/client/servers/0b5c6a0e/users/6b9e5a5e-3333-4a5b-9c1d-000000000003, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { permissions: ["control.start", "activity.read", "control.console", "websocket.connect"] } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/users/6b9e5a5e-3333-4a5b-9c1d-000000000003, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { permissions: ["user.read", "file.read"] } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/users/6b9e5a5e-3333-4a5b-9c1d-000000000003, bearer: pacc_user3key001User3ClientSecret000000000001, json: { permissions: ["user.read"] } }
+  - { method: DELETE, path: /api/client/servers/0b5c6a0e/users/6b9e5a5e-1111-4a5b-9c1d-000000000001, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: DELETE, path: /api/client/servers/0b5c6a0e/users/6b9e5a5e-3333-4a5b-9c1d-000000000003, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 204 }

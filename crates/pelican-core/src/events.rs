@@ -112,19 +112,21 @@ pub async fn server_installed<C: ConnectionTrait>(
 ) -> Result<(), DbErr> {
     let owner = users::Entity::find_by_id(server.owner_id).one(db).await?;
     let Some(owner) = owner else { return Ok(()) };
-    let title = match (initial, successful) {
-        (true, true) => "Server Installation Completed",
-        (true, false) => "Server Installation Failed",
-        (false, true) => "Server Reinstallation Completed",
-        (false, false) => "Server Reinstallation Failed",
+    let locale = owner.language.clone();
+    let key = match (initial, successful) {
+        (true, true) => "notifications.installation_completed",
+        (true, false) => "notifications.installation_failed",
+        (false, true) => "notifications.reinstallation_completed",
+        (false, false) => "notifications.reinstallation_failed",
     };
+    let title = crate::i18n::trans(&locale, key, &[]);
     let n = FilamentNotification {
-        title: title.into(),
-        body: Some(format!("Server Name: {}", server.name)),
+        title,
+        body: Some(crate::i18n::trans(&locale, "server_name", &[("name", &server.name)])),
         status: Some(if successful { "success" } else { "danger" }.into()),
         actions: vec![filament_button(
             "exclude_view",
-            "Open Server",
+            &crate::i18n::trans(&locale, "notifications.open_server", &[]),
             &format!("{url_root}/server/{}/console", server.uuid_short),
         )],
     };
@@ -165,13 +167,19 @@ pub async fn backup_completed<C: ConnectionTrait>(
             continue;
         }
         let ok = backup.is_successful.0;
+        let locale = user.language.clone();
+        let t = |k: &str| crate::i18n::trans(&locale, k, &[]);
         FilamentNotification {
-            title: if ok { "Backup Completed".into() } else { "Backup Failed".into() },
-            body: Some(format!("Backup \"{}\" for server \"{}\"", backup.name, server.name)),
+            title: if ok { t("notifications.backup_completed") } else { t("notifications.backup_failed") },
+            body: Some(crate::i18n::trans(
+                &locale,
+                "notifications.backup_body",
+                &[("name", &backup.name), ("server", &server.name)],
+            )),
             status: Some(if ok { "success" } else { "danger" }.into()),
             actions: vec![filament_button(
                 "exclude_view",
-                "View Backups",
+                &t("notifications.view_backups"),
                 &format!("{url_root}/server/{}/backups", server.uuid_short),
             )],
         }

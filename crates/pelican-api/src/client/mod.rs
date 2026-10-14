@@ -4,6 +4,7 @@ mod account;
 mod activity;
 pub mod data;
 mod servers;
+mod subusers;
 
 use axum::Router;
 use axum::routing::{MethodRouter, delete, get, post, put};
@@ -31,4 +32,6 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route("/servers/{server}/activity", p(get(activity::server)))
         .route("/servers/{server}/command", p(post(servers::command)))
         .route("/servers/{server}/power", p(post(servers::power)))
+        .route("/servers/{server}/users", p(get(subusers::index).post(subusers::store)))
+        .route("/servers/{server}/users/{user}", p(get(subusers::view).post(subusers::update).delete(subusers::delete)))
 }

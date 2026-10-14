@@ -13,6 +13,7 @@ pelican-wings = { path = "../pelican-wings" }
 base64.workspace = true
 sha2 = "0.10"
 sha1 = "0.10"
+uuid.workspace = true
 sea-orm.workspace = true
 serde.workspace = true
 serde_json.workspace = true

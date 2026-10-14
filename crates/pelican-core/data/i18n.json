@@ -1,0 +1,710 @@
+{
+    "ar": {
+        "notifications": {
+            "open_server": "فتح الخادم",
+            "installation_completed": "اكتمل تثبيت الخادم",
+            "installation_failed": "فشل تثبيت الخادم",
+            "reinstallation_completed": "اكتملت إعادة تثبيت السير فر",
+            "reinstallation_failed": "فشل إعادة تثبيت الخادم",
+            "failed": "فشل",
+            "user_added": {
+                "title": "أضيف إلى الخادم",
+                "body": "لقد تمت إضافتك كمستخدم فرعي إلى الخادم"
+            },
+            "user_removed": {
+                "title": "تم الإزالة من الخادم",
+                "body": "لقد تمت إزالتك كمستخدم فرعي من الخادم"
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "be": {
+        "notifications": {
+            "open_server": "Open Server",
+            "installation_completed": "Server Installation Completed",
+            "installation_failed": "Server Installation Failed",
+            "reinstallation_completed": "Server Reinstallation Completed",
+            "reinstallation_failed": "Server Reinstallation Failed",
+            "backup_completed": "Backup Completed",
+            "backup_failed": "Backup Failed",
+            "backup_body": "Backup \":name\" for server \":server\"",
+            "view_backups": "View Backups",
+            "failed": "Failed",
+            "user_added": {
+                "title": "Added to Server",
+                "body": "You have been added as a subuser to :server."
+            },
+            "user_removed": {
+                "title": "Removed from Server",
+                "body": "You have been removed as a subuser from :server."
+            }
+        },
+        "server_name": "Імя сервера: :name"
+    },
+    "bg": {
+        "notifications": {
+            "open_server": "Open Server",
+            "installation_completed": "Server Installation Completed",
+            "installation_failed": "Server Installation Failed",
+            "reinstallation_completed": "Server Reinstallation Completed",
+            "reinstallation_failed": "Server Reinstallation Failed",
+            "backup_completed": "Backup Completed",
+            "backup_failed": "Backup Failed",
+            "backup_body": "Backup \":name\" for server \":server\"",
+            "view_backups": "View Backups",
+            "failed": "Failed",
+            "user_added": {
+                "title": "Added to Server",
+                "body": "You have been added as a subuser to :server."
+            },
+            "user_removed": {
+                "title": "Removed from Server",
+                "body": "You have been removed as a subuser from :server."
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "cs": {
+        "notifications": {
+            "open_server": "Otevřít server",
+            "installation_completed": "Instalace serveru dokončena",
+            "installation_failed": "Instalace serveru selhala",
+            "reinstallation_completed": "Reinstalace serveru dokončena",
+            "reinstallation_failed": "Reinstalace serveru selhala",
+            "failed": "Selhalo",
+            "user_added": {
+                "title": "Přidáno na server",
+                "body": "Byli jste přidáni jako poduživatel do :server."
+            },
+            "user_removed": {
+                "title": "Odebráno ze serveru",
+                "body": "Byli jste odebráni jako poduživatel do :server."
+            }
+        },
+        "server_name": "Název serveru: :name"
+    },
+    "da": {
+        "notifications": {
+            "open_server": "Open Server",
+            "installation_completed": "Server Installation Completed",
+            "installation_failed": "Server Installation Failed",
+            "reinstallation_completed": "Server Reinstallation Completed",
+            "reinstallation_failed": "Server Reinstallation Failed",
+            "backup_completed": "Backup Completed",
+            "backup_failed": "Backup Failed",
+            "backup_body": "Backup \":name\" for server \":server\"",
+            "view_backups": "View Backups",
+            "failed": "Failed",
+            "user_added": {
+                "title": "Added to Server",
+                "body": "You have been added as a subuser to :server."
+            },
+            "user_removed": {
+                "title": "Removed from Server",
+                "body": "You have been removed as a subuser from :server."
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "de": {
+        "notifications": {
+            "open_server": "Server öffnen",
+            "installation_completed": "Serverinstallation abgeschlossen",
+            "installation_failed": "Serverinstallation fehlgeschlagen",
+            "reinstallation_completed": "Server Neuinstallation abgeschlossen",
+            "reinstallation_failed": "Server Neuinstallation fehlgeschlagen",
+            "backup_completed": "Backup abgeschlossen",
+            "backup_failed": "Backup fehlgeschlagen",
+            "backup_body": "Backup \":name\" für Server \":server\"",
+            "view_backups": "Backups anzeigen",
+            "failed": "Fehlgeschlagen",
+            "user_added": {
+                "title": "Zum Server hinzugefügt",
+                "body": "Sie wurden als Unterbenutzer hinzugefügt zu :server"
+            },
+            "user_removed": {
+                "title": "Vom Server entfernt",
+                "body": "Sie wurden als Unterbenutzer von :server entfernt"
+            }
+        },
+        "server_name": "Server Name"
+    },
+    "el": {
+        "notifications": {
+            "open_server": "Open Server",
+            "installation_completed": "Server Installation Completed",
+            "installation_failed": "Server Installation Failed",
+            "reinstallation_completed": "Server Reinstallation Completed",
+            "reinstallation_failed": "Server Reinstallation Failed",
+            "backup_completed": "Backup Completed",
+            "backup_failed": "Backup Failed",
+            "backup_body": "Backup \":name\" for server \":server\"",
+            "view_backups": "View Backups",
+            "failed": "Failed",
+            "user_added": {
+                "title": "Added to Server",
+                "body": "You have been added as a subuser to :server."
+            },
+            "user_removed": {
+                "title": "Removed from Server",
+                "body": "You have been removed as a subuser from :server."
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "en": {
+        "notifications": {
+            "open_server": "Open Server",
+            "installation_completed": "Server Installation Completed",
+            "installation_failed": "Server Installation Failed",
+            "reinstallation_completed": "Server Reinstallation Completed",
+            "reinstallation_failed": "Server Reinstallation Failed",
+            "backup_completed": "Backup Completed",
+            "backup_failed": "Backup Failed",
+            "backup_body": "Backup \":name\" for server \":server\"",
+            "view_backups": "View Backups",
+            "failed": "Failed",
+            "user_added": {
+                "title": "Added to Server",
+                "body": "You have been added as a subuser to :server."
+            },
+            "user_removed": {
+                "title": "Removed from Server",
+                "body": "You have been removed as a subuser from :server."
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "es": {
+        "notifications": {
+            "open_server": "Abrir servidor",
+            "installation_completed": "Instalación del servidor completada",
+            "installation_failed": "Instalación del servidor fallida",
+            "reinstallation_completed": "Reinstalación del servidor completada",
+            "reinstallation_failed": "Reinstalación del servidor fallida",
+            "backup_completed": "Copia de seguridad completada",
+            "backup_failed": "Copia de seguridad fallida",
+            "backup_body": "Copia de seguridad \":name\" del servidor \":server\"",
+            "view_backups": "Ver copias de seguridad",
+            "failed": "Fallido",
+            "user_added": {
+                "title": "Añadido al servidor",
+                "body": "Has sido añadido como un subusuario a :server."
+            },
+            "user_removed": {
+                "title": "Eliminado del servidor",
+                "body": "Has sido eliminado como un subusuario de :server."
+            }
+        },
+        "server_name": "Nombre del servidor: :name"
+    },
+    "fi": {
+        "notifications": {
+            "open_server": "Avaa Palvelin",
+            "installation_completed": "Palvelimen Asennus Onnistui",
+            "installation_failed": "Palvelimen Asennus Epäonnistui",
+            "reinstallation_completed": "Palvelimen Uudelleenasennus Onnistui",
+            "reinstallation_failed": "Palvelimen Uudelleenasennus Epäonnistui",
+            "failed": "Epäonnistui",
+            "user_added": {
+                "title": "Lisätty palvelimeen",
+                "body": "Sinut on lisätty käyttäjänä palvelimeen :server."
+            },
+            "user_removed": {
+                "title": "Poistettu palvelimelta",
+                "body": "Sinut on poistettu käyttäjänä palvelimelta :server."
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "fr": {
+        "notifications": {
+            "open_server": "Ouvrir le serveur",
+            "installation_completed": "Installation du serveur terminée",
+            "installation_failed": "Échec de l'installation du serveur",
+            "reinstallation_completed": "Réinstallation du serveur terminée",
+            "reinstallation_failed": "Échec de la réinstallation du serveur",
+            "backup_completed": "Sauvegarde terminée",
+            "backup_failed": "Échec de sauvegarde",
+            "backup_body": "Sauvegarde de \":name\" sur le serveur \":server\"",
+            "view_backups": "Afficher les sauvegardes",
+            "failed": "Échec",
+            "user_added": {
+                "title": "Ajouté au serveur",
+                "body": "Vous avez été ajouté en tant que sous-utilisateur à :server."
+            },
+            "user_removed": {
+                "title": "Retiré du serveur",
+                "body": "Vous avez été retiré en tant que sous-utilisateur de :server."
+            }
+        },
+        "server_name": "Nom du serveur: :name"
+    },
+    "hu": {
+        "notifications": {
+            "open_server": "Szerver megnyitása",
+            "installation_completed": "Szerver telepítése sikeres.",
+            "installation_failed": "Szerver telepítése sikertelen.",
+            "reinstallation_completed": "Szerver újratelepítése kész.",
+            "reinstallation_failed": "Szerver újratelepítése sikertelen.",
+            "backup_completed": "Biztonsági Mentés Befejezve",
+            "backup_failed": "Biztonsági Másolat Készítése Sikertelen",
+            "backup_body": "Biztonsági másolat készítése a „:name” fájlról a „:server” szerveren",
+            "view_backups": "Biztonsági Mentések Megtekintése",
+            "failed": "Sikertelen",
+            "user_added": {
+                "title": "Szerverhez hozzáadva.",
+                "body": "Felvettek a :server szerverre másodlagos felhasználóként."
+            },
+            "user_removed": {
+                "title": "Eltávolítva a szerverről.",
+                "body": "Töröltek a :server mint másodlagos felhasználó."
+            }
+        },
+        "server_name": "Szerver neve: :name"
+    },
+    "id": {
+        "notifications": {
+            "open_server": "Open Server",
+            "installation_completed": "Server Installation Completed",
+            "installation_failed": "Server Installation Failed",
+            "reinstallation_completed": "Server Reinstallation Completed",
+            "reinstallation_failed": "Server Reinstallation Failed",
+            "backup_completed": "Backup Completed",
+            "backup_failed": "Backup Failed",
+            "backup_body": "Backup \":name\" for server \":server\"",
+            "view_backups": "View Backups",
+            "failed": "Failed",
+            "user_added": {
+                "title": "Added to Server",
+                "body": "You have been added as a subuser to :server."
+            },
+            "user_removed": {
+                "title": "Removed from Server",
+                "body": "You have been removed as a subuser from :server."
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "it": {
+        "notifications": {
+            "open_server": "Apri il Server",
+            "installation_completed": "Installazione Server Completata",
+            "installation_failed": "Installazione Server Fallita",
+            "reinstallation_completed": "Reinstallazione Server Completata",
+            "reinstallation_failed": "Reinstallazione Server Fallita",
+            "backup_completed": "Backup completato",
+            "backup_failed": "Backup non riuscito",
+            "backup_body": "Backup \":name\" per il server \":server\"",
+            "view_backups": "Visualizza backup",
+            "failed": "Fallita",
+            "user_added": {
+                "title": "Aggiunto al server",
+                "body": "Sei stato aggiunto come sub-utente a :server."
+            },
+            "user_removed": {
+                "title": "Rimosso dal server",
+                "body": "Sei stato rimosso da sub-utente di :server."
+            }
+        },
+        "server_name": "Nome Del Server: :Name"
+    },
+    "ja": {
+        "notifications": {
+            "open_server": "サーバーを開く",
+            "installation_completed": "サーバーインストール完了",
+            "installation_failed": "サーバーインストール失敗",
+            "reinstallation_completed": "サーバー再インストール完了",
+            "reinstallation_failed": "サーバー再インストール失敗",
+            "backup_completed": "バックアップが完了しました",
+            "backup_failed": "バックアップに失敗しました",
+            "backup_body": "サーバー「:server」のバックアップ「:name」",
+            "view_backups": "バックアップを表示",
+            "failed": "失敗",
+            "user_added": {
+                "title": "サーバーを追加",
+                "body": ":server へサブユーザーとして追加されました。"
+            },
+            "user_removed": {
+                "title": "サーバから削除されました",
+                "body": ":server からサブユーザーとして削除されました。"
+            }
+        },
+        "server_name": "サーバー名: :name"
+    },
+    "ko": {
+        "notifications": {
+            "open_server": "서버 열기",
+            "installation_completed": "서버 설치 완료",
+            "installation_failed": "서버 설치 실패",
+            "reinstallation_completed": "서버 재설치 완료",
+            "reinstallation_failed": "서버 재설치 실패",
+            "failed": "실패",
+            "user_added": {
+                "title": "서버에 추가됨",
+                "body": ":server에 하위 사용자로 추가되었습니다."
+            },
+            "user_removed": {
+                "title": "서버에서 제거됨",
+                "body": ":server에서 하위 사용자로부터 제거되었습니다."
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "lt": {
+        "notifications": {
+            "open_server": "Open Server",
+            "installation_completed": "Server Installation Completed",
+            "installation_failed": "Server Installation Failed",
+            "reinstallation_completed": "Server Reinstallation Completed",
+            "reinstallation_failed": "Server Reinstallation Failed",
+            "backup_completed": "Backup Completed",
+            "backup_failed": "Backup Failed",
+            "backup_body": "Backup \":name\" for server \":server\"",
+            "view_backups": "View Backups",
+            "failed": "Failed",
+            "user_added": {
+                "title": "Added to Server",
+                "body": "You have been added as a subuser to :server."
+            },
+            "user_removed": {
+                "title": "Removed from Server",
+                "body": "You have been removed as a subuser from :server."
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "nl": {
+        "notifications": {
+            "open_server": "Open server",
+            "installation_completed": "Server installatie afgerond",
+            "installation_failed": "Server installatie mislukt",
+            "reinstallation_completed": "Server opnieuw installeren voltooid",
+            "reinstallation_failed": "Server opnieuw installeren mislukt",
+            "backup_completed": "Backup gereed",
+            "backup_failed": "Backup mislukt",
+            "backup_body": "Backup \":name\" voor server \":server\"",
+            "view_backups": "Bekijk backups",
+            "failed": "Mislukt",
+            "user_added": {
+                "title": "Toegevoegd aan server",
+                "body": "Je bent toegevoegd als sub gebruiker aan :server"
+            },
+            "user_removed": {
+                "title": "Verwijderd van server",
+                "body": "Je bent verwijderd als sub gebruiker van :server"
+            }
+        },
+        "server_name": "Servernaam :name"
+    },
+    "no": {
+        "notifications": {
+            "open_server": "Open Server",
+            "installation_completed": "Server Installation Completed",
+            "installation_failed": "Server Installation Failed",
+            "reinstallation_completed": "Server Reinstallation Completed",
+            "reinstallation_failed": "Server Reinstallation Failed",
+            "backup_completed": "Backup Completed",
+            "backup_failed": "Backup Failed",
+            "backup_body": "Backup \":name\" for server \":server\"",
+            "view_backups": "View Backups",
+            "failed": "Failed",
+            "user_added": {
+                "title": "Added to Server",
+                "body": "You have been added as a subuser to :server."
+            },
+            "user_removed": {
+                "title": "Removed from Server",
+                "body": "You have been removed as a subuser from :server."
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "pl": {
+        "notifications": {
+            "open_server": "Otwórz serwer",
+            "installation_completed": "Instalacja serwera zakończona",
+            "installation_failed": "Instalacja serwera nie powiodła się",
+            "reinstallation_completed": "Reinstalacja serwera zakończona pomyślnie",
+            "reinstallation_failed": "Reinstalacja serwera nie powiodła się",
+            "backup_completed": "Kopia zapasowa zakończona",
+            "backup_failed": "Nie udało się wykonać kopii zapasowej",
+            "backup_body": "Tworzenie kopii zapasowej „:name” dla serwera „:server”",
+            "view_backups": "Wyświetl kopie zapasowe",
+            "failed": "Niepowodzenie",
+            "user_added": {
+                "title": "Dodano do serwera",
+                "body": "Zostałeś dodany jako podużytkownik do :server."
+            },
+            "user_removed": {
+                "title": "Usunięto z serwera",
+                "body": "Zostałeś usunięty jako podużytkownik z :server."
+            }
+        },
+        "server_name": "Nazwa serwera: :name"
+    },
+    "pt": {
+        "notifications": {
+            "open_server": "Open Server",
+            "installation_completed": "Server Installation Completed",
+            "installation_failed": "Server Installation Failed",
+            "reinstallation_completed": "Server Reinstallation Completed",
+            "reinstallation_failed": "Server Reinstallation Failed",
+            "backup_completed": "Backup Completed",
+            "backup_failed": "Backup Failed",
+            "backup_body": "Backup \":name\" for server \":server\"",
+            "view_backups": "View Backups",
+            "failed": "Failed",
+            "user_added": {
+                "title": "Added to Server",
+                "body": "You have been added as a subuser to :server."
+            },
+            "user_removed": {
+                "title": "Removed from Server",
+                "body": "You have been removed as a subuser from :server."
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "pt_BR": {
+        "notifications": {
+            "open_server": "Abrir servidor",
+            "installation_completed": "Instalação do servidor concluída",
+            "installation_failed": "Instalação do servidor falhou",
+            "reinstallation_completed": "Reinstalação do servidor concluída",
+            "reinstallation_failed": "Reinstalação de servidor falhou",
+            "backup_completed": "Backup concluído",
+            "backup_failed": "Falha no backup",
+            "backup_body": "Backup \":name\" para o servidor \":server\"",
+            "view_backups": "Ver backups",
+            "failed": "Falhou",
+            "user_added": {
+                "title": "Adicionado ao servidor",
+                "body": "Você foi adicionado como um sub usuário ao servidor :server."
+            },
+            "user_removed": {
+                "title": "Removido do servidor",
+                "body": "Você foi removido como um sub-usuário do servidor :server."
+            }
+        },
+        "server_name": "Nome do servidor: :name"
+    },
+    "ro": {
+        "notifications": {
+            "open_server": "Deschide serverul",
+            "installation_completed": "Instalarea serverului a fost finalizată",
+            "installation_failed": "Instalarea serverului a eșuat",
+            "reinstallation_completed": "Reinstalarea serverului a fost finalizată",
+            "reinstallation_failed": "Reinstalarea serverului a eșuat",
+            "failed": "Eșuat",
+            "user_added": {
+                "title": "Adăugat la Server",
+                "body": "Ai fost adăugat ca subutilizator la :server."
+            },
+            "user_removed": {
+                "title": "Eliminat din Server",
+                "body": "Ai fost eliminat ca subutilizator de la :server."
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "ru": {
+        "notifications": {
+            "open_server": "Открыть сервер",
+            "installation_completed": "Установка сервера завершена",
+            "installation_failed": "Установка сервера не удалась",
+            "reinstallation_completed": "Переустановка сервера завершена",
+            "reinstallation_failed": "Переустановка сервера не удалась",
+            "backup_completed": "Создание резервной копии завершено",
+            "backup_failed": "Ошибка резервного копирования",
+            "backup_body": "Резервная копия \":name\" для сервера \":server\"",
+            "view_backups": "Просмотреть резервные копии",
+            "failed": "Не удалось",
+            "user_added": {
+                "title": "Добавлен на сервер",
+                "body": "Вы были добавлены в качестве субпользователя на :server."
+            },
+            "user_removed": {
+                "title": "Удален с сервера",
+                "body": "Вы были удалены как субпользователь с :server."
+            }
+        },
+        "server_name": "Имя сервера: :name"
+    },
+    "sk": {
+        "notifications": {
+            "open_server": "Open Server",
+            "installation_completed": "Server Installation Completed",
+            "installation_failed": "Server Installation Failed",
+            "reinstallation_completed": "Server Reinstallation Completed",
+            "reinstallation_failed": "Server Reinstallation Failed",
+            "backup_completed": "Backup Completed",
+            "backup_failed": "Backup Failed",
+            "backup_body": "Backup \":name\" for server \":server\"",
+            "view_backups": "View Backups",
+            "failed": "Failed",
+            "user_added": {
+                "title": "Added to Server",
+                "body": "You have been added as a subuser to :server."
+            },
+            "user_removed": {
+                "title": "Removed from Server",
+                "body": "You have been removed as a subuser from :server."
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "sr": {
+        "notifications": {
+            "open_server": "Open Server",
+            "installation_completed": "Server Installation Completed",
+            "installation_failed": "Server Installation Failed",
+            "reinstallation_completed": "Server Reinstallation Completed",
+            "reinstallation_failed": "Server Reinstallation Failed",
+            "backup_completed": "Backup Completed",
+            "backup_failed": "Backup Failed",
+            "backup_body": "Backup \":name\" for server \":server\"",
+            "view_backups": "View Backups",
+            "failed": "Failed",
+            "user_added": {
+                "title": "Added to Server",
+                "body": "You have been added as a subuser to :server."
+            },
+            "user_removed": {
+                "title": "Removed from Server",
+                "body": "You have been removed as a subuser from :server."
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "sv": {
+        "notifications": {
+            "open_server": "Open Server",
+            "installation_completed": "Server Installation Completed",
+            "installation_failed": "Server Installation Failed",
+            "reinstallation_completed": "Server Reinstallation Completed",
+            "reinstallation_failed": "Server Reinstallation Failed",
+            "backup_completed": "Backup Completed",
+            "backup_failed": "Backup Failed",
+            "backup_body": "Backup \":name\" for server \":server\"",
+            "view_backups": "View Backups",
+            "failed": "Failed",
+            "user_added": {
+                "title": "Added to Server",
+                "body": "You have been added as a subuser to :server."
+            },
+            "user_removed": {
+                "title": "Removed from Server",
+                "body": "You have been removed as a subuser from :server."
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "tr": {
+        "notifications": {
+            "open_server": "Open Server",
+            "installation_completed": "Server Installation Completed",
+            "installation_failed": "Server Installation Failed",
+            "reinstallation_completed": "Server Reinstallation Completed",
+            "reinstallation_failed": "Server Reinstallation Failed",
+            "backup_completed": "Backup Completed",
+            "backup_failed": "Backup Failed",
+            "backup_body": "Backup \":name\" for server \":server\"",
+            "view_backups": "View Backups",
+            "failed": "Failed",
+            "user_added": {
+                "title": "Added to Server",
+                "body": "You have been added as a subuser to :server."
+            },
+            "user_removed": {
+                "title": "Removed from Server",
+                "body": "You have been removed as a subuser from :server."
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "uk": {
+        "notifications": {
+            "open_server": "Відкрити сервер",
+            "installation_completed": "Встановлення сервера завершено",
+            "installation_failed": "Помилка встановлення сервера",
+            "reinstallation_completed": "Перевстановлення сервера завершено",
+            "reinstallation_failed": "Помилка перевстановлення сервера",
+            "failed": "Помилка",
+            "user_added": {
+                "title": "Додано на сервер",
+                "body": "Вас додано як користувача до :server."
+            },
+            "user_removed": {
+                "title": "Вилучено з сервера",
+                "body": "Вас було видалено як користувач з :server."
+            }
+        },
+        "server_name": "Ім'я сервера: :name"
+    },
+    "vi": {
+        "notifications": {
+            "open_server": "Open Server",
+            "installation_completed": "Server Installation Completed",
+            "installation_failed": "Server Installation Failed",
+            "reinstallation_completed": "Server Reinstallation Completed",
+            "reinstallation_failed": "Server Reinstallation Failed",
+            "backup_completed": "Backup Completed",
+            "backup_failed": "Backup Failed",
+            "backup_body": "Backup \":name\" for server \":server\"",
+            "view_backups": "View Backups",
+            "failed": "Failed",
+            "user_added": {
+                "title": "Added to Server",
+                "body": "You have been added as a subuser to :server."
+            },
+            "user_removed": {
+                "title": "Removed from Server",
+                "body": "You have been removed as a subuser from :server."
+            }
+        },
+        "server_name": "Server Name: :name"
+    },
+    "zh_CN": {
+        "notifications": {
+            "open_server": "打开服务器",
+            "installation_completed": "服务器安装完成",
+            "installation_failed": "服务器安装失败",
+            "reinstallation_completed": "服务器重新安装完成",
+            "reinstallation_failed": "服务器重新安装失败",
+            "failed": "失败",
+            "user_added": {
+                "title": "已添加到服务器",
+                "body": "您已被添加为 :server。"
+            },
+            "user_removed": {
+                "title": "已从服务器删除",
+                "body": "您已经被从 :server 移除为子用户。"
+            }
+        },
+        "server_name": "服务器名称: :name"
+    },
+    "zh_TW": {
+        "notifications": {
+            "open_server": "開啟伺服器",
+            "installation_completed": "伺服器安裝已完成",
+            "installation_failed": "伺服器安裝失敗",
+            "reinstallation_completed": "伺服器重新安裝已完成",
+            "reinstallation_failed": "伺服器重新安裝失敗",
+            "backup_completed": "備份已完成",
+            "backup_failed": "備份失敗",
+            "backup_body": "伺服器「:server」的備份「:name」",
+            "view_backups": "檢視備份",
+            "failed": "失敗",
+            "user_added": {
+                "title": "已新增至伺服器",
+                "body": "您已被新增為 :server 的子使用者。"
+            },
+            "user_removed": {
+                "title": "已從伺服器移除",
+                "body": "您已從 :server 的子使用者中移除。"
+            }
+        },
+        "server_name": "伺服器名稱：:name"
+    }
+}

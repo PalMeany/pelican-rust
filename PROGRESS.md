@@ -45,6 +45,11 @@
   subject activity), затем GET /api/client (список серверов), ServerData и далее по spec client-api.md §8.
   Механические ресурсы/эндпоинты отдавать воркерам по шаблону (см. scripts/worker/*.md).
 
+## Диск (просьба пользователя)
+Сборки живут в docker-томах VM (`pelican-rs-target*`, десятки ГБ). После каждой вехи/пачки воркеров
+запускать `scripts/clean.sh` (cargo clean в незанятых target-томах, удаление томов/окружений удалённых
+worktree, prune кэша docker). Проверка: `limactl shell pelican -- df -h /`.
+
 ## Грабли (важно)
 - Python-замены в исходниках после `cargo fmt` молча не срабатывают — всегда `assert old in s`.
 - Таблицы, которые засевают миграции (`backup_hosts` «Local»), сбрасываются харнессом — добавлять в фикстуры.
