@@ -415,6 +415,40 @@ pub fn spawn_scheduler(st: AppState) {
     });
 }
 
+/// `RevocationListener` (user deleted / password changed): one `RevokeSftpAccessJob`
+/// per node hosting a server the user owns or is a subuser of. A connection
+/// failure only releases the job; other Wings errors fail it (and propagate in sync mode).
+pub async fn revoke_sftp_access(st: &AppState, user: &pelican_db::entities::users::Model) -> ApiResult<()> {
+    let b = st.db.get_database_backend();
+    let nodes = pelican_db::entities::nodes::Model::find_by_statement(raw::stmt(
+        b,
+        "select * from {nodes} where {nodes.id} in (select distinct {servers.node_id} from {servers} \
+         left join {subusers} on {subusers.server_id} = {servers.id} where ({servers.owner_id} = ? or {subusers.user_id} = ?)) \
+         order by {nodes.id} asc",
+        vec![user.id.into(), user.id.into()],
+    ))
+    .all(&st.db)
+    .await?;
+    for node in nodes {
+        let conn = st.node_conn(&node).map_err(|_| ApiError::internal("DecryptException"))?;
+        let uuid = user.uuid.clone();
+        if is_sync(st) {
+            match st.wings.deauthorize_user(&conn, &uuid, &[]).await {
+                Ok(()) | Err(pelican_wings::WingsError::Connection(_)) => {}
+                Err(e) => return Err(wings_err(e)),
+            }
+        } else {
+            let st = st.clone();
+            tokio::spawn(async move {
+                if let Err(e) = st.wings.deauthorize_user(&conn, &uuid, &[]).await {
+                    tracing::warn!(error = %e, "revoking SFTP access failed");
+                }
+            });
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

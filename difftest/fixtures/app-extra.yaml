@@ -1,0 +1,21 @@
+# Application API: a non-root admin (role with permissions) and keys with partial ACL.
+#   staff app key read-only  : papp_staffread01StaffReadSecret00000000000000001   (user: 1)
+#   staff app key write-only : papp_staffwrite1StaffWriteSecret0000000000000001   (user: 2)
+#   staff account key        : pacc_staffacct01StaffAcctSecret00000000000000001   (non-root: ACL denies)
+users:
+  - { id: 5, uuid: 6b9e5a5e-5555-4a5b-9c1d-000000000005, username: staff, email: staff@example.com, external_id: ext-5, password: "@bcrypt:password", language: en, timezone: UTC, created_at: "2026-01-04 00:00:00", updated_at: "2026-01-04 00:00:00" }
+roles:
+  - { id: 2, name: Support, guard_name: web, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+  - { id: 3, name: Viewer, guard_name: web, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+permissions:
+  - { id: 1, name: viewList user, guard_name: web, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+  - { id: 2, name: view user, guard_name: web, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00" }
+role_has_permissions:
+  - { permission_id: 1, role_id: 2 }
+  - { permission_id: 2, role_id: 2 }
+model_has_roles:
+  - { role_id: 2, model_type: user, model_id: 5 }
+api_keys:
+  - { id: 20, user_id: 5, key_type: 2, identifier: papp_staffread01, token: "@encrypt:StaffReadSecret00000000000000001", allowed_ips: [], memo: staff read, permissions: { user: 1 }, created_at: "2026-01-04 00:00:00", updated_at: "2026-01-04 00:00:00" }
+  - { id: 21, user_id: 5, key_type: 2, identifier: papp_staffwrite1, token: "@encrypt:StaffWriteSecret0000000000000001", allowed_ips: [], memo: staff write, permissions: { user: 2 }, created_at: "2026-01-04 00:00:00", updated_at: "2026-01-04 00:00:00" }
+  - { id: 22, user_id: 5, key_type: 1, identifier: pacc_staffacct01, token: "@encrypt:StaffAcctSecret00000000000000001", allowed_ips: [], memo: staff account, permissions: [], created_at: "2026-01-04 00:00:00", updated_at: "2026-01-04 00:00:00" }

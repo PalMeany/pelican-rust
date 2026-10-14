@@ -1,0 +1,44 @@
+name: app/users-read
+fixtures: [base, infra, client-users, app-extra]
+steps:
+  - { path: /api/application/users, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 200 }
+  - { path: "/api/application/users?per_page=2&page=2", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/users?filter[email]=EXAMPLE.COM&filter[username]=s,u&sort=-id", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/users?filter[nope]=x&sort=email", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/users?sort=email", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/users?per_page=abc", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/users?per_page=10abc", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/users?per_page=-1&page=3", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/users?per_page=0", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/users/2?include=servers,roles", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/users/1?include=roles.permissions,servers.node", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/users/999, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/users/abc, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/users/external/ext-5, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/users/external/nope, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/users, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: "/api/application/users/5?include=roles,servers", bearer: pacc_admin000001AdminClientSecret000000000000001 }
+  - { path: "/api/application/users/5?include=roles,servers", bearer: papp_staffread01StaffReadSecret00000000000000001 }
+  - { path: /api/application/users, bearer: papp_staffwrite1StaffWriteSecret0000000000000001 }
+  - { path: /api/application/users, bearer: pacc_staffacct01StaffAcctSecret00000000000000001 }
+---
+name: app/users-write
+fixtures: [base, infra, client-users, app-extra]
+steps:
+  - { method: POST, path: /api/application/users, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { email: " New.User@Example.com ", username: NewUser, password: "  secret  ", language: de, timezone: Europe/Berlin, external_id: ext-new, is_managed_externally: "1" }, expect_status: 201 }
+  - { method: POST, path: /api/application/users, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { email: nomail@example.com, username: nopass } }
+  - { method: POST, path: /api/application/users, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { email: user@example.com, username: user, external_id: ext-5, language: xx, timezone: Mars/Base, is_managed_externally: maybe } }
+  - { method: POST, path: /api/application/users, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { email: "not an email" } }
+  - { method: POST, path: /api/application/users, bearer: papp_staffread01StaffReadSecret00000000000000001, json: { email: a@b.c, username: abc } }
+  - { method: PATCH, path: /api/application/users/2, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { email: user@example.com, username: user, language: fr } }
+  - { method: PATCH, path: /api/application/users/2, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { email: USER2@example.com, username: user, password: newpassword } }
+  - { method: PATCH, path: /api/application/users/2, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { email: staff@example.com, username: user } }
+  - { method: PATCH, path: /api/application/users/3/roles/assign, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { roles: [2, 3, 1] } }
+  - { method: PATCH, path: /api/application/users/3/roles/assign, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { roles: ["1"] } }
+  - { method: PATCH, path: /api/application/users/5/roles/remove, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { roles: [2, 99] } }
+  - { method: PATCH, path: /api/application/users/5/roles/remove, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { roles: [2] } }
+  - { method: PATCH, path: /api/application/users/1/roles/remove, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { roles: [1] } }
+  - { method: DELETE, path: /api/application/users/1, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: DELETE, path: /api/application/users/2, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: DELETE, path: /api/application/users/4, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 204 }
+  - { method: DELETE, path: /api/application/users/5, bearer: papp_staffwrite1StaffWriteSecret0000000000000001 }
