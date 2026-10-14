@@ -1,0 +1,73 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% block head %}
+<script src="{{ asset('js/startup.js') }}" defer></script>
+{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ title }}</h1></div>
+
+{# Filament page form: one column (two on md) of command/image fields plus the
+   full-width readonly startup textarea with the preview hint action. #}
+<div class="card card-body stack">
+  <div class="grid grid-2">
+    {% if cmd_select %}
+    <form method="post" action="{{ base }}/startup/command" data-live>
+      {{ csrf_field() }}
+      {{ f.select('startup', trans('server/startup.command'), cmd_select.options, cmd_select.current, disabled=not cmd_select.enabled) }}
+    </form>
+    {% else %}
+    {# custom startup: readonly display, not an editable field #}
+    <div class="field">
+      <label>{{ trans('server/startup.command') }}</label>
+      <input class="input mono" type="text" value="Custom Startup" readonly>
+    </div>
+    {% endif %}
+    {% if img_select %}
+    <form method="post" action="{{ base }}/startup/image" data-live>
+      {{ csrf_field() }}
+      {{ f.select('image', trans('server/startup.docker_image'), img_select.options, img_select.current, disabled=not img_select.enabled) }}
+    </form>
+    {% else %}
+    <div class="field">
+      <label>{{ trans('server/startup.docker_image') }}</label>
+      <input class="input mono" type="text" value="{{ server.image }}" readonly>
+    </div>
+    {% endif %}
+  </div>
+  {# PreviewStartupAction hint + readonly Textarea #}
+  <div class="field">
+    <button type="button" class="btn btn-sm btn-gray"
+      data-preview
+      data-on-label="{{ trans('server/startup.disable_preview') }}"
+      data-off-label="{{ trans('server/startup.enable_preview') }}">
+      {{ icon('code', 'icon-sm') }}<span data-preview-label>{{ trans('server/startup.enable_preview') }}</span>
+    </button>
+    <textarea class="textarea code" id="f-startup-command" rows="4" readonly
+      data-raw="{{ raw_startup }}"
+      data-preview-value="{{ preview_startup }}">{{ raw_startup }}</textarea>
+  </div>
+</div>
+
+{# Section('Server Variables'): Repeater over user-viewable variables;
+   every field posts to Startup::update() on its own. #}
+<section class="card card-body stack">
+  <h3>{{ trans('server/startup.variables') }}</h3>
+  {% for v in vars %}
+  <form method="post" action="{{ base }}/startup/variable/{{ v.id }}" data-live style="border-top: 1px solid var(--line); padding-top: .75rem;">
+    {{ csrf_field() }}
+    {% if v.kind == 'select' %}
+    {{ f.select('value', v.name, v.options, v.value, required=v.required, placeholder=(none if v.required else trans('filament-forms::components.select.placeholder')), disabled=v.disabled) }}
+    {% elif v.kind == 'toggle' %}
+    {{ f.toggle('value', v.name, v.value == '1', disabled=v.disabled) }}
+    {% elif v.kind == 'number' %}
+    {# prefix = '{{ENV}}' affix (StartupVariable::setUp) #}
+    {{ f.text('value', v.name, v.value, type='number', required=v.required, placeholder=v.default, disabled=v.disabled, attrs=v.attrs, prefix=('{{' ~ v.env ~ '}}')) }}
+    {% else %}
+    {{ f.text('value', v.name, v.value, required=v.required, placeholder=v.default, disabled=v.disabled, prefix=('{{' ~ v.env ~ '}}')) }}
+    {% endif %}
+    {# hintIcon(TablerIcon::Code, rules '|'-joined) + helperText(description) #}
+    <p class="hint muted small"><span title="{{ v.rules }}">{{ icon('code', 'icon-sm') }}</span> {{ v.description }}</p>
+  </form>
+  {% endfor %}
+</section>
+{% endblock %}
