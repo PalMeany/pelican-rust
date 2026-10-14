@@ -17,6 +17,11 @@ steps:
   expect_status: 200
 - path: /api/application/eggs/2/export?format=json
   bearer: papp_admin000001AdminAppSecret000000000000000001
+- path: /api/application/eggs/1/export
+  bearer: papp_admin000001AdminAppSecret000000000000000001
+  expect_status: 200
+- path: /api/application/eggs/2/export?format=yaml
+  bearer: papp_admin000001AdminAppSecret000000000000000001
 - path: /api/application/eggs/1/export?format=xml
   bearer: papp_admin000001AdminAppSecret000000000000000001
 - path: /api/application/eggs/99
