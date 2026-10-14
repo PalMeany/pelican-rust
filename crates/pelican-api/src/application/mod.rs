@@ -1,7 +1,7 @@
 //! Application API (`routes/api-application.php`, docs/spec/application-api.md).
 
 pub mod data;
-mod database_hosts;
+pub mod database_hosts;
 mod eggs;
 mod mounts;
 pub mod nodes;

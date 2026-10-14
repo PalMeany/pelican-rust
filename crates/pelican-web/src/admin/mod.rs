@@ -1,6 +1,7 @@
 //! Admin panel (`/admin`, app/Filament/Admin): access check, navigation,
 //! resources. Permissions follow the spatie names (`viewList mount`, …).
 
+mod database_hosts;
 mod mounts;
 mod nodes;
 mod server_relations;
@@ -22,6 +23,7 @@ use crate::error::{WebError, WebResult};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .merge(database_hosts::routes())
         .merge(mounts::routes())
         .merge(nodes::routes())
         .merge(servers_create::routes())

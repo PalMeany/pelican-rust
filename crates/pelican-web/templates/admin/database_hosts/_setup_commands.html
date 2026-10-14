@@ -1,0 +1,22 @@
+{# Step 2 "Database Setup" of the create wizard; also rendered as the htmx
+   fragment (`block setup_commands`) refreshed by the step-1 inputs. #}
+<div id="dh-setup-commands">
+  <input type="hidden" name="panel_ip" value="{{ panel_ip }}">
+  <fieldset class="card card-body stack" style="margin:0">
+    <h2 class="muted">{{ trans('admin/databasehost.setup.database_user') }}</h2>
+    <p class="small">{{ trans('admin/databasehost.setup.cli_login') | safe }}</p>
+    <div class="field">
+      <label>{{ trans('admin/databasehost.setup.command_create_user') }}</label>
+      <div class="code-block copyable" data-copy="{{ create_user }}" tabindex="0">{{ create_user }}</div>
+    </div>
+    <div class="field">
+      <label>{{ trans('admin/databasehost.setup.command_assign_permissions') }}</label>
+      <div class="code-block copyable" data-copy="{{ assign_permissions }}" tabindex="0">{{ assign_permissions }}</div>
+    </div>
+    <p class="small">{{ trans('admin/databasehost.setup.cli_exit') | safe }}</p>
+  </fieldset>
+  <fieldset class="card card-body stack" style="margin:0">
+    <h2 class="muted">{{ trans('admin/databasehost.setup.external_access') }}</h2>
+    <p class="small">{{ trans('admin/databasehost.setup.allow_external_access') | safe }}</p>
+  </fieldset>
+</div>

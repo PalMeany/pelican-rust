@@ -1,0 +1,50 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    <button class="btn" type="submit" form="record-form" title="{{ trans('filament-panels::resources/pages/create-record.form.actions.create.label') }}">{{ icon('device-floppy', 'icon-sm') }}{{ trans('filament-panels::resources/pages/create-record.form.actions.create.label') }}</button>
+  </div>
+</div>
+<form id="record-form" method="post" action="{{ action }}" class="stack">
+  {{ csrf_field() }}
+
+  {# Step 1: Preparations #}
+  <fieldset class="card card-body grid grid-2" style="margin:0;align-content:start">
+    <div class="span-full muted">{{ trans('admin/databasehost.setup.preparations') }}</div>
+    <p class="span-full">{{ trans('admin/databasehost.setup.note') }}</p>
+    <div class="field span-full" id="dh-different-server">
+      <input type="hidden" name="different_server" value="0">
+      <label class="toggle"><input type="checkbox" name="different_server" value="1"{% if v.different_server %} checked{% endif %} {{ refresh_attrs | safe }}><span class="track"></span><span>{{ trans('admin/databasehost.setup.different_server') | safe }}</span></label>
+    </div>
+    {{ f.text('username', trans('admin/databasehost.username'), v.username, errors, required=true, hint=trans('admin/databasehost.username_help'), attrs='maxlength="255" autocomplete="off" ' ~ refresh_attrs) }}
+    {{ f.text('password', trans('admin/databasehost.password'), v.password, errors, required=true, type='password', hint=trans('admin/databasehost.password_help'), attrs='maxlength="255" autocomplete="new-password" ' ~ refresh_attrs) }}
+  </fieldset>
+
+  {# Step 2: Database Setup (fragment-refreshable: hidden panel_ip + commands) #}
+  {% include "admin/database_hosts/_setup_commands.html" %}
+
+  {# Step 3: Panel Setup #}
+  <fieldset class="card card-body grid grid-2" id="dh-panel-setup" style="margin:0;align-content:start">
+    <div class="span-full muted">{{ trans('admin/databasehost.setup.panel_setup') }}</div>
+    <div class="span-full">{{ f.text('host', trans('admin/databasehost.host'), v.host, errors, required=true, hint=trans('admin/databasehost.host_help'), attrs='maxlength="255"') }}</div>
+    {{ f.text('port', trans('admin/databasehost.port'), v.port, errors, required=true, type='number', hint=trans('admin/databasehost.port_help'), attrs='min="0" max="65535"') }}
+    {{ f.text('max_databases', trans('admin/databasehost.max_database'), v.max_databases, errors, type='number', hint=trans('admin/databasehost.max_databases_help'), placeholder=trans('admin/databasehost.unlimited')) }}
+    <div class="span-full">{{ f.text('name', trans('admin/databasehost.display_name'), v.name, errors, required=true, hint=trans('admin/databasehost.display_name_help'), attrs='maxlength="60"') }}</div>
+    <div class="span-full">{{ f.select('node_ids', trans('admin/databasehost.linked_nodes'), node_options, v.node_ids, errors, multiple=true, hint=trans('admin/databasehost.linked_nodes_help')) }}</div>
+  </fieldset>
+</form>
+<script>
+  // `afterStateUpdated` of the host field copies its value into Display Name.
+  document.getElementById('f-host')?.addEventListener('blur', function () {
+    const name = document.querySelector('#dh-panel-setup input[name="name"]');
+    if (name) name.value = this.value;
+  });
+</script>
+{% endblock %}
+
+{# htmx fragment target for POST /create/commands #}
+{% block setup_commands %}
+{% include "admin/database_hosts/_setup_commands.html" %}
+{% endblock %}

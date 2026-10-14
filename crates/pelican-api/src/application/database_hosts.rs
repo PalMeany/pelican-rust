@@ -223,7 +223,7 @@ async fn insert_host(
 
 /// `$host->nodes()->sync($ids)` for a freshly created host: attach every id.
 /// The relation declares no pivot columns, so no timestamps are written.
-async fn sync_nodes(db: &impl ConnectionTrait, b: DbBackend, host_id: Int, ids: &[i64]) -> ApiResult<()> {
+pub async fn sync_nodes(db: &impl ConnectionTrait, b: DbBackend, host_id: Int, ids: &[i64]) -> ApiResult<()> {
     let rows = db
         .query_all_raw(raw::stmt(
             b,

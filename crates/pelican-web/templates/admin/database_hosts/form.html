@@ -1,0 +1,157 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if not readonly and can_delete %}
+    <button class="btn btn-danger" type="submit" form="delete-form" title="{{ delete_tooltip }}"{% if delete_disabled %} disabled{% endif %}>{{ icon('trash', 'icon-sm') }}{{ trans('filament-actions::delete.single.label') }}</button>
+    {% endif %}
+    {% if edit_url %}
+    <a class="btn" href="{{ edit_url }}">{{ icon('pencil', 'icon-sm') }}{{ trans('filament-actions::edit.single.label') }}</a>
+    {% endif %}
+    {% if not readonly %}<button class="btn" type="submit" form="record-form" title="{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}">{{ icon('device-floppy', 'icon-sm') }}{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}</button>{% endif %}
+  </div>
+</div>
+
+<div class="stack" data-tabs-root id="dh-tabs">
+  <nav class="tabs" aria-label="{{ trans('filament::components/tabs.label') }}">
+    <a href="{{ record_tab_url }}" data-tab="record" class="{{ 'active' if active_record }}">{{ trans('admin/databasehost.model_label') }}</a>
+    {% if show_databases %}<a href="{{ databases_tab_url }}" data-tab="databases" class="{{ 'active' if not active_record }}">{{ trans('admin/databasehost.databases') }}</a>{% endif %}
+  </nav>
+
+  {# Record panel: the edit form / read-only infolist #}
+  <section data-tab-panel="record"{% if not active_record %} hidden{% endif %}>
+  <form id="record-form" method="post" action="{{ action }}" class="grid grid-3">
+    {{ csrf_field() }}
+    <fieldset class="card card-body span-2 grid grid-2" style="margin:0;align-content:start"{% if readonly %} disabled{% endif %}>
+      <div class="span-full">{{ f.text('host', trans('admin/databasehost.host'), v.host, errors, required=not readonly, hint=trans('admin/databasehost.host_help'), attrs='maxlength="255"') }}</div>
+      {{ f.text('port', trans('admin/databasehost.port'), v.port, errors, required=true, type='number', hint=trans('admin/databasehost.port_help'), attrs='min="0" max="65535"') }}
+      {{ f.text('max_databases', trans('admin/databasehost.max_database'), v.max_databases, errors, type='number', hint=trans('admin/databasehost.max_databases_help')) }}
+      <div class="span-full">{{ f.text('name', trans('admin/databasehost.display_name'), v.name, errors, required=true, hint=trans('admin/databasehost.display_name_help'), attrs='maxlength="60"') }}</div>
+      <div class="span-full">{{ f.text('username', trans('admin/databasehost.username'), v.username, errors, required=true, hint=trans('admin/databasehost.username_help'), attrs='maxlength="255" autocomplete="off"') }}</div>
+      {# Leaving it blank keeps the stored password. #}
+      <div class="span-full">{{ f.password('password', trans('admin/databasehost.password'), errors=errors, autocomplete='new-password', hint=trans('admin/databasehost.password_help')) }}</div>
+      <div class="span-full">{{ f.select('node_ids', trans('admin/databasehost.linked_nodes'), node_options, v.node_ids, errors, multiple=true, hint=trans('admin/databasehost.linked_nodes_help')) }}</div>
+    </fieldset>
+  </form>
+  </section>
+
+  {% if show_databases %}
+  {# Relation manager: Databases on this host #}
+  <section data-tab-panel="databases"{% if active_record %} hidden{% endif %}>
+  <div class="card table-card stack">
+    {% if db_rows | length %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr>
+          <th>{{ trans('admin/databasehost.table.database') }}</th>
+          <th>{{ trans('admin/databasehost.table.username') }}</th>
+          <th>{{ trans('admin/databasehost.table.remote') }}</th>
+          <th>Server name</th>
+          <th>{{ trans('admin/databasehost.table.max_connections') }}</th>
+          <th>{{ trans('admin/databasehost.table.created_at') }}</th>
+          <th class="sr-only">{{ trans('filament-tables::table.columns.actions.label') }}</th>
+        </tr></thead>
+        <tbody>
+          {% for r in db_rows %}
+          <tr>
+            <td>{{ r.database }}</td>
+            <td>{{ r.username }}</td>
+            <td>{{ r.remote }}</td>
+            <td>{% if r.server_url %}<a href="{{ r.server_url }}" hx-boost="false">{{ r.server_name }}</a>{% else %}{{ r.server_name }}{% endif %}</td>
+            <td>{{ r.max_conn }}</td>
+            <td>{% if r.created_at %}{{ r.created_at | datetime }}{% endif %}</td>
+            <td class="actions">
+              <button type="button" class="btn-link" data-modal-open="db-view-{{ record.id }}-{{ r.id }}">{{ icon('eye', 'icon-sm') }}{{ trans('filament-actions::view.single.label') }}</button>
+              <form method="post" action="/admin/database-hosts/{{ record.id }}/databases/{{ r.id }}/delete" style="display:inline"
+                data-confirm="{{ trans('filament-actions::modal.confirmation') }}"
+                data-confirm-title="{{ trans('filament-actions::delete.single.modal.heading', label=r.database) }}"
+                data-confirm-ok="{{ trans('filament-actions::delete.single.modal.actions.delete.label') }}">
+                {{ csrf_field() }}<input type="hidden" name="_back" value="{{ back_url }}">
+                <button type="submit" class="btn-link danger">{{ icon('trash', 'icon-sm') }}{{ trans('filament-actions::delete.single.label') }}</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if dbs_prev or dbs_next %}
+    <nav class="pagination" aria-label="{{ trans('filament::components/pagination.label') }}">
+      {% if dbs_prev %}<a href="{{ dbs_prev }}" hx-boost="false" aria-label="{{ trans('filament::components/pagination.actions.previous.label') }}">{{ icon('chevron-left', 'icon-sm') }}</a>{% else %}<span class="disabled">{{ icon('chevron-left', 'icon-sm') }}</span>{% endif %}
+      {% if dbs_next %}<a href="{{ dbs_next }}" hx-boost="false" aria-label="{{ trans('filament::components/pagination.actions.next.label') }}">{{ icon('chevron-right', 'icon-sm') }}</a>{% else %}<span class="disabled">{{ icon('chevron-right', 'icon-sm') }}</span>{% endif %}
+    </nav>
+    {% endif %}
+    {% else %}
+    <div class="empty">
+      <div class="icon-wrap">{{ icon('database', 'icon-lg') }}</div>
+      <h3>{{ empty_heading }}</h3>
+    </div>
+    {% endif %}
+  </div>
+  </section>
+  {% endif %}
+</div>
+
+{% for r in db_rows %}
+{# View modal of the Databases relation manager (the form fields, read-only). #}
+<dialog id="db-view-{{ record.id }}-{{ r.id }}" class="modal wide">
+  <div class="modal-head"><h2>{{ trans('filament-actions::view.single.modal.heading', label=r.database) }}</h2><button type="button" class="icon-btn" data-modal-close>{{ icon('x', 'icon-sm') }}</button></div>
+  <div class="modal-body">
+    <div class="field">
+      <label for="db-database-{{ r.id }}">{{ trans('admin/databasehost.table.database') }}</label>
+      <input class="input" id="db-database-{{ r.id }}" type="text" value="{{ r.database }}" readonly>
+    </div>
+    <div class="field">
+      <label for="db-username-{{ r.id }}">{{ trans('admin/databasehost.table.username') }}</label>
+      <input class="input" id="db-username-{{ r.id }}" type="text" value="{{ r.username }}" readonly>
+    </div>
+    <div class="field">
+      <label for="db-password-{{ r.id }}">{{ trans('admin/databasehost.table.password') }}</label>
+      <div class="row" style="gap:0.5rem;align-items:flex-end">
+        <input class="input" style="flex:1;min-width:0" id="db-password-{{ r.id }}" type="password" value="{{ r.password }}" readonly>
+        <button type="button" class="addon icon-btn" style="width:auto;height:auto" data-reveal="db-password-{{ r.id }}">{{ icon('eye', 'icon-sm') }}</button>
+        <form method="post" action="/admin/database-hosts/{{ record.id }}/databases/{{ r.id }}/rotate"
+          data-confirm="{{ trans('filament-actions::modal.confirmation') }}"
+          data-confirm-title="{{ rotate_title }}" data-confirm-color="warning"
+          data-confirm-ok="{{ trans('filament-actions::modal.actions.confirm.label') }}">
+          {{ csrf_field() }}<input type="hidden" name="_back" value="{{ back_url }}">
+          <button type="submit" class="btn" title="{{ trans('admin/databasehost.rotate') }}">{{ icon('refresh', 'icon-sm') }}{{ trans('admin/databasehost.rotate') }}</button>
+        </form>
+      </div>
+    </div>
+    <div class="field">
+      <label for="db-remote-{{ r.id }}">{{ trans('admin/databasehost.table.remote') }}</label>
+      <input class="input" id="db-remote-{{ r.id }}" type="text" value="{{ r.remote }}" readonly>
+    </div>
+    <div class="field">
+      <label for="db-max-connections-{{ r.id }}">{{ trans('admin/databasehost.table.max_connections') }}</label>
+      <input class="input" id="db-max-connections-{{ r.id }}" type="text" value="{{ r.max_conn }}" readonly>
+    </div>
+    <div class="field">
+      <label for="db-jdbc-{{ r.id }}">{{ trans('admin/databasehost.table.connection_string') }}</label>
+      <div class="row" style="gap:0.5rem;align-items:flex-end">
+        <input class="input mono" style="flex:1;min-width:0" id="db-jdbc-{{ r.id }}" type="password" value="{{ r.jdbc }}" readonly>
+        <button type="button" class="addon icon-btn" style="width:auto;height:auto" data-reveal="db-jdbc-{{ r.id }}">{{ icon('eye', 'icon-sm') }}</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::view.single.modal.actions.close.label') }}</button></div>
+</dialog>
+{% endfor %}
+
+<form id="delete-form" method="post" action="/admin/database-hosts/{{ record.id }}/delete"
+  data-confirm="{{ trans('filament-actions::modal.confirmation') }}"
+  data-confirm-title="{{ trans('filament-actions::delete.single.modal.heading', label=record.name) }}"
+  data-confirm-ok="{{ trans('filament-actions::delete.single.modal.actions.delete.label') }}"></form>
+
+<script>
+  // `afterStateUpdated` of the host field copies its value into Display Name.
+  (function () {
+    const host = document.getElementById('f-host');
+    const name = document.querySelector('#record-form input[name="name"]');
+    if (host && name) host.addEventListener('blur', () => { name.value = host.value; });
+  })();
+</script>
+{% endblock %}
