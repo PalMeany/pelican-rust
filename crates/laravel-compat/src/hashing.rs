@@ -20,7 +20,8 @@ pub fn make(password: &str, rounds: u32) -> Result<String, HashError> {
 }
 
 fn is_bcrypt(hash: &str) -> bool {
-    hash.len() == 60 && (hash.starts_with("$2y$") || hash.starts_with("$2a$") || hash.starts_with("$2b$"))
+    hash.len() == 60
+        && (hash.starts_with("$2y$") || hash.starts_with("$2a$") || hash.starts_with("$2b$"))
 }
 
 /// `Hash::check()`. An empty stored hash never matches (Laravel returns false).
@@ -48,7 +49,10 @@ mod tests {
 
     #[test]
     fn verifies_php_hash() {
-        assert_eq!(check("password", crate::fixtures::BCRYPT_PASSWORD), Ok(true));
+        assert_eq!(
+            check("password", crate::fixtures::BCRYPT_PASSWORD),
+            Ok(true)
+        );
         assert_eq!(check("nope", crate::fixtures::BCRYPT_PASSWORD), Ok(false));
         assert!(!needs_rehash(crate::fixtures::BCRYPT_PASSWORD, 12));
         assert!(needs_rehash(crate::fixtures::BCRYPT_PASSWORD, 10));

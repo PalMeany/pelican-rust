@@ -24,7 +24,11 @@ fn schema_sql(driver: Driver) -> &'static str {
 }
 
 pub fn migration_names() -> Vec<&'static str> {
-    MIGRATIONS.lines().map(str::trim).filter(|l| !l.is_empty()).collect()
+    MIGRATIONS
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect()
 }
 
 /// State of the database relative to the original panel's migrations.
@@ -45,17 +49,29 @@ pub async fn schema_state(db: &DatabaseConnection) -> Result<SchemaState, DbErr>
         return Ok(SchemaState::Empty);
     }
     let rows = db
-        .query_all_raw(Statement::from_string(db.get_database_backend(), "SELECT migration FROM migrations"))
+        .query_all_raw(Statement::from_string(
+            db.get_database_backend(),
+            "SELECT migration FROM migrations",
+        ))
         .await?;
-    let applied: std::collections::HashSet<String> =
-        rows.iter().filter_map(|r| r.try_get::<String>("", "migration").ok()).collect();
+    let applied: std::collections::HashSet<String> = rows
+        .iter()
+        .filter_map(|r| r.try_get::<String>("", "migration").ok())
+        .collect();
     let known = migration_names();
-    let missing: Vec<String> = known.iter().filter(|m| !applied.contains(**m)).map(|m| m.to_string()).collect();
+    let missing: Vec<String> = known
+        .iter()
+        .filter(|m| !applied.contains(**m))
+        .map(|m| m.to_string())
+        .collect();
     if !missing.is_empty() {
         return Ok(SchemaState::Outdated { missing });
     }
     let known_set: std::collections::HashSet<&str> = known.into_iter().collect();
-    let mut unknown: Vec<String> = applied.into_iter().filter(|m| !known_set.contains(m.as_str())).collect();
+    let mut unknown: Vec<String> = applied
+        .into_iter()
+        .filter(|m| !known_set.contains(m.as_str()))
+        .collect();
     unknown.sort();
     Ok(SchemaState::Ready { unknown })
 }
@@ -63,7 +79,9 @@ pub async fn schema_state(db: &DatabaseConnection) -> Result<SchemaState, DbErr>
 pub async fn table_exists(db: &DatabaseConnection, table: &str) -> Result<bool, DbErr> {
     let backend = db.get_database_backend();
     let sql = match backend {
-        sea_orm::DbBackend::Sqlite => "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+        sea_orm::DbBackend::Sqlite => {
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?"
+        }
         sea_orm::DbBackend::MySql => {
             "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?"
         }
@@ -72,7 +90,9 @@ pub async fn table_exists(db: &DatabaseConnection, table: &str) -> Result<bool, 
         }
         _ => return Err(DbErr::Custom("unsupported backend".into())),
     };
-    let row = db.query_one_raw(Statement::from_sql_and_values(backend, sql, [table.into()])).await?;
+    let row = db
+        .query_one_raw(Statement::from_sql_and_values(backend, sql, [table.into()]))
+        .await?;
     Ok(row.is_some())
 }
 
@@ -113,7 +133,9 @@ pub fn split_statements(sql: &str) -> Vec<String> {
 /// Create the full schema in an EMPTY database and record all migrations.
 pub async fn install_fresh(db: &DatabaseConnection, driver: Driver) -> Result<(), DbErr> {
     if schema_state(db).await? != SchemaState::Empty {
-        return Err(DbErr::Custom("database is not empty (a `migrations` table exists)".into()));
+        return Err(DbErr::Custom(
+            "database is not empty (a `migrations` table exists)".into(),
+        ));
     }
     let backend = db.get_database_backend();
     let stmts = split_statements(schema_sql(driver));
@@ -141,22 +163,36 @@ pub async fn install_fresh(db: &DatabaseConnection, driver: Driver) -> Result<()
         _ => "INSERT INTO migrations (migration, batch) VALUES (?, 1)",
     };
     for name in migration_names() {
-        txn.execute_raw(Statement::from_sql_and_values(backend, insert_migration, [name.into()])).await?;
+        txn.execute_raw(Statement::from_sql_and_values(
+            backend,
+            insert_migration,
+            [name.into()],
+        ))
+        .await?;
     }
     // Seed rows written by the original migrations themselves.
-    let now = Utc::now().naive_utc().format("%Y-%m-%d %H:%M:%S").to_string();
+    let now = Utc::now()
+        .naive_utc()
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string();
     let insert_backup_host = match backend {
         sea_orm::DbBackend::Postgres => {
             "INSERT INTO backup_hosts (name, schema, configuration, created_at, updated_at) VALUES ('Local', 'wings', NULL, CAST($1 AS timestamp), CAST($2 AS timestamp))"
         }
-        _ => "INSERT INTO backup_hosts (name, `schema`, configuration, created_at, updated_at) VALUES ('Local', 'wings', NULL, ?, ?)",
+        _ => {
+            "INSERT INTO backup_hosts (name, `schema`, configuration, created_at, updated_at) VALUES ('Local', 'wings', NULL, ?, ?)"
+        }
     };
     let sql = if backend == sea_orm::DbBackend::Sqlite {
         insert_backup_host.replace('`', "\"")
     } else {
         insert_backup_host.to_string()
     };
-    txn.execute_raw(Statement::from_sql_and_values(backend, &sql, [now.clone().into(), now.into()]))
-        .await?;
+    txn.execute_raw(Statement::from_sql_and_values(
+        backend,
+        &sql,
+        [now.clone().into(), now.into()],
+    ))
+    .await?;
     txn.commit().await
 }

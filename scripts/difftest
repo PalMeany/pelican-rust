@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Run differential tests against the original panel for one or more backends.
+#   scripts/difftest [--backend mariadb|mysql|pgsql|sqlite|all] [difftest args...]
+# Restarts panel-orig on the chosen database, then runs the harness inside the
+# dev container with the DNS alias `wings.test` (mock Wings).
+set -euo pipefail
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+backend="mariadb"
+if [[ "${1:-}" == "--backend" ]]; then backend="$2"; shift 2; fi
+backends=("$backend"); [[ "$backend" == "all" ]] && backends=(mariadb mysql pgsql sqlite)
+
+vm() { limactl shell pelican -- sh -c "cd '$REPO/difftest' && $1"; }
+vm "docker compose up -d mariadb mysql postgres >/dev/null 2>&1"
+rc=0
+for b in "${backends[@]}"; do
+  case "$b" in
+    mariadb) envs="DB_CONNECTION=mariadb DB_HOST=mariadb DB_PORT=3306 DB_DATABASE=panel" ;;
+    mysql)   envs="DB_CONNECTION=mysql DB_HOST=mysql DB_PORT=3306 DB_DATABASE=panel" ;;
+    pgsql)   envs="DB_CONNECTION=pgsql DB_HOST=postgres DB_PORT=5432 DB_DATABASE=panel" ;;
+    sqlite)  envs="DB_CONNECTION=sqlite DB_HOST= DB_PORT= DB_DATABASE=database.sqlite" ;;
+    *) echo "unknown backend $b" >&2; exit 2 ;;
+  esac
+  marker="$REPO/../.difftest/orig-backend"
+  if [[ "$(cat "$marker" 2>/dev/null)" != "$b" ]] || ! vm "docker compose ps --status running panel-orig | grep -q panel-orig"; then
+    echo "== starting panel-orig on $b"
+    vm "$envs docker compose up -d --force-recreate panel-orig >/dev/null 2>&1"
+    for _ in $(seq 1 90); do
+      vm "docker compose logs panel-orig 2>&1 | grep -q 'Starting Supervisord'" && break; sleep 2
+    done
+    echo "$b" > "$marker"
+  fi
+  echo "== difftest on $b"
+  PELICAN_NET_ALIAS=wings.test DIFFTEST_BACKEND="$b" TEST_DIFFTEST_BACKEND="$b" \
+    "$REPO/scripts/cargo" run -q -p difftest -- --backend "$b" "$@" || rc=1
+done
+exit $rc

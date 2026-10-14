@@ -38,3 +38,4 @@ sqlite3 "$DATA/sqlite/database.sqlite" .schema > "$RAW/sqlite.schema.sql"
 sqlite3 "$DATA/sqlite/database.sqlite" "select migration from migrations order by id" > "$RAW/migrations.txt"
 
 python3 "$REPO/scripts/schema/sanitize.py" "$RAW" "$REPO/crates/pelican-db/schema"
+python3 "$REPO/scripts/schema/column_order.py" "$REPO/crates/pelican-db/schema" "$REPO/crates/pelican-db/src/column_order.rs"

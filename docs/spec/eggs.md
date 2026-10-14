@@ -107,7 +107,7 @@ so an imported variable with a null/missing `description` or `default_value` fai
 
 | Entry | Behaviour |
 |---|---|
-| `GET /api/application/eggs/{egg:id}/export?format=json|yaml` (`EggController::export`, `EggController.php:78-87`) | `format` validated `nullable|string|in:yaml,json` (`ExportEggRequest.php:11`); `EggFormat::tryFrom(input) ?? YAML` → **default YAML** (the doc comment in the request class says JSON; the code wins). Response is a `StreamedResponse` download, filename `egg-{kebab}.{json|yaml}`, header `Content-Type: application/json` or `application/yaml`. |
+| `GET /api/application/eggs/{egg:id}/export?format=json\|yaml` (`EggController::export`, `EggController.php:78-87`) | `format` validated `nullable\|string\|in:yaml,json` (`ExportEggRequest.php:11`); `EggFormat::tryFrom(input) ?? YAML` → **default YAML** (the doc comment in the request class says JSON; the code wins). Response is a `StreamedResponse` download, filename `egg-{kebab}.{json\|yaml}`, header `Content-Type: application/json` or `application/yaml`. |
 | Admin "Export" action (`ExportEggAction.php:43-52`) | Two buttons that open the API route above in a new tab with `format=json` / `format=yaml` (relies on the browser session being accepted by the application API, permission `export egg`). |
 | `p:egg:check-updates` | Calls the exporter internally to diff against the remote file (§6.3). |
 | `p:egg:normalize` | Re-uses `yamlExport()` + the same `Yaml::dump` call, but on a parsed *file*, not on DB data (§7). |
@@ -654,7 +654,7 @@ idempotency, delete-original, no delete on write failure).
 
 | Path (relative to `panel/`) | Content / use |
 |---|---|
-| `tests/Unit/Console/Commands/Egg/egg-ptdlv2.json` | PTDL_v2 JSON: `startup` string, `rules` as `|` string, `field_type`, CRLF in config JSON text, `\/` escapes, legacy `server.build.default.port` placeholder |
+| `tests/Unit/Console/Commands/Egg/egg-ptdlv2.json` | PTDL_v2 JSON: `startup` string, `rules` as `\|` string, `field_type`, CRLF in config JSON text, `\/` escapes, legacy `server.build.default.port` placeholder |
 | `tests/Unit/Console/Commands/Egg/egg-plcnv3-example.yaml` | exact `p:egg:normalize` output for the file above (byte-level YAML dumper test) |
 | `tests/_fixtures/egg-vanilla-minecraft.yaml` | PLCN_v3 YAML with legacy top-level `image:` data URI (PNG), wrapped multi-line descriptions, multiple docker images, regex rule with `\w`, `sort` values |
 | `tests/_fixtures/egg-bungeecord.yaml` | PLCN_v3 YAML, two variables, tags `minecraft`/`proxy`, `image:` data URI |

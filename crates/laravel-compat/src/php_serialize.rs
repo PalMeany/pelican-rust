@@ -34,7 +34,9 @@ impl PhpValue {
 
     /// Lookup by string key (or by an integer key given as decimal string, like PHP).
     pub fn get(&self, key: &str) -> Option<&PhpValue> {
-        let PhpValue::Array(items) = self else { return None };
+        let PhpValue::Array(items) = self else {
+            return None;
+        };
         items.iter().find_map(|(k, v)| match k {
             PhpKey::Str(s) if s == key.as_bytes() => Some(v),
             PhpKey::Int(i) if i.to_string() == key => Some(v),
@@ -99,7 +101,11 @@ impl fmt::Display for PhpFloat {
         if v != 0.0 && !(1e-4..1e17).contains(&abs) {
             let s = format!("{v:e}"); // e.g. 1.5e20, 1e-7
             let (mant, exp) = s.split_once('e').unwrap_or((&s, "0"));
-            let mant = if mant.contains('.') { mant.to_string() } else { format!("{mant}.0") };
+            let mant = if mant.contains('.') {
+                mant.to_string()
+            } else {
+                format!("{mant}.0")
+            };
             let exp: i32 = exp.parse().unwrap_or(0);
             return write!(f, "{mant}E{}{}", if exp < 0 { '-' } else { '+' }, exp.abs());
         }
@@ -121,7 +127,10 @@ struct Parser<'a> {
 
 impl Parser<'_> {
     fn err(&self, msg: &'static str) -> UnserializeError {
-        UnserializeError { offset: self.i, msg }
+        UnserializeError {
+            offset: self.i,
+            msg,
+        }
     }
 
     fn expect(&mut self, b: u8) -> Result<(), UnserializeError> {
@@ -148,17 +157,23 @@ impl Parser<'_> {
 
     fn int_until(&mut self, end: u8) -> Result<i64, UnserializeError> {
         let raw = self.until(end)?;
-        std::str::from_utf8(raw).ok().and_then(|s| s.parse().ok()).ok_or(UnserializeError {
-            offset: self.i,
-            msg: "invalid integer",
-        })
+        std::str::from_utf8(raw)
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .ok_or(UnserializeError {
+                offset: self.i,
+                msg: "invalid integer",
+            })
     }
 
     fn value(&mut self, depth: usize) -> Result<PhpValue, UnserializeError> {
         if depth > 64 {
             return Err(self.err("nesting too deep"));
         }
-        let tag = *self.s.get(self.i).ok_or_else(|| self.err("unexpected end"))?;
+        let tag = *self
+            .s
+            .get(self.i)
+            .ok_or_else(|| self.err("unexpected end"))?;
         self.i += 1;
         match tag {
             b'N' => {
@@ -188,9 +203,14 @@ impl Parser<'_> {
             }
             b's' => {
                 self.expect(b':')?;
-                let len = usize::try_from(self.int_until(b':')?).map_err(|_| self.err("negative length"))?;
+                let len = usize::try_from(self.int_until(b':')?)
+                    .map_err(|_| self.err("negative length"))?;
                 self.expect(b'"')?;
-                let end = self.i.checked_add(len).filter(|e| *e <= self.s.len()).ok_or_else(|| self.err("string too long"))?;
+                let end = self
+                    .i
+                    .checked_add(len)
+                    .filter(|e| *e <= self.s.len())
+                    .ok_or_else(|| self.err("string too long"))?;
                 let bytes = self.s[self.i..end].to_vec();
                 self.i = end;
                 self.expect(b'"')?;
@@ -199,7 +219,8 @@ impl Parser<'_> {
             }
             b'a' => {
                 self.expect(b':')?;
-                let n = usize::try_from(self.int_until(b':')?).map_err(|_| self.err("negative length"))?;
+                let n = usize::try_from(self.int_until(b':')?)
+                    .map_err(|_| self.err("negative length"))?;
                 self.expect(b'{')?;
                 let mut items = Vec::with_capacity(n.min(1024));
                 for _ in 0..n {

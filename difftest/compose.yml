@@ -78,9 +78,6 @@ services:
       <<: *panel-env
       XDG_DATA_HOME: /pelican-data
     ports: ["18000:80"]
-    extra_hosts:
-      # Mock Wings runs on the macOS host (192.168.5.2 = host.lima.internal).
-      - "wings.test:192.168.5.2"
     volumes:
       - /Users/tazik/Desktop/Code/claude/pelican/.difftest/sqlite:/pelican-data/database
     # No cron/queue workers: nothing may mutate the DB outside a request.

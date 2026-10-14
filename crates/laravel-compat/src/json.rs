@@ -54,7 +54,11 @@ impl<F: Formatter> Formatter for PhpFormatter<F> {
         self.write_f64(w, f64::from(value))
     }
 
-    fn write_string_fragment<W: ?Sized + io::Write>(&mut self, w: &mut W, fragment: &str) -> io::Result<()> {
+    fn write_string_fragment<W: ?Sized + io::Write>(
+        &mut self,
+        w: &mut W,
+        fragment: &str,
+    ) -> io::Result<()> {
         let mut start = 0;
         for (i, ch) in fragment.char_indices() {
             let esc: Option<&[u8]> = match ch {
@@ -67,7 +71,8 @@ impl<F: Formatter> Formatter for PhpFormatter<F> {
             };
             let needs_unicode_escape = (ch as u32) >= 0x80
                 && (!self.has(JSON_UNESCAPED_UNICODE)
-                    || ((ch == '\u{2028}' || ch == '\u{2029}') && !self.has(JSON_UNESCAPED_LINE_TERMINATORS)));
+                    || ((ch == '\u{2028}' || ch == '\u{2029}')
+                        && !self.has(JSON_UNESCAPED_LINE_TERMINATORS)));
             if esc.is_none() && !needs_unicode_escape {
                 continue;
             }
@@ -85,7 +90,11 @@ impl<F: Formatter> Formatter for PhpFormatter<F> {
         w.write_all(&fragment.as_bytes()[start..])
     }
 
-    fn write_char_escape<W: ?Sized + io::Write>(&mut self, w: &mut W, escape: CharEscape) -> io::Result<()> {
+    fn write_char_escape<W: ?Sized + io::Write>(
+        &mut self,
+        w: &mut W,
+        escape: CharEscape,
+    ) -> io::Result<()> {
         match escape {
             CharEscape::Quote if self.has(JSON_HEX_QUOT) => w.write_all(b"\\u0022"),
             CharEscape::Quote => w.write_all(b"\\\""),
@@ -108,7 +117,11 @@ impl<F: Formatter> Formatter for PhpFormatter<F> {
     fn end_array<W: ?Sized + io::Write>(&mut self, w: &mut W) -> io::Result<()> {
         self.inner.end_array(w)
     }
-    fn begin_array_value<W: ?Sized + io::Write>(&mut self, w: &mut W, first: bool) -> io::Result<()> {
+    fn begin_array_value<W: ?Sized + io::Write>(
+        &mut self,
+        w: &mut W,
+        first: bool,
+    ) -> io::Result<()> {
         self.inner.begin_array_value(w, first)
     }
     fn end_array_value<W: ?Sized + io::Write>(&mut self, w: &mut W) -> io::Result<()> {
@@ -120,7 +133,11 @@ impl<F: Formatter> Formatter for PhpFormatter<F> {
     fn end_object<W: ?Sized + io::Write>(&mut self, w: &mut W) -> io::Result<()> {
         self.inner.end_object(w)
     }
-    fn begin_object_key<W: ?Sized + io::Write>(&mut self, w: &mut W, first: bool) -> io::Result<()> {
+    fn begin_object_key<W: ?Sized + io::Write>(
+        &mut self,
+        w: &mut W,
+        first: bool,
+    ) -> io::Result<()> {
         self.inner.begin_object_key(w, first)
     }
     fn end_object_key<W: ?Sized + io::Write>(&mut self, w: &mut W) -> io::Result<()> {
@@ -146,7 +163,11 @@ pub fn php_json_float(v: f64, zero_frac: bool) -> String {
         // zend_gcvt exponent form: mantissa always has a fractional part.
         let s = format!("{v:e}");
         let (mant, exp) = s.split_once('e').unwrap_or((&s, "0"));
-        let mant = if mant.contains('.') { mant.to_string() } else { format!("{mant}.0") };
+        let mant = if mant.contains('.') {
+            mant.to_string()
+        } else {
+            format!("{mant}.0")
+        };
         let exp: i32 = exp.parse().unwrap_or(0);
         return format!("{mant}e{}{}", if exp < 0 { '-' } else { '+' }, exp.abs());
     }
@@ -159,13 +180,22 @@ pub fn php_json_float(v: f64, zero_frac: bool) -> String {
 }
 
 /// `json_encode($value, $flags)`.
-pub fn to_string_with_flags<T: Serialize + ?Sized>(value: &T, flags: u32) -> serde_json::Result<String> {
+pub fn to_string_with_flags<T: Serialize + ?Sized>(
+    value: &T,
+    flags: u32,
+) -> serde_json::Result<String> {
     let mut out = Vec::with_capacity(128);
     if flags & JSON_PRETTY_PRINT != 0 {
-        let fmt = PhpFormatter { inner: PrettyFormatter::with_indent(b"    "), flags };
+        let fmt = PhpFormatter {
+            inner: PrettyFormatter::with_indent(b"    "),
+            flags,
+        };
         value.serialize(&mut serde_json::Serializer::with_formatter(&mut out, fmt))?;
     } else {
-        let fmt = PhpFormatter { inner: CompactFormatter, flags };
+        let fmt = PhpFormatter {
+            inner: CompactFormatter,
+            flags,
+        };
         value.serialize(&mut serde_json::Serializer::with_formatter(&mut out, fmt))?;
     }
     // The formatter only ever writes valid UTF-8.
@@ -187,7 +217,11 @@ mod tests {
         let v = json!({"url": "http://x/y", "u": "ü😀", "c": "\u{1}\n\t\"\\", "e": [], "o": {}});
         assert_eq!(
             to_string(&v).unwrap(),
-            concat!(r#"{"url":"http:\/\/x\/y","u":""#, "\\u00fc\\ud83d\\ude00", r#"","c":"\u0001\n\t\"\\","e":[],"o":{}}"#)
+            concat!(
+                r#"{"url":"http:\/\/x\/y","u":""#,
+                "\\u00fc\\ud83d\\ude00",
+                r#"","c":"\u0001\n\t\"\\","e":[],"o":{}}"#
+            )
         );
         assert_eq!(
             to_string_with_flags(&v, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE).unwrap(),
@@ -206,10 +240,20 @@ mod tests {
         assert_eq!(php_json_float(0.1, false), "0.1");
         // Reference output of PHP 8.5 json_encode().
         let cases: &[(f64, &str)] = &[
-            (1.0, "1"), (0.1, "0.1"), (1e20, "1.0e+20"), (1e-5, "1.0e-5"), (0.0001, "0.0001"),
-            (0.00012, "0.00012"), (1.5e15, "1500000000000000"), (1e15, "1000000000000000"),
-            (999999999999999.0, "999999999999999"), (-0.0, "-0"), (3.0e-7, "3.0e-7"), (2.5, "2.5"),
-            (1.0 / 3.0, "0.3333333333333333"), (1e14, "100000000000000"),
+            (1.0, "1"),
+            (0.1, "0.1"),
+            (1e20, "1.0e+20"),
+            (1e-5, "1.0e-5"),
+            (0.0001, "0.0001"),
+            (0.00012, "0.00012"),
+            (1.5e15, "1500000000000000"),
+            (1e15, "1000000000000000"),
+            (999999999999999.0, "999999999999999"),
+            (-0.0, "-0"),
+            (3.0e-7, "3.0e-7"),
+            (2.5, "2.5"),
+            (1.0 / 3.0, "0.3333333333333333"),
+            (1e14, "100000000000000"),
         ];
         for (v, want) in cases {
             assert_eq!(php_json_float(*v, false), *want, "{v}");

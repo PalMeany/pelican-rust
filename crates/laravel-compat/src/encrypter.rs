@@ -5,7 +5,7 @@
 //! `mac` = hex(HMAC-SHA256(key, iv_b64 . value_b64)). `encrypt()` serializes the
 //! value with PHP `serialize()` first; `encryptString()` does not.
 
-use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
+use aes::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use hmac::{Hmac, Mac};
@@ -31,7 +31,9 @@ pub enum DecryptError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum KeyError {
-    #[error("Unsupported cipher or incorrect key length. Supported ciphers are: aes-128-cbc, aes-256-cbc.")]
+    #[error(
+        "Unsupported cipher or incorrect key length. Supported ciphers are: aes-128-cbc, aes-256-cbc."
+    )]
     Unsupported,
     #[error("invalid base64 in key")]
     Base64,
@@ -139,15 +141,20 @@ impl Encrypter {
 
     pub fn decrypt_bytes(&self, payload: &str) -> Result<Vec<u8>, DecryptError> {
         let json = php_base64_decode(payload).ok_or(DecryptError::InvalidPayload)?;
-        let v: serde_json::Value = serde_json::from_slice(&json).map_err(|_| DecryptError::InvalidPayload)?;
+        let v: serde_json::Value =
+            serde_json::from_slice(&json).map_err(|_| DecryptError::InvalidPayload)?;
         let field = |k: &str| v.get(k).and_then(|x| x.as_str());
-        let (Some(iv_b64), Some(value_b64), Some(mac)) = (field("iv"), field("value"), field("mac")) else {
+        let (Some(iv_b64), Some(value_b64), Some(mac)) =
+            (field("iv"), field("value"), field("mac"))
+        else {
             return Err(DecryptError::InvalidPayload);
         };
         if v.get("tag").is_some_and(|t| !t.is_null() && !t.is_string()) {
             return Err(DecryptError::InvalidPayload);
         }
-        let iv = STANDARD.decode(iv_b64).map_err(|_| DecryptError::InvalidPayload)?;
+        let iv = STANDARD
+            .decode(iv_b64)
+            .map_err(|_| DecryptError::InvalidPayload)?;
         if iv.len() != 16 {
             return Err(DecryptError::InvalidPayload);
         }
@@ -157,7 +164,12 @@ impl Encrypter {
         }
         let key = std::iter::once(&self.key)
             .chain(self.previous_keys.iter())
-            .find(|k| hmac_hex(k, iv_b64, value_b64).as_bytes().ct_eq(mac.as_bytes()).into())
+            .find(|k| {
+                hmac_hex(k, iv_b64, value_b64)
+                    .as_bytes()
+                    .ct_eq(mac.as_bytes())
+                    .into()
+            })
             .ok_or(DecryptError::InvalidMac)?;
         // openssl_decrypt(options 0) base64-decodes the value itself.
         let ct = php_base64_decode(value_b64).ok_or(DecryptError::CouldNotDecrypt)?;
@@ -215,12 +227,17 @@ mod tests {
 
     #[test]
     fn previous_keys_and_bad_mac() {
-        let old = Encrypter::from_env_values("base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", None).unwrap();
+        let old =
+            Encrypter::from_env_values("base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", None)
+                .unwrap();
         let p = old.encrypt_string("x");
         let cur = Encrypter::from_env_values(KEY, None).unwrap();
         assert_eq!(cur.decrypt_string(&p), Err(DecryptError::InvalidMac));
-        let both =
-            Encrypter::from_env_values(KEY, Some("base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")).unwrap();
+        let both = Encrypter::from_env_values(
+            KEY,
+            Some("base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+        )
+        .unwrap();
         assert_eq!(both.decrypt_string(&p).unwrap(), "x");
     }
 
@@ -231,9 +248,15 @@ mod tests {
         use crate::fixtures::*;
         let e = Encrypter::from_env_values(KEY, None).unwrap();
         assert_eq!(e.decrypt_string(ENCRYPT_STRING).unwrap(), "wings-token/+=");
-        assert_eq!(e.decrypt_string_lenient(ENCRYPT_STRING).unwrap(), "wings-token/+=");
+        assert_eq!(
+            e.decrypt_string_lenient(ENCRYPT_STRING).unwrap(),
+            "wings-token/+="
+        );
         assert_eq!(e.decrypt_string_lenient(ENCRYPT).unwrap(), "wings-token/+=");
-        assert_eq!(e.decrypt_serialized(ENCRYPT_INT_42).unwrap(), PhpValue::Int(42));
+        assert_eq!(
+            e.decrypt_serialized(ENCRYPT_INT_42).unwrap(),
+            PhpValue::Int(42)
+        );
         let arr = e.decrypt_serialized(ENCRYPT_ARRAY).unwrap();
         assert_eq!(arr.get("a"), Some(&PhpValue::Int(1)));
     }

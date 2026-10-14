@@ -1,4 +1,45 @@
-//! SeaORM entities for the tables created by the original panel's migrations.
+//! SeaORM entities for the tables created by the original panel migrations.
 //! Column types follow the cross-backend rules of ADR-0004 (see `types`).
 
+pub mod activity_log_subjects;
+pub mod activity_logs;
+pub mod allocations;
+pub mod api_keys;
+pub mod api_logs;
+pub mod backup_host_node;
+pub mod backup_hosts;
+pub mod backups;
+pub mod database_host_node;
+pub mod database_hosts;
+pub mod databases;
+pub mod egg_variables;
+pub mod eggs;
+pub mod failed_jobs;
+pub mod jobs;
+pub mod migrations;
+pub mod model_has_permissions;
+pub mod model_has_roles;
+pub mod mountables;
+pub mod mounts;
+pub mod node_role;
 pub mod nodes;
+pub mod notifications;
+pub mod passkeys;
+pub mod password_resets;
+pub mod permissions;
+pub mod role_has_permissions;
+pub mod roles;
+pub mod schedules;
+pub mod server_transfers;
+pub mod server_user_settings;
+pub mod server_variables;
+pub mod servers;
+pub mod sessions;
+pub mod settings;
+pub mod subusers;
+pub mod tasks;
+pub mod tasks_log;
+pub mod user_ssh_keys;
+pub mod users;
+pub mod webhook_configurations;
+pub mod webhooks;

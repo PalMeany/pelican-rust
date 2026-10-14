@@ -199,6 +199,56 @@ would throw `ClassMorphViolationException`.
 * Calls made with `Http::daemon()` directly (transfer notify, `Server::send`) do **not** throw on
   non-2xx responses.
 
+### 0.11 Database-engine specifics and the diff-test configuration
+
+Schema dumps are in `crates/pelican-db/schema/{mysql,mariadb,pgsql,sqlite}.sql`. The diff harness
+(`docs/decisions/0007-differential-testing.md`) runs the PHP panel with `QUEUE_CONNECTION=sync`,
+`CACHE_STORE=array` and `SESSION_DRIVER=array`.
+
+* **Booleans on bind**: PHP bools become `1`/`0`
+  (`vendor/.../Database/Connection.php:771-787`). On PostgreSQL they also become `1`/`0` unless
+  emulated prepares are on, in which case they become `'true'`/`'false'`
+  (`vendor/.../Database/PostgresConnection.php:31-46`). PostgreSQL coerces either form into
+  `boolean` or `smallint` columns. In pgsql some flag columns are `smallint`, for example
+  `backups.is_locked`, `egg_variables.user_viewable`, `mounts.read_only`; others are `boolean`.
+* **JSON columns**:
+  * pgsql `json` (not `jsonb`) stores the input text **verbatim**, so PHP's exact bytes (§0.2)
+    are visible there.
+  * MySQL `JSON` re-serializes on read.
+  * MariaDB `JSON` is `LONGTEXT` and stores verbatim.
+  * SQLite `TEXT` stores verbatim.
+  * Several "array" columns are plain `text` in pgsql (`nodes.tags`, `eggs.tags`,
+    `backups.ignored_files`) and are verbatim on every engine.
+* **Timestamps**: pgsql uses `timestamp(0) without time zone`. A `Y-m-d H:i:s` UTC string goes
+  in unchanged.
+* **`whereJsonContains`** (read-only; used by webhook matching and `NodeAutoDeployService`):
+  * MySQL/MariaDB: `json_contains(col, '"x"')`
+  * pgsql: `(col)::jsonb @> '["x"]'`
+  * SQLite: `json_each`
+* **`inRandomOrder()`**: MySQL `RAND()`, pgsql and SQLite `RANDOM()`. **`lockForUpdate()`**
+  compiles to `FOR UPDATE` and is a no-op on SQLite.
+* **Effects of `QUEUE_CONNECTION=sync`**: every queued item from §0.9 runs inline, **inside**
+  whatever transaction dispatched it. No `jobs` rows are written. Instead:
+  * **`notifications` rows** come from Filament DB notifications, sent by the `SubUserAdded`,
+    `SubUserRemoved`, `Installed` and `BackupCompleted` listeners. Columns:
+    * `id = (string) Str::uuid()` (v4; `vendor/.../Notifications/NotificationSender.php:117`)
+    * `type = 'Filament\Notifications\DatabaseNotification'`
+    * `notifiable_type = 'user'`, `notifiable_id`
+    * `read_at = NULL`, timestamps
+    * `data` = json (flags 0) of Filament's `getDatabaseMessage()`
+      (`vendor/filament/notifications/src/Notification.php:69-94,237-245`), with keys in this
+      order: `actions`, `body`, `color`, `duration` (`"persistent"`), `icon`, `iconColor`,
+      `iconSize`, `status`, `title`, `view`, `viewData`, `format` (`"filament"`).
+  * **Mail notifications** go to `MAIL_MAILER` (default `log`). They write no DB rows.
+  * **`RevokeSftpAccessJob`** becomes an inline Wings `POST /api/deauthorize-user
+    {user: uuid, servers: [server uuid] | []}`
+    (`app/Repositories/Daemon/DaemonServerRepository.php:147-153`). A `ConnectionException` is
+    swallowed through `release()`.
+  * **`ProcessWebhook`** inserts a `webhooks` row inline, but only when a matching
+    `webhook_configurations` row exists.
+  * **`RunTaskJob`** with a `delay` still runs immediately under `sync`. Manual schedule
+    execution always uses `dispatchNow`.
+
 ---
 
 ## 1. Models
@@ -926,8 +976,11 @@ request.
 
 * **Lazy instance** `getActivity()` (198-225): `new ActivityLog([ip => Request::ip(),
   properties => Collection([]), api_key_id => targetable.apiKeyId])`, then:
-  * **Subject first**: the targetable subject set by middleware (`ServerSubject` → the route's
-    Server; `AccountSubject` → the user). Otherwise, the Filament tenant if it is a Server.
+  * **Subject first**: the targetable subject set by middleware. `ServerSubject` (on
+    `/api/client/servers/{server}/*`, `routes/api-client.php:54`) sets the route's Server.
+    `AccountSubject` (on `/api/client/account/*`, `routes/api-client.php:22`) sets the user.
+    Otherwise it is the Filament tenant if that is a Server. Application and remote routes have no
+    subject middleware.
   * **Actor**: the targetable actor, else `auth()->guard()->user()`. After `auth:sanctum` the
     default guard is `sanctum`. `actor_type` is `'user'`.
 * `event()`, `description()`, `property(key|array, value)` (merge or put, preserving insertion
@@ -1734,9 +1787,10 @@ Defaults: 256/1, 256/1, 2/1, 5/1, 3/15, 2/1, 10/15, 5/10, 2/1.
    `Authenticate` → `shouldUse('sanctum')` changes `auth.defaults.guard` and Role has no
    `guard_name` default. Verify on a live panel; this affects later `assignRole` (GuardDoesNotMatch).
 4. **Queue driver** decides whether `jobs` rows or real side effects appear (notifications rows,
-   `webhooks` rows, Wings deauthorize calls). The harness must pin `QUEUE_CONNECTION`; `sync` is
-   recommended. With `database`, the `payload` column contains serialized PHP and is not
-   reproducible.
+   `webhooks` rows, Wings deauthorize calls). The harness pins `QUEUE_CONNECTION=sync` (decision
+   0007), so the Rust in-process queue (decision 0009) must reproduce the inline effects in §0.11,
+   with the same rows and the same transaction placement. Production PHP defaults to `database`,
+   which writes `jobs` rows with serialized-PHP payloads; that path is deliberately not reproduced.
 5. **JSON byte equality**. PHP emits compact JSON with escaped `/` and `\uXXXX`. On MySQL `JSON`
    columns the server re-serializes; on MariaDB and SQLite the bytes are verbatim. Decide per
    column whether to compare byte-exact (TEXT: Egg `config_*`, `server_variables.variable_value`)

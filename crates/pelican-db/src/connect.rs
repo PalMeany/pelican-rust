@@ -69,9 +69,13 @@ pub struct DbConfig {
 impl DbConfig {
     /// Build from env-like lookups. `base_path` is the panel root; SQLite paths
     /// are resolved against `<base_path>/database` like Laravel's `database_path()`.
-    pub fn from_lookup(get: impl Fn(&str) -> Option<String>, base_path: &Path) -> Result<Self, String> {
+    pub fn from_lookup(
+        get: impl Fn(&str) -> Option<String>,
+        base_path: &Path,
+    ) -> Result<Self, String> {
         let driver_s = get("DB_CONNECTION").unwrap_or_else(|| "sqlite".into());
-        let driver = Driver::parse(&driver_s).ok_or_else(|| format!("unsupported DB_CONNECTION `{driver_s}`"))?;
+        let driver = Driver::parse(&driver_s)
+            .ok_or_else(|| format!("unsupported DB_CONNECTION `{driver_s}`"))?;
         let database_raw = get("DB_DATABASE");
         let database = match driver {
             Driver::Sqlite => {
@@ -79,7 +83,11 @@ impl DbConfig {
                 if db.starts_with('/') || db == ":memory:" {
                     db
                 } else {
-                    base_path.join("database").join(db).to_string_lossy().into_owned()
+                    base_path
+                        .join("database")
+                        .join(db)
+                        .to_string_lossy()
+                        .into_owned()
                 }
             }
             _ => database_raw.unwrap_or_else(|| "panel".into()),
@@ -94,7 +102,10 @@ impl DbConfig {
         };
         let truthy = |k: &str, default: bool| match get(k).as_deref() {
             None => default,
-            Some(v) => matches!(v.to_ascii_lowercase().as_str(), "true" | "(true)" | "1" | "on" | "yes"),
+            Some(v) => matches!(
+                v.to_ascii_lowercase().as_str(),
+                "true" | "(true)" | "1" | "on" | "yes"
+            ),
         };
         Ok(DbConfig {
             driver,
@@ -117,7 +128,9 @@ impl DbConfig {
             strict: truthy("DB_STRICT_MODE", false),
             schema: get("DB_SCHEMA").unwrap_or_else(|| "public".into()),
             foreign_keys: truthy("DB_FOREIGN_KEYS", true),
-            max_connections: get("PELICAN_DB_POOL").and_then(|v| v.parse().ok()).unwrap_or(16),
+            max_connections: get("PELICAN_DB_POOL")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(16),
         })
     }
 
@@ -153,7 +166,9 @@ fn urlencode(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
         match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
             _ => out.push_str(&format!("%{b:02X}")),
         }
     }
@@ -174,8 +189,15 @@ fn laravel_sql_mode_statement(strict: bool, server_version: &str) -> &'static st
 }
 
 fn version_ge(v: &str, min: (u32, u32, u32)) -> bool {
-    let mut parts = v.split(|c: char| !c.is_ascii_digit()).filter(|p| !p.is_empty()).map(|p| p.parse::<u32>().unwrap_or(0));
-    let cur = (parts.next().unwrap_or(0), parts.next().unwrap_or(0), parts.next().unwrap_or(0));
+    let mut parts = v
+        .split(|c: char| !c.is_ascii_digit())
+        .filter(|p| !p.is_empty())
+        .map(|p| p.parse::<u32>().unwrap_or(0));
+    let cur = (
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+    );
     cur >= min
 }
 
@@ -203,13 +225,18 @@ pub async fn connect(cfg: &DbConfig) -> Result<DatabaseConnection, DbErr> {
                         use sea_orm::sqlx::{Executor, Row};
                         let row = conn.fetch_one("SELECT VERSION()").await?;
                         let version: String = row.try_get(0)?;
-                        conn.execute(laravel_sql_mode_statement(strict, &version)).await?;
+                        conn.execute(laravel_sql_mode_statement(strict, &version))
+                            .await?;
                         Ok(())
                     })
                 })
             });
             opts.map_sqlx_mysql_opts(move |o| {
-                let mut o = o.pipes_as_concat(false).no_engine_substitution(false).timezone(None).charset(&charset);
+                let mut o = o
+                    .pipes_as_concat(false)
+                    .no_engine_substitution(false)
+                    .timezone(None)
+                    .charset(&charset);
                 if let Some(c) = &collation {
                     o = o.collation(c);
                 }

@@ -1,0 +1,13 @@
+name: smoke/client-unauthenticated
+description: Client API without credentials returns the Laravel JSON 401.
+steps:
+  - path: /api/client
+    expect_status: 401
+  - path: /api/client
+    accept_json: false
+---
+name: smoke/application-unauthenticated
+steps:
+  - path: /api/application/users
+    expect_status: 401
+  - path: /api/remote/servers
