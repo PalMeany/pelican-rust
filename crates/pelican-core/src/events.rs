@@ -88,20 +88,6 @@ impl FilamentNotification {
     }
 }
 
-/// `Server::saved` hook: an owner must not also be a subuser.
-pub async fn server_saved<C: ConnectionTrait>(db: &C, server: &servers::Model, _ip: String) -> Result<(), DbErr> {
-    let owner_sub = subusers::Entity::find()
-        .filter(subusers::Column::ServerId.eq(server.id))
-        .filter(subusers::Column::UserId.eq(server.owner_id))
-        .one(db)
-        .await?;
-    if owner_sub.is_some() {
-        // SubuserDeletionService arrives with the client API (M4).
-        return Err(DbErr::Custom("owner subuser deletion is not implemented yet".into()));
-    }
-    Ok(())
-}
-
 /// `ServerInstalledListener` (DB notification; mail is sent via MAIL_MAILER).
 pub async fn server_installed<C: ConnectionTrait>(
     db: &C,

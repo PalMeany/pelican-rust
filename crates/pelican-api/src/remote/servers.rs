@@ -226,7 +226,7 @@ pub async fn install_store(
         }
         q.col_expr(servers::Column::UpdatedAt, Expr::value(now)).exec(&st.db).await?;
     }
-    pelican_core::events::server_saved(&st.db, &server, ctx.ip.to_string()).await?;
+    crate::services::server_saved(&st, &ctx, &st.db, &server).await?;
     pelican_core::events::server_installed(&st.db, &server, successful, initial_install, &ctx.root).await?;
     Ok(no_content())
 }

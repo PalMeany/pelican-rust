@@ -163,7 +163,7 @@ pub async fn restore(State(st): State<AppState>, Extension(ctx): Extension<Ctx>,
             .exec(&st.db)
             .await?;
     }
-    pelican_core::events::server_saved(&st.db, &server, ctx.ip.to_string()).await?;
+    crate::services::server_saved(&st, &ctx, &st.db, &server).await?;
     // The failure event name contains a `.` instead of `:` in the original.
     let event = if php_boolean(input.get("successful")) {
         "server:backup.restore-complete"

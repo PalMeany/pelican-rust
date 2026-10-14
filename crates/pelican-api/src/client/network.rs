@@ -8,7 +8,7 @@ use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use pelican_core::activity::morph;
 use pelican_core::state::AppState;
-use pelican_core::{events, time};
+use pelican_core::time;
 use pelican_db::Timestamp;
 use pelican_db::entities::{allocations, servers};
 use pelican_db::raw;
@@ -330,7 +330,7 @@ pub async fn set_primary(State(st): State<AppState>, Extension(ctx): Extension<C
             },
         )
         .await?;
-        events::server_saved(&st.db, &server, ctx.ip.to_string()).await?;
+        crate::services::server_saved(&st, &ctx, &st.db, &server).await?;
     }
     ctx.activity("server:allocation.primary")
         .subject(morph::ALLOCATION, alloc.id.0)
@@ -408,7 +408,7 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
                 },
             )
             .await?;
-            events::server_saved(&txn, &server, ctx.ip.to_string()).await?;
+            crate::services::server_saved(&st, &ctx, &txn, &server).await?;
         }
         if let Some(p) = newp {
             ctx.activity("server:allocation.primary")

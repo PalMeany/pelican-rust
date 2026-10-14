@@ -7,7 +7,7 @@ use axum::extract::{OriginalUri, Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use pelican_core::state::AppState;
-use pelican_db::entities::{database_hosts, databases, nodes, server_transfers, servers, subusers, users};
+use pelican_db::entities::{database_hosts, databases, nodes, server_transfers, servers, users};
 use pelican_db::{Bool, Int, Timestamp, raw};
 use sea_orm::{
     ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, QueryFilter, TransactionTrait,
@@ -39,26 +39,6 @@ pub(super) async fn node_conn<C: ConnectionTrait>(
 
 fn wings_err(e: pelican_wings::WingsError) -> ApiError {
     ApiError::internal(e.code())
-}
-
-/// `Server::saved` hook: a subuser entry of the (new) owner is removed
-/// through `SubuserDeletionService`.
-pub(super) async fn server_saved<C: ConnectionTrait>(
-    st: &AppState,
-    ctx: &Ctx,
-    db: &C,
-    server: &servers::Model,
-) -> ApiResult<()> {
-    let sub = subusers::Entity::find()
-        .filter(subusers::Column::ServerId.eq(server.id))
-        .filter(subusers::Column::UserId.eq(server.owner_id))
-        .one(db)
-        .await?;
-    if let Some(sub) = sub {
-        let user = users::Entity::find_by_id(sub.user_id).one(db).await?.ok_or_else(ApiError::model_not_found)?;
-        crate::client::subusers::delete_subuser_in(st, ctx, db, server, &sub, &user).await?;
-    }
-    Ok(())
 }
 
 /// `GET /servers`.
@@ -252,7 +232,7 @@ pub async fn details(State(st): State<AppState>, Extension(ctx): Extension<Ctx>,
     s.owner_id = Int(owner);
     s.name = name;
     s.description = Some(description);
-    server_saved(&st, &ctx, &txn, &s).await?;
+    crate::services::server_saved(&st, &ctx, &txn, &s).await?;
     if s.owner_id != old_owner.id {
         crate::client::subusers::revoke(&st, &txn, &s, &old_owner.uuid).await?;
     }
@@ -287,7 +267,7 @@ async fn toggle_suspension(st: &AppState, ctx: &Ctx, suspend: bool) -> ApiResult
     )
     .await?;
     s.status = status;
-    server_saved(st, ctx, &st.db, &s).await?;
+    crate::services::server_saved(st, ctx, &st.db, &s).await?;
     let conn = node_conn(st, &st.db, s.node_id).await?;
     st.wings.sync_server(&conn, &s.uuid).await.map_err(wings_err)?;
     Ok(no_content())
@@ -322,7 +302,7 @@ pub async fn reinstall(State(st): State<AppState>, Extension(ctx): Extension<Ctx
         .await?;
         s.status = Some("installing".into());
     }
-    server_saved(&st, &ctx, &txn, &s).await?;
+    crate::services::server_saved(&st, &ctx, &txn, &s).await?;
     st.wings.reinstall_server(&conn, &s.uuid).await.map_err(wings_err)?;
     txn.commit().await?;
     Ok(no_content())

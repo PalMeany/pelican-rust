@@ -14,6 +14,7 @@ pub mod pipeline;
 pub mod query;
 pub mod remote;
 pub mod resources;
+pub mod services;
 pub mod url_rule;
 pub mod validation;
 
