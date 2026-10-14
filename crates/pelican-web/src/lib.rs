@@ -18,6 +18,7 @@ pub mod views;
 
 mod admin;
 mod app;
+mod server;
 
 use axum::Router;
 use axum::http::{HeaderName, HeaderValue};
@@ -55,6 +56,7 @@ pub fn router(state: AppState) -> Router {
         .route("/logout", post(auth::logout))
         .merge(app::routes())
         .merge(admin::routes())
+        .merge(server::routes())
         .fallback(error::not_found)
         .layer(from_fn(csrf::layer))
         .layer(from_fn_with_state(state.clone(), session::layer));

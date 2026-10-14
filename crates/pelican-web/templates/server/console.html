@@ -1,0 +1,44 @@
+{% extends "layouts/panel.html" %}
+{% block head %}
+<link rel="stylesheet" href="{{ asset('vendor/xterm/xterm.css') }}">
+<script src="{{ asset('vendor/xterm/xterm.js') }}" defer></script>
+<script src="{{ asset('vendor/xterm/addon-fit.js') }}" defer></script>
+<script src="{{ asset('vendor/xterm/addon-web-links.js') }}" defer></script>
+<script src="{{ asset('vendor/xterm/addon-search.js') }}" defer></script>
+<script src="{{ asset('js/console.js') }}" defer></script>
+{% if font != 'monospace' %}<style>@font-face { font-family: '{{ font }}'; src: url('/storage/fonts/{{ font }}.ttf'); }</style>{% endif %}
+{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="btn-group" role="group">
+    {% if can.start %}<button type="button" class="btn" data-power="start" disabled>{{ icon('player-play-filled', 'icon-sm') }}{{ trans('server/console.power_actions.start') }}</button>{% endif %}
+    {% if can.restart %}<button type="button" class="btn btn-gray" data-power="restart" disabled>{{ icon('reload', 'icon-sm') }}{{ trans('server/console.power_actions.restart') }}</button>{% endif %}
+    {% if can.stop %}<button type="button" class="btn btn-danger" data-power="stop" disabled>{{ icon('player-stop-filled', 'icon-sm') }}{{ trans('server/console.power_actions.stop') }}</button>
+    <button type="button" class="btn btn-danger" data-power="kill" hidden disabled title="{{ trans('server/console.power_actions.kill_tooltip') }}">{{ icon('alert-square', 'icon-sm') }}{{ trans('server/console.power_actions.kill') }}</button>{% endif %}
+  </div>
+</div>
+<div class="grid grid-3 stat-blocks">
+  <div class="card stat-sm"><div class="label">{{ trans('server/console.labels.name') }}</div><div class="value copyable" data-copy="{{ server.name }}">{{ server.name }}</div></div>
+  <div class="card stat-sm"><div class="label">{{ trans('server/console.labels.status') }}</div><div class="value" id="server-stat-status">{{ condition }}</div></div>
+  <div class="card stat-sm"><div class="label">{{ trans('server/console.labels.address') }}</div><div class="value copyable" data-copy="{{ address }}">{{ address }}</div></div>
+  <div class="card stat-sm"><div class="label">{{ trans('server/console.labels.cpu') }}</div><div class="value"><span id="server-stat-cpu" data-limit="{{ cpu_limit }}">—{{ cpu_limit }}</span></div></div>
+  <div class="card stat-sm"><div class="label">{{ trans('server/console.labels.memory') }}</div><div class="value"><span id="server-stat-memory" data-limit="{{ memory_limit }}">—{{ memory_limit }}</span></div></div>
+  <div class="card stat-sm"><div class="label">{{ trans('server/console.labels.disk') }}</div><div class="value"><span id="server-stat-disk">—</span>{{ disk_limit }}</div></div>
+</div>
+<div class="card console-card">
+  <div id="terminal"></div>
+  {% if can.command %}
+  <div class="console-input">
+    {{ icon('chevrons-right', 'icon-sm') }}
+    <input id="send-command" type="text" autocomplete="off" spellcheck="false" readonly>
+  </div>
+  {% endif %}
+</div>
+<div class="grid grid-3">
+  <div class="card"><div class="card-head"><h3>{{ trans('server/console.labels.cpu') }}</h3></div><div class="card-body"><canvas class="chart" id="chart-cpu" height="120"></canvas></div></div>
+  <div class="card"><div class="card-head"><h3>{{ trans('server/console.labels.memory') }}</h3></div><div class="card-body"><canvas class="chart" id="chart-memory" height="120"></canvas></div></div>
+  <div class="card"><div class="card-head"><h3>{{ trans('server/console.labels.network') }} <span id="server-network-heading" class="muted small"></span></h3></div><div class="card-body"><canvas class="chart" id="chart-network" height="120"></canvas></div></div>
+</div>
+<script type="application/json" id="console-config">{{ cfg | safe }}</script>
+{% endblock %}

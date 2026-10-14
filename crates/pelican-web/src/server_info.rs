@@ -248,11 +248,19 @@ pub fn condition(server: &servers::Model, details: &Value, locale: &str) -> (Str
     }
 }
 
+/// `isInstalled()`: not installing and not a failed (re)install.
+pub fn is_installed(server: &servers::Model) -> bool {
+    !matches!(
+        ServerState::parse(server.status.as_deref()),
+        Some(ServerState::Installing | ServerState::InstallFailed | ServerState::ReinstallFailed)
+    )
+}
+
 /// `isInConflictState()` (transfer check needs the caller's lookup).
 pub fn in_conflict_state(server: &servers::Model, node: &nodes::Model, has_transfer: bool) -> bool {
     matches!(ServerState::parse(server.status.as_deref()), Some(ServerState::Suspended | ServerState::RestoringBackup))
         || node.maintenance_mode.0
-        || server.installed_at.is_none()
+        || !is_installed(server)
         || has_transfer
 }
 

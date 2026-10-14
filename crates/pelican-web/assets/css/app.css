@@ -325,3 +325,16 @@ dialog.modal::backdrop { background: rgb(9 9 11 / 0.5); }
 .bg-success { background: var(--success-600); } .bg-danger { background: var(--danger-600); } .bg-warning { background: var(--warning-500); }
 .bg-info { background: var(--info-500); } .bg-primary { background: var(--primary-600); } .bg-gray { background: var(--gray-400); }
 .server-card-stats > div { min-width: 0; overflow-wrap: anywhere; }
+
+/* ---------- server console ---------- */
+.btn-group { display: inline-flex; gap: 0.5rem; flex-wrap: wrap; }
+.stat-blocks { gap: 1rem; }
+.stat-sm { padding: 0.875rem 1rem; }
+.stat-sm .label { font-size: 0.8125rem; color: var(--text-2); }
+.stat-sm .value { font-size: 1.125rem; font-weight: 600; overflow-wrap: anywhere; }
+.console-card { overflow: hidden; background: rgb(19 26 32); border-color: rgb(255 255 255 / 0.08); }
+#terminal { padding: 0.5rem 0.75rem; min-height: 10rem; }
+.console-input { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.75rem; border-top: 1px solid rgb(255 255 255 / 0.1); color: var(--gray-400); }
+.console-input input { flex: 1; background: transparent; border: 0; color: #e4e4e7; font: 0.875rem var(--mono); padding: 0.5rem 0; outline: none; }
+.console-input input[readonly] { cursor: not-allowed; opacity: 0.6; }
+canvas.chart { width: 100%; height: 120px; display: block; }
