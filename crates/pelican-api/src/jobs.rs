@@ -409,7 +409,10 @@ pub fn spawn_scheduler(live: pelican_core::state::Live) {
             let now = chrono::Utc::now();
             let wait = 60 - (now.timestamp() % 60) as u64;
             tokio::time::sleep(Duration::from_secs(wait)).await;
-            run_schedule(&live.get(), chrono::Utc::now()).await;
+            let st = live.get();
+            let now = chrono::Utc::now();
+            crate::health::record_heartbeats(now);
+            run_schedule(&st, now).await;
         }
     });
 }
@@ -516,6 +519,10 @@ async fn run_schedule(st: &AppState, now: chrono::DateTime<chrono::Utc>) {
     }
     let env = &st.config.env;
     let (hour, minute) = (now.hour(), now.minute());
+    if minute % 5 == 0 {
+        // RunHealthChecksCommand (everyFiveMinutes).
+        crate::health::run_checks(st).await;
+    }
     if minute % 30 == 0 {
         let age = env.int_or("BACKUP_PRUNE_AGE", 360);
         if age > 0 {

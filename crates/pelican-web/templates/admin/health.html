@@ -1,0 +1,20 @@
+{% extends "layouts/panel.html" %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    <form method="post" action="/admin/health/refresh">{{ csrf_field() }}<button class="btn btn-gray" type="submit" title="{{ trans('admin/health.refresh') }}">{{ icon('refresh', 'icon-sm') }}</button></form>
+  </div>
+</div>
+{% if checks %}
+<div class="grid grid-2">
+  {% for c in checks %}
+  <div class="card card-body row health-check" style="align-items:flex-start;flex-wrap:nowrap">
+    <span class="health-icon bg-{{ c.color }}">{{ icon(c.icon, 'icon text-' ~ c.color) }}</span>
+    <div><div style="font-weight:700;font-size:1.125rem">{{ c.label }}</div><div class="muted small">{{ c.message }}</div></div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+<p class="{{ 'text-danger' if stale else 'muted' }}" style="text-align:center;font-weight:500">{{ trans('admin/health.checked', time=(last_ran_at | ago)) }}</p>
+{% endblock %}

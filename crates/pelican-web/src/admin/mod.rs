@@ -2,8 +2,10 @@
 //! resources. Permissions follow the spatie names (`viewList mount`, …).
 
 mod api_keys;
+mod dashboard;
 mod database_hosts;
 mod eggs;
+mod health;
 mod mounts;
 mod nodes;
 mod roles;
@@ -29,8 +31,10 @@ use crate::error::{WebError, WebResult};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .merge(api_keys::routes())
+        .merge(dashboard::routes())
         .merge(database_hosts::routes())
         .merge(eggs::routes())
+        .merge(health::routes())
         .merge(mounts::routes())
         .merge(nodes::routes())
         .merge(roles::routes())
@@ -70,6 +74,11 @@ pub struct NavItem {
     pub icon: &'static str,
     pub active: bool,
     pub badge: Option<String>,
+    /// `getNavigationBadgeColor()` / `getNavigationBadgeTooltip()`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub badge_color: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub badge_tooltip: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -110,6 +119,8 @@ impl Admin {
             icon,
             active: slug == active,
             badge,
+            badge_color: None,
+            badge_tooltip: None,
         };
         let mut top = Vec::new();
         top.push(item("", t("filament-panels::pages/dashboard.title"), "layout-dashboard", None));
@@ -154,7 +165,24 @@ impl Admin {
             ));
         }
         if self.can("view health") {
-            advanced.push(item("health", t("admin/health.title"), "heart", None));
+            // Health::getNavigationIcon/Badge/BadgeColor/BadgeTooltip from the stored results.
+            let results = pelican_api::health::latest();
+            let icon = match &results {
+                None => "heart-question",
+                Some(r) if r.contains_failing() => "heart-exclamation",
+                Some(_) => "heart-check",
+            };
+            let mut it = item("health", t("admin/health.title"), icon, None);
+            if let Some(r) = &results {
+                let failed = r.failed();
+                if !failed.is_empty() {
+                    it.badge = Some(failed.len().to_string());
+                    it.badge_color = Some("danger");
+                    let names = failed.iter().map(|c| c.name.as_str()).collect::<Vec<_>>().join(", ");
+                    it.badge_tooltip = Some(self.t_with("admin/health.checks.failed", &[("checks", &names)]));
+                }
+            }
+            advanced.push(it);
         }
         if self.can("viewList mount") {
             advanced.push(item("mounts", t("admin/mount.nav_title"), "layers-linked", count(st, "mounts").await));

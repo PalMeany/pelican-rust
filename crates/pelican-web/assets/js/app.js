@@ -265,6 +265,20 @@
     if (box && e.target === box) box.querySelector('.tags-entry')?.focus();
   });
 
+  // Collapsible sections remembered per browser (`persistCollapsed()`): <details data-persist="key">.
+  function restoreDetails(root) {
+    root.querySelectorAll('details[data-persist]').forEach((d) => {
+      try { const v = localStorage.getItem('collapsed:' + d.dataset.persist); if (v !== null) d.open = v !== '1'; } catch (_) { /* storage blocked */ }
+    });
+  }
+  document.addEventListener('toggle', (e) => {
+    const d = e.target;
+    if (!(d instanceof HTMLDetailsElement) || !d.dataset.persist) return;
+    try { localStorage.setItem('collapsed:' + d.dataset.persist, d.open ? '0' : '1'); } catch (_) { /* storage blocked */ }
+  }, true);
+  document.addEventListener('DOMContentLoaded', () => restoreDetails(document));
+  document.addEventListener('htmx:afterSwap', (e) => restoreDetails(e.target));
+
   // Reveal / hide password inputs.
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-reveal]');

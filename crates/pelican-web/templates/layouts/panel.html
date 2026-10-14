@@ -20,7 +20,7 @@
         {% for item in group['items'] %}
         <a class="nav-item{% if item.active %} active{% endif %}" href="{{ item.url }}"{% if item.target %} target="{{ item.target }}"{% endif %}>
           {{ icon(item.icon or 'point', 'icon') }}<span>{{ item.label }}</span>
-          {% if item.badge is not none and item.badge != '' %}<span class="badge">{{ item.badge }}</span>{% endif %}
+          {% if item.badge is not none and item.badge != '' %}<span class="badge{% if item.badge_color %} badge-{{ item.badge_color }}{% endif %}"{% if item.badge_tooltip %} title="{{ item.badge_tooltip }}"{% endif %}>{{ item.badge }}</span>{% endif %}
         </a>
         {% endfor %}
       </div>

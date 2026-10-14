@@ -1,0 +1,40 @@
+{% extends "layouts/panel.html" %}
+{% set D = 'admin/dashboard.sections.' %}
+{% macro section(id, heading, icon_name, color, actions=[], collapsed=false) %}
+<details class="card dash-section" data-persist="dashboard-{{ id }}"{% if not collapsed %} open{% endif %}>
+  <summary class="card-head"><h2 class="row">{{ icon(icon_name, 'icon text-' ~ color) }}{{ heading }}</h2>
+    <span class="row">{% for a in actions %}<a class="btn btn-sm {{ a.class or 'btn-gray' }}" href="{{ a.url }}"{% if a.external %} target="_blank" rel="noopener"{% endif %}>{{ icon(a.icon, 'icon-sm') }}{{ a.label }}</a>{% endfor %}</span>
+  </summary>
+  <div class="card-body stack">{{ caller() }}</div>
+</details>
+{% endmacro %}
+{% block content %}
+<div class="page-head"><div><h1>{{ title }}</h1><p class="muted">{{ subheading }}</p></div></div>
+<div class="stack">
+  {% if update == 'unavailable' %}
+    {% call section('update', trans(D ~ 'intro-version-unavailable.heading'), 'cloud-off', 'gray') %}<p>{{ trans(D ~ 'intro-version-unavailable.content', version=version) }}</p>{% endcall %}
+  {% elif update == 'latest' %}
+    {% call section('update', trans(D ~ 'intro-no-update.heading'), 'checkbox', 'success') %}<p>{{ trans(D ~ 'intro-no-update.content', version=version) }}</p>{% endcall %}
+  {% else %}
+    {% call section('update', trans(D ~ 'intro-update-available.heading'), 'info-circle', 'warning', [{'label': trans(D ~ 'intro-update-available.heading'), 'icon': 'clipboard-text', 'url': 'https://pelican.dev/docs/panel/update', 'external': true, 'class': 'btn-warning'}]) %}
+      <p>{{ trans(D ~ 'intro-update-available.' ~ ('content_container' if in_container else 'content'), latestVersion=latest_version) }}</p>
+    {% endcall %}
+  {% endif %}
+  {% if canary %}
+    {% call section('developers', trans(D ~ 'intro-developers.heading'), 'code', 'primary', [{'label': trans(D ~ 'intro-developers.button_issues'), 'icon': 'brand-github', 'url': 'https://github.com/pelican/panel/issues', 'external': true}], collapsed=true) %}
+      <p>{{ trans(D ~ 'intro-developers.content') }}</p><p>{{ trans(D ~ 'intro-developers.extra_note') }}</p>
+    {% endcall %}
+  {% endif %}
+  {% if no_nodes %}
+    {% call section('first-node', trans(D ~ 'intro-first-node.heading'), 'server-2', 'primary', [{'label': trans(D ~ 'intro-first-node.button_label'), 'icon': 'server-2', 'url': '/admin/nodes/create', 'class': 'btn'}]) %}
+      <p>{{ trans(D ~ 'intro-first-node.content') }}</p>
+    {% endcall %}
+  {% endif %}
+  {% call section('support', trans(D ~ 'intro-support.heading'), 'heart-filled', 'danger', [{'label': trans(D ~ 'intro-support.button_donate'), 'icon': 'cash', 'url': 'https://pelican.dev/donate', 'external': true, 'class': 'btn-success'}]) %}
+    <p>{{ trans(D ~ 'intro-support.content') }}</p><p>{{ trans(D ~ 'intro-support.extra_note') }}</p>
+  {% endcall %}
+  {% call section('help', trans(D ~ 'intro-help.heading'), 'question-mark', 'info', [{'label': trans(D ~ 'intro-help.button_docs'), 'icon': 'speedboat', 'url': 'https://pelican.dev/docs', 'external': true}]) %}
+    <p>{{ trans(D ~ 'intro-help.content') }}</p>
+  {% endcall %}
+</div>
+{% endblock %}

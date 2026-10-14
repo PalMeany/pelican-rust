@@ -171,6 +171,8 @@ impl ServerPanel {
                     icon,
                     active: slug == active,
                     badge: None,
+                    badge_color: None,
+                    badge_tooltip: None,
                 });
             }
         };
@@ -195,6 +197,8 @@ impl ServerPanel {
                 icon: "arrow-back",
                 active: false,
                 badge: None,
+                badge_color: None,
+                badge_tooltip: None,
             });
         }
         vec![NavGroup { label: None, items }]

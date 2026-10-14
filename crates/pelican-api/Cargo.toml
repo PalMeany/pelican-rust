@@ -6,6 +6,7 @@ license.workspace = true
 description = "HTTP layer of pelican-rs: remote, client and application APIs"
 
 [dependencies]
+libc = "0.2"
 pelican-core = { path = "../pelican-core" }
 pelican-db = { path = "../pelican-db" }
 laravel-compat = { path = "../laravel-compat" }

@@ -6,6 +6,7 @@ pub mod binding;
 pub mod client;
 pub mod envelope;
 pub mod error;
+pub mod health;
 pub mod input;
 pub mod jobs;
 pub mod json;
@@ -17,6 +18,7 @@ pub mod resources;
 pub mod services;
 pub mod url_rule;
 pub mod validation;
+pub mod versions;
 
 use axum::Router;
 use axum::http::Method;
