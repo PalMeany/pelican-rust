@@ -94,7 +94,8 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] Диф-тесты на каждый маршрут (app/*), 4 СУБД
 
 ### M6 — UI (паритет функций)
-- [ ] Каркас: SSR (minijinja) + htmx, декларативные ресурсы (таблица/форма/действия) — ADR-0005
+- [ ] Каркас (ADR-0013): крейт pelican-web, сессии в `sessions`, CSRF, шаблоны (build.rs), ассеты, переводы
+- [ ] Ресурсный фреймворк: таблица (колонки/фильтры/сортировка/пагинация/массовые действия), формы (поля+валидация), модалки
 - [ ] Auth: логин, 2FA, passkeys, OAuth, сброс пароля, профиль
 - [ ] Admin: dashboard, nodes, servers, eggs, users, roles, db hosts, mounts, webhooks, api keys, settings, health, plugins
 - [ ] App: список серверов
