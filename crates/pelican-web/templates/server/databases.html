@@ -1,0 +1,43 @@
+{# Server › Databases list (app/Filament/Server/Resources/Databases/DatabaseResource::defaultTable)
+   with the toolbar create action. #}
+{% extends "layouts/panel.html" %}
+{% import "components/table.html" as tbl %}
+{% import "components/forms.html" as f %}
+{% block head %}<script src="{{ asset('js/databases.js') }}" defer></script>{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if can_create %}
+      {% if at_limit %}
+      <button type="button" class="btn btn-danger" disabled
+        title="{{ trans('server/database.limit') }}"
+        aria-label="{{ trans('server/database.create_database') }}">{{ icon('database-x', 'icon-sm') }}</button>
+      {% else %}
+      <button type="button" class="btn" data-modal-open="create-database"
+        title="{{ trans('server/database.create_database') }}"
+        aria-label="{{ trans('server/database.create_database') }}">{{ icon('database-plus', 'icon-sm') }}</button>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+{{ tbl.render(table, csrf) }}
+{% if can_create and not at_limit %}
+<dialog id="create-database" class="modal">
+  <form method="post" action="{{ base }}/databases">
+    {{ csrf_field() }}
+    <div class="modal-head"><h2>{{ trans('filament-actions::create.single.modal.heading', label=trans('server/database.database')) }}</h2></div>
+    <div class="modal-body">
+      {# The CreateAction form: host select spans both grid columns. #}
+      <fieldset class="grid grid-2" style="margin:0;align-content:start">
+        {{ f.select('database_host_id', trans('server/database.database_host'), host_options, v_host, v_errors, required=true, placeholder=trans('server/database.database_host_select')) }}
+        {{ f.text('database', trans('server/database.name'), v_database, v_errors, prefix='s' ~ server.id ~ '_', hint=trans('server/database.name_hint'), autocomplete='off') }}
+        {{ f.text('remote', trans('server/database.connections_from'), v_remote, v_errors, autocomplete='off') }}
+      </fieldset>
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+      <button type="submit" class="btn">{{ icon('plus', 'icon-sm') }}{{ trans('filament-actions::create.single.modal.actions.create.label') }}</button></div>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,44 @@
+{# Server › Databases view (DatabaseResource::defaultForm fields), served as a
+   detail page instead of the original ViewAction modal. #}
+{% extends "layouts/panel.html" %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if can_update %}
+    <form method="post" action="{{ base }}/databases/{{ d.id }}/rotate-password"
+      data-confirm="{{ trans('filament-actions::modal.confirmation') }}"
+      data-confirm-title="{{ trans('admin/databasehost.rotate_password') }}">
+      {{ csrf_field() }}<button class="btn btn-gray" type="submit">{{ icon('refresh', 'icon-sm') }}{{ trans('admin/databasehost.rotate') }}</button>
+    </form>
+    {% endif %}
+    {% if can_delete %}
+    <form method="post" action="{{ base }}/databases/{{ d.id }}/delete"
+      data-confirm="{{ trans('filament-actions::modal.confirmation') }}"
+      data-confirm-title="{{ trans('filament-actions::delete.single.modal.heading', label=d.name) }}"
+      data-confirm-ok="{{ trans('filament-actions::delete.single.modal.actions.delete.label') }}">
+      {{ csrf_field() }}<button class="btn btn-danger" type="submit">{{ icon('trash', 'icon-sm') }}{{ trans('filament-actions::delete.single.label') }}</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+<div class="card card-body stack">
+  <dl class="kv">
+    <dt>{{ trans('server/database.host') }}</dt><dd><span class="copyable" data-copy="{{ address }}">{{ address }}</span></dd>
+    <dt>{{ trans('server/database.database') }}</dt><dd><span class="copyable" data-copy="{{ d.name }}">{{ d.name }}</span></dd>
+    <dt>{{ trans('server/database.username') }}</dt><dd><span class="copyable" data-copy="{{ d.username }}">{{ d.username }}</span></dd>
+    {% if password is not none %}
+    <dt>{{ trans('server/database.password') }}</dt>
+    <dd><div class="row" style="gap:0.5rem">
+      <input class="input mono" id="db-password" type="password" value="{{ password }}" autocomplete="off" readonly style="max-width:24rem">
+      <button type="button" class="icon-btn" data-reveal="db-password" aria-label="Show password">{{ icon('eye', 'icon-sm') }}</button>
+    </div></dd>
+    {% endif %}
+    <dt>{{ trans('server/database.remote') }}</dt><dd>{{ d.remote }}</dd>
+    <dt>{{ trans('server/database.max_connections') }}</dt><dd>{{ max_connections }}</dd>
+    {% if jdbc %}
+    <dt>{{ trans('server/database.jdbc') }}</dt><dd><code class="mono copyable" data-copy="{{ jdbc }}">{{ jdbc }}</code></dd>
+    {% endif %}
+  </dl>
+</div>
+{% endblock %}

@@ -2,6 +2,7 @@
 //! subuser permissions, navigation and the console.
 
 mod console;
+mod databases;
 mod files;
 
 use std::collections::HashSet;
@@ -21,7 +22,7 @@ use crate::ctx::Authed;
 use crate::error::{WebError, WebResult};
 
 pub fn routes() -> Router<AppState> {
-    Router::new().merge(console::routes()).merge(files::routes())
+    Router::new().merge(console::routes()).merge(files::routes()).merge(databases::routes())
 }
 
 /// A request inside a server's panel: the tenant, its node and what the user may do there.
