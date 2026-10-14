@@ -235,6 +235,16 @@ impl FromRequestParts<AppState> for Authed {
             }
             return Err(web.redirect("/login"));
         };
+        // RequireTwoFactorAuthentication (auth middleware of every panel); the auth and
+        // profile routes stay reachable so the user can enable it.
+        let level = st.config.env.int_or("APP_2FA_REQUIRED", 0);
+        let exempt = web.path == "/profile" || web.path.starts_with("/profile/") || web.path == "/logout";
+        let u = &user.user;
+        let has_2fa = u.mfa_email_enabled.0 || u.mfa_app_secret.as_deref().is_some_and(|s| !s.is_empty());
+        if level != 0 && !has_2fa && !exempt && !(level == 1 && !user.is_admin()) {
+            web.session.flash("warning", web.t("auth.2fa_must_be_enabled"), None);
+            return Err(web.redirect("/profile?tab=2fa"));
+        }
         Ok(Authed { web, user })
     }
 }
