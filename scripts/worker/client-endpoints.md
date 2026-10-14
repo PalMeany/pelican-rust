@@ -1,5 +1,5 @@
 Задача: реализовать группу эндпоинтов Client API «{{GROUP}}» в Rust-панели и доказать совместимость диф-тестами.
-Рабочая папка — /Users/tazik/Desktop/Code/claude/pelican/pelican-rs. Сначала прочитай CLAUDE.md.
+Рабочая папка — {{WORKDIR}} (git worktree; работай ТОЛЬКО в ней). Сначала прочитай CLAUDE.md.
 
 ЧТО РЕАЛИЗОВАТЬ: маршруты {{ROUTES}}
 Спецификация (обязательно прочитай целиком нужные разделы): docs/spec/client-api.md — {{SPEC}}.
