@@ -9,6 +9,7 @@ mod files;
 mod network;
 mod schedules;
 mod servers;
+mod settings;
 mod startup;
 mod subusers;
 
@@ -70,6 +71,10 @@ pub fn routes(state: &AppState) -> Router<AppState> {
             "/servers/{server}/schedules/{schedule}/tasks/{task}",
             p(post(schedules::task_update).delete(schedules::task_delete)),
         )
+        .route("/servers/{server}/settings/rename", p(post(settings::rename)))
+        .route("/servers/{server}/settings/description", p(post(settings::description)))
+        .route("/servers/{server}/settings/reinstall", p(post(settings::reinstall)))
+        .route("/servers/{server}/settings/docker-image", p(put(settings::docker_image)))
         .route("/servers/{server}/startup", p(get(startup::index)))
         .route("/servers/{server}/startup/variable", p(put(startup::update)))
         .route("/servers/{server}/backups/{backup}", p(get(backups::view).delete(backups::delete)))

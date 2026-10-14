@@ -1,0 +1,84 @@
+name: client/settings-rename
+fixtures: [base, infra, client-users, client-settings]
+steps:
+  # Unchanged name: no update at all (no updated_at touch, no activity).
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/rename, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: Survival }, expect_status: 204 }
+  # Trimmed by TrimStrings.
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/rename, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: " New Survival " } }
+  # Whitespace-only becomes null (ConvertEmptyStringsToNull) -> required.
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/rename, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: "" } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/rename, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: "   " } }
+  # Numeric name -> string rule (min still computed on the (string) cast size).
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/rename, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: 123 } }
+  # Short name ok, then max:255 rejection (256 chars).
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/rename, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: Surv } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/rename, bearer: pacc_user0000001UserClientSecret0000000000000001, headers: { Content-Type: application/json }, body: '{"name":"123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890xxxxxx"}' }
+  # Subuser without settings.rename: authorize wins over validation.
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/rename, bearer: pacc_user3key001User3ClientSecret000000000001, json: { name: Nope } }
+  # Stranger (no access at all): AuthenticateServerAccess 404.
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/rename, bearer: pacc_user4key001User4ClientSecret000000000001, json: { name: Nope } }
+  # Server state conflicts hit before FormRequest checks.
+  - { method: POST, path: /api/client/servers/1c6d7b1f/settings/rename, bearer: pacc_admin000001AdminClientSecret000000000000001, json: { name: X } }
+  - { method: POST, path: /api/client/servers/2d7e8c2a/settings/rename, bearer: pacc_admin000001AdminClientSecret000000000000001, json: { name: X } }
+  # Route-model binding 404 (before auth).
+  - { method: POST, path: /api/client/servers/nope/settings/rename, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: X } }
+---
+name: client/settings-description
+fixtures: [base, infra, client-users, client-settings]
+steps:
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/description, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { description: New desc }, expect_status: 204 }
+  # Omitted input: stored '' but the activity `new` property is null.
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/description, bearer: pacc_user0000001UserClientSecret0000000000000001, json: {} }
+  # Second reset: stored stays '', so nothing changes at all.
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/description, bearer: pacc_user0000001UserClientSecret0000000000000001, json: {} }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/description, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { description: Back again } }
+  # Empty string is converted to null too.
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/description, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { description: "" } }
+  # Explicit null on an already-empty column: unchanged.
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/description, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { description: null } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/description, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { description: 123 } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/description, bearer: pacc_user3key001User3ClientSecret000000000001, json: { description: Nope } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/description, bearer: pacc_user4key001User4ClientSecret000000000001, json: { description: Nope } }
+  - { method: POST, path: /api/client/servers/2d7e8c2a/settings/description, bearer: pacc_admin000001AdminClientSecret000000000000001, json: { description: X } }
+  # Same value twice: only the first save fires.
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/description, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { description: Stable } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/description, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { description: "  Stable  " } }
+---
+name: client/settings-reinstall-ok
+fixtures: [base, infra, client-users, client-settings]
+steps:
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/reinstall, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 202 }
+  # Already installing: no DB update this time, but Wings + activity fire again.
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/reinstall, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/reinstall, bearer: pacc_user3key001User3ClientSecret000000000001 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/reinstall, bearer: pacc_user4key001User4ClientSecret000000000001 }
+  - { method: POST, path: /api/client/servers/1c6d7b1f/settings/reinstall, bearer: pacc_admin000001AdminClientSecret000000000000001 }
+---
+name: client/settings-reinstall-wings-error
+description: Wings failure rolls back the status change and skips the activity log.
+fixtures: [base, infra, client-users, client-settings]
+wings:
+  responses:
+    - { method: POST, path: /api/servers/*/reinstall, status: 500 }
+steps:
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/reinstall, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 500 }
+---
+name: client/settings-docker-image
+fixtures: [base, infra, client-users, client-settings]
+steps:
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/settings/docker-image, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { docker_image: ghcr.io/parkervcp/yolks:java_17 }, expect_status: 204 }
+  # Back to the original image.
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/settings/docker-image, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { docker_image: ghcr.io/parkervcp/yolks:java_21 } }
+  # Same image again: clean model, nothing written.
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/settings/docker-image, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { docker_image: ghcr.io/parkervcp/yolks:java_21 } }
+  # Not offered by the egg -> Rule::in.
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/settings/docker-image, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { docker_image: ghcr.io/custom:nope } }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/settings/docker-image, bearer: pacc_user0000001UserClientSecret0000000000000001, json: {} }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/settings/docker-image, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { docker_image: "" } }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/settings/docker-image, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { docker_image: 123 } }
+  # Current image pinned by an admin -> BadRequestHttpException 400.
+  - { method: PUT, path: /api/client/servers/8f0f7a11/settings/docker-image, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { docker_image: ghcr.io/parkervcp/yolks:java_21 } }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/settings/docker-image, bearer: pacc_user3key001User3ClientSecret000000000001, json: { docker_image: ghcr.io/parkervcp/yolks:java_21 } }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/settings/docker-image, bearer: pacc_user4key001User4ClientSecret000000000001, json: { docker_image: ghcr.io/parkervcp/yolks:java_21 } }
+  - { method: PUT, path: /api/client/servers/1c6d7b1f/settings/docker-image, bearer: pacc_admin000001AdminClientSecret000000000000001, json: { docker_image: ghcr.io/parkervcp/yolks:java_21 } }
+

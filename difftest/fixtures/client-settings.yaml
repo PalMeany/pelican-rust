@@ -1,0 +1,30 @@
+# A fourth server whose current docker image is not one of its egg's images
+# (SettingsController: "manually set by an administrator").
+servers:
+  - id: 4
+    uuid: 8f0f7a11-3333-499b-bc1d-000000000004
+    uuid_short: 8f0f7a11
+    node_id: 1
+    name: Pinned Image
+    description: null
+    status: null
+    skip_scripts: 0
+    owner_id: 2
+    memory: 1024
+    swap: 0
+    disk: 2048
+    io: 500
+    cpu: 100
+    threads: null
+    oom_killer: 0
+    allocation_id: null
+    egg_id: 1
+    startup: ./start.sh --port {{SERVER_PORT}}
+    image: ghcr.io/pinned/image:not-in-list
+    allocation_limit: null
+    database_limit: 0
+    backup_limit: 0
+    docker_labels: []
+    installed_at: "2026-01-01 00:10:00"
+    created_at: "2026-01-01 00:00:00"
+    updated_at: "2026-01-01 00:00:00"
