@@ -14,6 +14,7 @@ mod server_relations;
 mod server_transfer;
 mod servers;
 mod servers_create;
+mod settings;
 mod users;
 mod webhooks;
 
@@ -43,6 +44,7 @@ pub fn routes() -> Router<AppState> {
         .merge(roles::routes())
         .merge(servers_create::routes())
         .merge(servers::routes())
+        .merge(settings::routes())
         .merge(server_relations::routes())
         .merge(server_transfer::routes())
         .merge(users::routes())

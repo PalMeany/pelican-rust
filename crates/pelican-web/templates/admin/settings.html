@@ -1,0 +1,209 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% block head %}<script src="{{ asset('js/admin_settings.js') }}" defer></script>{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ trans('admin/setting.title') }}</h1>
+  {% if can_update %}
+  <div class="page-actions">
+    <button class="btn" type="submit" form="settings-form" title="{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}">{{ icon('device-floppy', 'icon-sm') }}{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}</button>
+  </div>
+  {% endif %}
+</div>
+
+<nav class="tabs">
+  {%- for t in [['general', 'home', 'admin/setting.navigation.general'], ['captcha', 'shield', 'admin/setting.navigation.captcha'], ['mail', 'mail', 'admin/setting.navigation.mail'], ['backup', 'box', 'admin/setting.navigation.backup'], ['oauth', 'brand-oauth', 'admin/setting.navigation.oauth'], ['misc', 'tool', 'admin/setting.navigation.misc']] -%}
+  <button type="button" data-tab="{{ t[0] }}" class="{{ 'active' if tab == t[0] }}">{{ icon(t[1], 'icon-sm') }}{{ trans(t[2]) }}</button>
+  {%- endfor -%}
+</nav>
+
+<form id="settings-form" method="post" action="{{ action }}">
+{{ csrf_field() }}<input type="hidden" name="_tab" value="{{ tab }}">
+<fieldset style="border:0;padding:0;margin:0"{% if readonly %} disabled{% endif %}>
+
+{# ---------------------------------------------------------------- general #}
+<section class="card card-body stack" data-tab-panel="general"{% if tab != 'general' %} hidden{% endif %}>
+  {{ f.text('APP_NAME', trans('admin/setting.general.app_name'), v['APP_NAME'], errors, required=true) }}
+  <div class="grid grid-2">
+    {{ f.text('APP_LOGO', trans('admin/setting.general.app_logo'), v['APP_LOGO'], errors, hint=trans('admin/setting.general.app_logo_help'), placeholder='/pelican.svg') }}
+    {{ f.text('APP_FAVICON', trans('admin/setting.general.app_favicon'), v['APP_FAVICON'], errors, required=true, hint=trans('admin/setting.general.app_favicon_help'), placeholder='/pelican.ico') }}
+  </div>
+  {{ f.toggle('APP_DEBUG', trans('admin/setting.general.debug_mode'), v['APP_DEBUG'] == '1') }}
+  <div class="grid grid-2">
+    {{ f.select('FILAMENT_AVATAR_PROVIDER', trans('admin/setting.general.avatar_provider'), avatar_options, v['FILAMENT_AVATAR_PROVIDER'], errors) }}
+    {{ f.toggle('FILAMENT_UPLOADABLE_AVATARS', trans('admin/setting.general.uploadable_avatars'), v['FILAMENT_UPLOADABLE_AVATARS'] == '1') }}
+  </div>
+  {{ f.radios('PANEL_USE_BINARY_PREFIX', trans('admin/setting.general.unit_prefix'), [['0', trans('admin/setting.general.decimal_prefix')], ['1', trans('admin/setting.general.binary_prefix')]], v['PANEL_USE_BINARY_PREFIX'], errors, inline=true) }}
+  {{ f.radios('FILAMENT_DEFAULT_NAVIGATION', trans('admin/setting.general.default_navigation'), nav_options, v['FILAMENT_DEFAULT_NAVIGATION'], errors, inline=true) }}
+  {{ f.radios('APP_2FA_REQUIRED', trans('admin/setting.general.2fa_requirement'), twofa_options, v['APP_2FA_REQUIRED'], errors, inline=true) }}
+  {{ f.select('FILAMENT_WIDTH', trans('admin/setting.general.display_width'), width_options, v['FILAMENT_WIDTH'], errors) }}
+  <div class="field">
+    <label>{{ trans('admin/setting.general.trusted_proxies') }}</label>
+    {{ f.tags_input('TRUSTED_PROXIES', proxies, placeholder=trans('admin/setting.general.trusted_proxies_help')) }}
+    <div class="row" style="gap:.5rem">
+      <button type="button" class="btn btn-sm btn-danger" data-tags-clear>{{ icon('trash', 'icon-sm') }}{{ trans('admin/setting.general.clear') }}</button>
+      <button type="button" class="btn btn-sm btn-gray" data-tags-cloudflare>{{ icon('brand-cloudflare', 'icon-sm') }}{{ trans('admin/setting.general.set_to_cf') }}</button>
+    </div>
+    {{ f.error(errors, 'TRUSTED_PROXIES') }}
+  </div>
+</section>
+
+{# ---------------------------------------------------------------- captcha #}
+<section class="card card-body stack" data-tab-panel="captcha"{% if tab != 'captcha' %} hidden{% endif %}>
+  <section class="card card-body stack" aria-labelledby="captcha-turnstile-head">
+    <div class="row" style="justify-content:space-between">
+      <span id="captcha-turnstile-head" class="row">{{ icon('brand-cloudflare', 'icon-sm') }}TURNSTILE</span>
+      <div class="row" style="gap:.25rem">
+        <button type="button" class="btn btn-danger" data-set-name="CAPTCHA_TURNSTILE_ENABLED" data-set-value="0"{% if v['CAPTCHA_TURNSTILE_ENABLED'] != '1' %} hidden{% endif %}>{{ trans('admin/setting.captcha.disable') }}</button>
+        <button type="button" class="btn" data-set-name="CAPTCHA_TURNSTILE_ENABLED" data-set-value="1"{% if v['CAPTCHA_TURNSTILE_ENABLED'] == '1' %} hidden{% endif %}>{{ trans('admin/setting.captcha.enable') }}</button>
+      </div>
+    </div>
+    <input type="hidden" name="CAPTCHA_TURNSTILE_ENABLED" value="{{ v['CAPTCHA_TURNSTILE_ENABLED'] }}">
+    <div class="stack span-full" data-show-if="CAPTCHA_TURNSTILE_ENABLED=1">
+      <div class="grid grid-4">
+        {{ f.text('CAPTCHA_TURNSTILE_SITE_KEY', trans('admin/setting.captcha.site_key'), v['CAPTCHA_TURNSTILE_SITE_KEY'], errors, required=true, type='password', autocomplete='off') }}
+        {{ f.text('CAPTCHA_TURNSTILE_SECRET_KEY', trans('admin/setting.captcha.secret_key'), v['CAPTCHA_TURNSTILE_SECRET_KEY'], errors, required=true, type='password', autocomplete='off') }}
+        {{ f.toggle('CAPTCHA_TURNSTILE_VERIFY_DOMAIN', trans('admin/setting.captcha.verify'), v['CAPTCHA_TURNSTILE_VERIFY_DOMAIN'] == '1') }}
+        <p class="hint muted">{{ trans('admin/setting.captcha.info_label') }}: {{ trans('admin/setting.captcha.info') }}</p>
+      </div>
+    </div>
+  </section>
+</section>
+
+{# -------------------------------------------------------------------- mail #}
+<section class="card card-body stack" data-tab-panel="mail"{% if tab != 'mail' %} hidden{% endif %}>
+  <div class="field">
+    <span class="field-label">{{ trans('admin/setting.mail.mail_driver') }}</span>
+    <div class="radio-group inline">
+      {% for o in mailer_options %}
+      <label class="check"><input type="radio" name="MAIL_MAILER" value="{{ o[0] }}"{% if o[0] == v['MAIL_MAILER'] %} checked{% endif %}><span>{{ o[1] }}</span></label>
+      {% endfor %}
+    </div>
+    <button type="submit" class="btn btn-sm btn-gray" formaction="/admin/settings/test-mail" data-mailer-test hidden>{{ icon('send', 'icon-sm') }}{{ trans('admin/setting.mail.test_mail') }}</button>
+    {{ f.error(errors, 'MAIL_MAILER') }}
+  </div>
+  <fieldset class="card card-body grid grid-2">
+    <legend class="muted">{{ trans('admin/setting.mail.from_settings') }}<br><span class="small">{{ trans('admin/setting.mail.from_settings_help') }}</span></legend>
+    {{ f.text('MAIL_FROM_ADDRESS', trans('admin/setting.mail.from_address'), v['MAIL_FROM_ADDRESS'], errors, required=true, type='email') }}
+    {{ f.text('MAIL_FROM_NAME', trans('admin/setting.mail.from_name'), v['MAIL_FROM_NAME'], errors, required=true) }}
+  </fieldset>
+  <fieldset class="card card-body grid grid-2" data-show-if="MAIL_MAILER=smtp">
+    <legend class="muted">{{ trans('admin/setting.mail.smtp.smtp_title') }}</legend>
+    {{ f.text('MAIL_HOST', trans('admin/setting.mail.smtp.host'), v['MAIL_HOST'], errors, required=true) }}
+    {{ f.text('MAIL_PORT', trans('admin/setting.mail.smtp.port'), v['MAIL_PORT'], errors, required=true, type='number', attrs='min="1" max="65535"') }}
+    {{ f.text('MAIL_USERNAME', trans('admin/setting.mail.smtp.username'), v['MAIL_USERNAME'], errors) }}
+    {{ f.text('MAIL_PASSWORD', trans('admin/setting.mail.smtp.password'), v['MAIL_PASSWORD'], errors, type='password', autocomplete='off') }}
+    {{ f.radios('MAIL_SCHEME', trans('admin/setting.mail.smtp.scheme'), scheme_options, v['MAIL_SCHEME'], errors, inline=true) }}
+  </fieldset>
+  <fieldset class="card card-body grid grid-3" data-show-if="MAIL_MAILER=mailgun">
+    <legend class="muted">{{ trans('admin/setting.mail.mailgun.mailgun_title') }}</legend>
+    {{ f.text('MAILGUN_DOMAIN', trans('admin/setting.mail.mailgun.domain'), v['MAILGUN_DOMAIN'], errors, required=true) }}
+    {{ f.text('MAILGUN_SECRET', trans('admin/setting.mail.mailgun.secret'), v['MAILGUN_SECRET'], errors, required=true) }}
+    {{ f.text('MAILGUN_ENDPOINT', trans('admin/setting.mail.mailgun.endpoint'), v['MAILGUN_ENDPOINT'], errors, required=true) }}
+  </fieldset>
+</section>
+
+{# ------------------------------------------------------------------ backup #}
+<section class="card card-body grid grid-2" data-tab-panel="backup"{% if tab != 'backup' %} hidden{% endif %}>
+  <p class="span-full muted">{{ trans('admin/setting.backup.throttle') }} — {{ trans('admin/setting.backup.throttle_help') }}</p>
+  {{ f.text('BACKUP_THROTTLE_LIMIT', trans('admin/setting.backup.limit'), v['BACKUP_THROTTLE_LIMIT'], errors, required=true, type='number', attrs='min="1"') }}
+  {{ f.text('BACKUP_THROTTLE_PERIOD', trans('admin/setting.backup.period'), v['BACKUP_THROTTLE_PERIOD'], errors, required=true, type='number', suffix=trans('admin/setting.backup.seconds'), attrs='min="0"') }}
+</section>
+
+{# ------------------------------------------------------------------- oauth #}
+<section class="card card-body stack" data-tab-panel="oauth"{% if tab != 'oauth' %} hidden{% endif %}>
+  {% for p in oauth_providers %}
+  <section class="card card-body stack" aria-labelledby="oauth-{{ p.id }}-head">
+    <div class="row" style="justify-content:space-between">
+      <span id="oauth-{{ p.id }}-head" class="row">{{ icon(p.icon, 'icon-sm') }}{{ p.name }}</span>
+      <div class="row" style="gap:.25rem">
+        <button type="button" class="btn btn-danger" data-set-name="OAUTH_{{ p.upper }}_ENABLED" data-set-value="0"{% if v['OAUTH_' ~ p.upper ~ '_ENABLED'] != '1' %} hidden{% endif %}>{{ trans('admin/setting.oauth.disable') }}</button>
+        <button type="button" class="btn" data-set-name="OAUTH_{{ p.upper }}_ENABLED" data-set-value="1"{% if v['OAUTH_' ~ p.upper ~ '_ENABLED'] == '1' %} hidden{% endif %}>{{ trans('admin/setting.oauth.enable') }}</button>
+      </div>
+    </div>
+    <input type="hidden" name="OAUTH_{{ p.upper }}_ENABLED" value="{{ v['OAUTH_' ~ p.upper ~ '_ENABLED'] }}">
+    <div class="stack" data-show-if="OAUTH_{{ p.upper }}_ENABLED=1">
+      <div class="grid grid-4">
+        {% if p.id == 'steam' %}
+          {{ f.text('OAUTH_STEAM_CLIENT_SECRET', trans('admin/setting.oauth.web_api_key'), v['OAUTH_STEAM_CLIENT_SECRET'], errors, required=true, type='password', autocomplete='off') }}
+        {% else %}
+          {{ f.text('OAUTH_' ~ p.upper ~ '_CLIENT_ID', trans('admin/setting.oauth.client_id'), v['OAUTH_' ~ p.upper ~ '_CLIENT_ID'], errors, required=true, type='password', autocomplete='off') }}
+          {{ f.text('OAUTH_' ~ p.upper ~ '_CLIENT_SECRET', trans('admin/setting.oauth.client_secret'), v['OAUTH_' ~ p.upper ~ '_CLIENT_SECRET'], errors, required=true, type='password', autocomplete='off') }}
+          {{ f.toggle('OAUTH_' ~ p.upper ~ '_SHOULD_CREATE_MISSING_USERS', trans('admin/setting.oauth.create_missing_users'), v['OAUTH_' ~ p.upper ~ '_SHOULD_CREATE_MISSING_USERS'] == '1') }}
+          {{ f.toggle('OAUTH_' ~ p.upper ~ '_SHOULD_LINK_MISSING_USERS', trans('admin/setting.oauth.link_missing_users'), v['OAUTH_' ~ p.upper ~ '_SHOULD_LINK_MISSING_USERS'] == '1') }}
+        {% endif %}
+        {% if p.id == 'gitlab' %}
+          {{ f.text('OAUTH_GITLAB_HOST', 'Custom Host', v['OAUTH_GITLAB_HOST'], errors, placeholder='Only set a custom host if you are self hosting gitlab') }}
+        {% elif p.id == 'authentik' %}
+          {{ f.text('OAUTH_AUTHENTIK_BASE_URL', trans('admin/setting.oauth.base_url'), v['OAUTH_AUTHENTIK_BASE_URL'], errors, required=true, type='url') }}
+          {{ f.text('OAUTH_AUTHENTIK_DISPLAY_NAME', 'Display Name', v['OAUTH_AUTHENTIK_DISPLAY_NAME'], errors) }}
+          {{ f.text('OAUTH_AUTHENTIK_DISPLAY_COLOR', 'Display Color', v['OAUTH_AUTHENTIK_DISPLAY_COLOR'], errors, placeholder='#fd4b2d', attrs='pattern="^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"') }}
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endfor %}
+</section>
+
+{# -------------------------------------------------------------------- misc #}
+<section class="card card-body stack" data-tab-panel="misc"{% if tab != 'misc' %} hidden{% endif %}>
+
+  <fieldset class="card card-body grid grid-2">
+    <legend class="muted">{{ trans('admin/setting.misc.auto_allocation.title') }}<br><span class="small">{{ trans('admin/setting.misc.auto_allocation.helper') }}</span></legend>
+    {{ f.toggle('PANEL_CLIENT_ALLOCATIONS_ENABLED', trans('admin/setting.misc.auto_allocation.question'), v['PANEL_CLIENT_ALLOCATIONS_ENABLED'] == '1') }}
+    <div class="stack" data-show-if="PANEL_CLIENT_ALLOCATIONS_ENABLED=1">
+      {{ f.toggle('PANEL_CLIENT_ALLOCATIONS_CREATE_NEW', trans('admin/setting.misc.auto_allocation.create_new'), v['PANEL_CLIENT_ALLOCATIONS_CREATE_NEW'] == '1', hint=trans('admin/setting.misc.auto_allocation.create_new_help')) }}
+      <div class="grid grid-2">
+        {{ f.text('PANEL_CLIENT_ALLOCATIONS_RANGE_START', trans('admin/setting.misc.auto_allocation.start'), v['PANEL_CLIENT_ALLOCATIONS_RANGE_START'], errors, required=true, type='number', attrs='min="1024" max="65535"') }}
+        {{ f.text('PANEL_CLIENT_ALLOCATIONS_RANGE_END', trans('admin/setting.misc.auto_allocation.end'), v['PANEL_CLIENT_ALLOCATIONS_RANGE_END'], errors, required=true, type='number', attrs='min="1024" max="65535"') }}
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset class="card card-body grid grid-2">
+    <legend class="muted">{{ trans('admin/setting.misc.mail_notifications.title') }}<br><span class="small">{{ trans('admin/setting.misc.mail_notifications.helper') }}</span></legend>
+    {{ f.toggle('PANEL_SEND_ACCOUNT_CREATED_NOTIFICATION', trans('admin/setting.misc.mail_notifications.account_created'), v['PANEL_SEND_ACCOUNT_CREATED_NOTIFICATION'] == '1') }}
+    {{ f.toggle('PANEL_SEND_ADDED_TO_SERVER_NOTIFICATION', trans('admin/setting.misc.mail_notifications.added_to_server'), v['PANEL_SEND_ADDED_TO_SERVER_NOTIFICATION'] == '1') }}
+    {{ f.toggle('PANEL_SEND_REMOVED_FROM_SERVER_NOTIFICATION', trans('admin/setting.misc.mail_notifications.removed_from_server'), v['PANEL_SEND_REMOVED_FROM_SERVER_NOTIFICATION'] == '1') }}
+    {{ f.toggle('PANEL_SEND_INSTALL_NOTIFICATION', trans('admin/setting.misc.mail_notifications.server_installed'), v['PANEL_SEND_INSTALL_NOTIFICATION'] == '1') }}
+    {{ f.toggle('PANEL_SEND_REINSTALL_NOTIFICATION', trans('admin/setting.misc.mail_notifications.server_reinstalled'), v['PANEL_SEND_REINSTALL_NOTIFICATION'] == '1') }}
+  </fieldset>
+
+  <fieldset class="card card-body grid grid-2">
+    <legend class="muted">{{ trans('admin/setting.misc.connections.title') }}<br><span class="small">{{ trans('admin/setting.misc.connections.helper') }}</span></legend>
+    {{ f.text('GUZZLE_TIMEOUT', trans('admin/setting.misc.connections.request_timeout'), v['GUZZLE_TIMEOUT'], errors, required=true, type='number', suffix=trans('admin/setting.misc.connections.seconds'), attrs='min="15" max="60"') }}
+    {{ f.text('GUZZLE_CONNECT_TIMEOUT', trans('admin/setting.misc.connections.connection_timeout'), v['GUZZLE_CONNECT_TIMEOUT'], errors, required=true, type='number', suffix=trans('admin/setting.misc.connections.seconds'), attrs='min="5" max="60"') }}
+  </fieldset>
+
+  <fieldset class="card card-body grid grid-2">
+    <legend class="muted">{{ trans('admin/setting.misc.activity_log.title') }}<br><span class="small">{{ trans('admin/setting.misc.activity_log.helper') }}</span></legend>
+    {{ f.text('APP_ACTIVITY_PRUNE_DAYS', trans('admin/setting.misc.activity_log.prune_age'), v['APP_ACTIVITY_PRUNE_DAYS'], errors, required=true, type='number', suffix=trans('admin/setting.misc.activity_log.days'), attrs='min="1" max="365"') }}
+    {{ f.toggle('APP_ACTIVITY_HIDE_ADMIN', trans('admin/setting.misc.activity_log.log_admin'), v['APP_ACTIVITY_HIDE_ADMIN'] == '1') }}
+  </fieldset>
+
+  <fieldset class="card card-body stack">
+    <legend class="muted">{{ trans('admin/setting.misc.api.title') }}<br><span class="small">{{ trans('admin/setting.misc.api.helper') }}</span></legend>
+    {% for r in rate_limits %}
+    <fieldset class="card card-body grid grid-2">
+      <legend class="muted small">{{ r.title }} — <span class="small">{{ r.helper }}</span></legend>
+      {{ f.text(r.limit_key, trans('admin/setting.misc.api.requests_per_period'), v[r.limit_key], errors, required=true, type='number', suffix=trans('admin/setting.misc.api.requests'), attrs='min="1"') }}
+      {{ f.text(r.period_key, trans('admin/setting.misc.api.period_length'), v[r.period_key], errors, required=true, type='number', suffix=trans('admin/setting.misc.api.minutes'), attrs='min="1"') }}
+    </fieldset>
+    {% endfor %}
+  </fieldset>
+
+  <fieldset class="card card-body grid grid-2">
+    <legend class="muted">{{ trans('admin/setting.misc.server.title') }}<br><span class="small">{{ trans('admin/setting.misc.server.helper') }}</span></legend>
+    {{ f.toggle('PANEL_EDITABLE_SERVER_DESCRIPTIONS', trans('admin/setting.misc.server.edit_server_desc'), v['PANEL_EDITABLE_SERVER_DESCRIPTIONS'] == '1') }}
+    {# console_font FileUpload stores on the public disk, not .env; omitted. #}
+  </fieldset>
+
+  <fieldset class="card card-body grid grid-2">
+    <legend class="muted">{{ trans('admin/setting.misc.webhook.title') }}<br><span class="small">{{ trans('admin/setting.misc.webhook.helper') }}</span></legend>
+    {{ f.text('APP_WEBHOOK_PRUNE_DAYS', trans('admin/setting.misc.webhook.prune_age'), v['APP_WEBHOOK_PRUNE_DAYS'], errors, required=true, type='number', suffix=trans('admin/setting.misc.webhook.days'), attrs='min="1" max="365"') }}
+  </fieldset>
+</section>
+
+</fieldset>
+</form>
+{% endblock %}
