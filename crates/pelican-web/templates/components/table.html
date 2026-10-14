@@ -23,6 +23,8 @@
       {% if c.placeholder %}<option value="">{{ c.placeholder }}</option>{% endif %}
       {% for o in c.options %}<option value="{{ o[0] }}"{% if o[0] == c.value %} selected{% endif %}>{{ o[1] }}</option>{% endfor %}
     </select></form>
+{%- elif c.type == 'html' -%}
+  {{ c.html | safe }}
 {%- elif c.type == 'image' -%}
   {% if c.src %}<img class="server-icon" src="{{ c.src }}" alt="" loading="lazy">{% else %}<span class="server-icon" style="display:inline-block"></span>{% endif %}
 {%- endif -%}

@@ -1,0 +1,165 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% set N = 'admin/node' %}
+{% block content %}
+<div data-tabs-root class="stack">
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if can_delete %}
+    <form method="post" action="/admin/nodes/{{ node.id }}/action" data-confirm="{{ trans('filament-actions::modal.confirmation') }}" data-confirm-title="{{ trans('filament-actions::delete.single.modal.heading', label=node.name) }}" data-confirm-ok="{{ trans('filament-actions::delete.single.label') }}">
+      {{ csrf_field() }}<input type="hidden" name="op" value="delete">
+      <button class="btn btn-danger" type="submit"{% if node.has_servers %} disabled title="{{ trans(N ~ '.node_has_servers') }}"{% endif %}>{{ icon('trash', 'icon-sm') }}</button></form>
+    {% endif %}
+    {% if not readonly %}<button class="btn" type="submit" form="node-form">{{ icon('device-floppy' if not creating else 'file-plus', 'icon-sm') }}{{ trans('filament-panels::resources/pages/create-record.form.actions.create.label') if creating else trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}</button>{% endif %}
+  </div>
+</div>
+<div><nav class="tabs">
+  {% set tabs = ([] if creating else [['overview', 'chart-area-line-filled']]) + [['basic_settings', 'server'], ['advanced_settings', 'server-cog']] + ([] if creating else [['config_file', 'code']] + ([] if readonly else [['diagnostics', 'heart-search']])) %}
+  {% for t in tabs %}<button type="button" data-tab="{{ t[0] }}" class="{{ 'active' if tab == t[0] }}">{{ icon(t[1], 'icon-sm') }}{{ trans(N ~ '.tabs.' ~ t[0]) }}</button>{% endfor %}
+</nav></div>
+
+{% if not creating %}
+<section class="stack" data-tab-panel="overview"{% if tab != 'overview' %} hidden{% endif %}>
+  <fieldset class="fieldset"><legend>{{ trans(N ~ '.node_info') }}</legend>
+    <dl class="kv" style="grid-template-columns: repeat(4, max-content 1fr)">
+      <dt>{{ trans(N ~ '.wings_version') }}</dt><dd>{{ info.version }}</dd>
+      <dt>{{ trans(N ~ '.cpu_threads') }}</dt><dd>{{ info.cpu_count }}</dd>
+      <dt>{{ trans(N ~ '.architecture') }}</dt><dd>{{ info.architecture }}</dd>
+      <dt>{{ trans(N ~ '.kernel') }}</dt><dd>{{ info.kernel }}</dd>
+    </dl>
+  </fieldset>
+  <div class="grid grid-2" id="node-charts" data-stats="/admin/nodes/{{ node.id }}/stats" data-cpu-count="{{ info.cpu_count }}">
+    <div class="card"><div class="card-head"><h3 data-heading="cpu">{{ trans(N ~ '.cpu') }}</h3></div><div class="card-body"><canvas class="chart" id="node-cpu" height="120"></canvas></div></div>
+    <div class="card"><div class="card-head"><h3 data-heading="memory">{{ trans(N ~ '.memory') }}</h3></div><div class="card-body"><canvas class="chart" id="node-memory" height="120"></canvas></div></div>
+    <div class="card span-full"><div class="card-head"><h3 data-heading="disk">{{ trans(N ~ '.disk') }}</h3></div><div class="card-body"><div class="progress" style="height:1rem"><span id="node-disk" style="width:0%"></span></div></div></div>
+  </div>
+  <script type="application/json" id="node-strings">{{ { "cpu": trans(N ~ '.cpu_chart'), "memory": trans(N ~ '.memory_chart'), "disk": trans(N ~ '.disk_chart') } | tojson }}</script>
+</section>
+{% endif %}
+
+<form id="node-form" method="post" action="{{ '/admin/nodes/create' if creating else '/admin/nodes/' ~ node.id ~ '/edit' }}">
+{{ csrf_field() }}<input type="hidden" name="_tab" value="{{ tab }}">
+<fieldset style="border:0;padding:0;margin:0"{% if readonly %} disabled{% endif %}>
+<section class="card card-body grid grid-2" data-tab-panel="basic_settings"{% if tab != 'basic_settings' %} hidden{% endif %}>
+  <div class="span-full">{{ f.text('fqdn', trans(N ~ '.domain'), v.fqdn, errors, required=true, placeholder='node.example.com', hint=trans(N ~ '.fqdn_ssl') if secure else '', attrs='maxlength="255"') }}</div>
+  {{ f.text('daemon_connect', trans(N ~ '.port'), v.daemon_connect, errors, type='number', required=true, hint=trans(N ~ '.port_help'), attrs='min="1" max="65535"') }}
+  <div data-show-if="connection=https_proxy"{% if v.connection != 'https_proxy' %} hidden{% endif %}>{{ f.text('daemon_listen', trans(N ~ '.listen_port'), v.daemon_listen, errors, type='number', required=true, hint=trans(N ~ '.listen_port_help'), attrs='min="1" max="65535"') }}</div>
+  {{ f.text('name', trans(N ~ '.display_name'), v.name, errors, required=true, attrs='maxlength="100"') }}
+  <div class="span-full">{{ f.radios('connection', trans(N ~ '.ssl'), [['http', 'HTTP'], ['https', 'HTTPS (SSL)'], ['https_proxy', 'HTTPS with (reverse) proxy']], v.connection, errors, inline=true, hint=trans(N ~ '.panel_on_ssl') if secure else '') }}</div>
+</section>
+
+<section class="card card-body stack" data-tab-panel="advanced_settings"{% if tab != 'advanced_settings' %} hidden{% endif %}>
+  {% if not creating %}<div class="grid grid-3">
+    <div class="field"><label>{{ trans(N ~ '.node_id') }}</label><input class="input" disabled value="{{ node.id }}"></div>
+    <div class="field span-2"><label>{{ trans(N ~ '.node_uuid') }}</label><input class="input copyable" readonly value="{{ node.uuid }}" data-copy="{{ node.uuid }}"></div>
+  </div>{% endif %}
+  <div class="grid grid-3">
+    <div class="span-2">{{ f.text('tags', trans(N ~ '.tags'), v.tags, errors, hint='a, b, c') }}</div>
+    {{ f.text('upload_size', trans(N ~ '.upload_limit'), v.upload_size, errors, type='number', required=true, suffix='MiB' if binary else 'MB', hint=trans(N ~ '.upload_limit_help'), attrs='min="1"') }}
+    <div class="span-2">{{ f.text('daemon_base', trans(N ~ '.daemon_base'), v.daemon_base, errors, required=true, placeholder='/var/lib/pelican/volumes', hint=trans(N ~ '.daemon_base_help')) }}</div>
+    {{ f.text('daemon_sftp', trans(N ~ '.sftp_port'), v.daemon_sftp, errors, type='number', required=true, attrs='min="1" max="65535"') }}
+    <div class="span-2">{{ f.text('daemon_sftp_alias', trans(N ~ '.sftp_alias'), v.daemon_sftp_alias, errors, hint=trans(N ~ '.sftp_alias_help')) }}</div>
+    {{ f.radios('public', trans(N ~ '.use_for_deploy'), [['1', trans(N ~ '.yes')], ['0', trans(N ~ '.no')]], v.public, errors, inline=true) }}
+    {{ f.radios('maintenance_mode', trans(N ~ '.maintenance_mode'), [['1', trans(N ~ '.enabled')], ['0', trans(N ~ '.disabled')]], v.maintenance_mode, errors, inline=true, hint=trans(N ~ '.maintenance_mode_help')) }}
+  </div>
+  {{ f.limit('memory', trans(N ~ '.memory'), v.memory, errors, suffix='MiB' if binary else 'MB', limit_label=trans(N ~ '.memory_limit'), with_overallocate=true, over_value=v.memory_overallocate, over_label=trans(N ~ '.overallocate')) }}
+  {{ f.limit('disk', trans(N ~ '.disk'), v.disk, errors, suffix='MiB' if binary else 'MB', limit_label=trans(N ~ '.disk_limit'), with_overallocate=true, over_value=v.disk_overallocate, over_label=trans(N ~ '.overallocate')) }}
+  {{ f.limit('cpu', trans(N ~ '.cpu'), v.cpu, errors, suffix='%', limit_label=trans(N ~ '.cpu_limit'), with_overallocate=true, over_value=v.cpu_overallocate, over_label=trans(N ~ '.overallocate')) }}
+</section>
+</fieldset>
+</form>
+
+{% if not creating %}
+<section class="card card-body stack" data-tab-panel="config_file"{% if tab != 'config_file' %} hidden{% endif %}>
+  <div class="field"><span class="field-label">{{ trans(N ~ '.instructions') }}</span><p class="muted">{{ trans(N ~ '.instructions_help') }}</p></div>
+  <div class="field"><span class="field-label row" style="justify-content:space-between">/etc/pelican/config.yml <button type="button" class="btn-link" data-copy="{{ config_yaml }}">{{ icon('copy', 'icon-sm') }}</button></span>
+    <pre class="code-block">{{ config_yaml }}</pre></div>
+  {% if not readonly %}
+  <div class="grid grid-2">
+    <button type="button" class="btn btn-block" data-modal-open="auto-deploy">{{ icon('rocket', 'icon-sm') }}{{ trans(N ~ '.auto_deploy') }}</button>
+    <form method="post" action="/admin/nodes/{{ node.id }}/action" data-confirm="{{ trans(N ~ '.reset_help') }}" data-confirm-title="{{ trans(N ~ '.reset_token') }}" data-confirm-ok="{{ trans(N ~ '.reset_token') }}">
+      {{ csrf_field() }}<input type="hidden" name="op" value="reset-token"><button class="btn btn-block btn-danger" type="submit">{{ trans(N ~ '.reset_token') }}</button></form>
+  </div>
+  {% endif %}
+</section>
+{% if not readonly %}
+<section class="card card-body stack" data-tab-panel="diagnostics"{% if tab != 'diagnostics' %} hidden{% endif %}>
+  <form method="post" action="/admin/nodes/{{ node.id }}/action" class="grid grid-4" style="align-items:end">
+    {{ csrf_field() }}<input type="hidden" name="op" value="diagnostics-pull">
+    {{ f.toggle('include_endpoints', trans(N ~ '.diagnostics.include_endpoints'), true, trans(N ~ '.diagnostics.include_endpoints_hint')) }}
+    {{ f.toggle('include_logs', trans(N ~ '.diagnostics.include_logs'), true, trans(N ~ '.diagnostics.include_logs_hint')) }}
+    {{ f.text('log_lines', trans(N ~ '.diagnostics.log_lines'), 200, {}, type='range', attrs='min="100" max="500" step="50"') }}
+    <div class="row"><button class="btn" type="submit">{{ icon('cloud-download', 'icon-sm') }}{{ trans(N ~ '.diagnostics.pull') }}</button></div>
+  </form>
+  {% if diagnostics %}
+  <div class="row"><form method="post" action="/admin/nodes/{{ node.id }}/action">{{ csrf_field() }}<input type="hidden" name="op" value="diagnostics-clear"><button class="btn btn-sm btn-danger">{{ icon('trash', 'icon-sm') }}{{ trans(N ~ '.diagnostics.clear') }}</button></form>
+    <button type="button" class="btn btn-sm btn-gray" data-copy="{{ diagnostics }}">{{ icon('copy', 'icon-sm') }}</button></div>
+  <textarea class="textarea code" rows="30" readonly>{{ diagnostics }}</textarea>
+  {% endif %}
+</section>
+<dialog id="auto-deploy" class="modal wide">
+  <div class="modal-head"><h2>{{ trans(N ~ '.auto_deploy') }}</h2></div>
+  <div class="modal-body">
+    <div class="field"><span class="field-label">{{ trans(N ~ '.auto_label') }}</span>
+      <div class="radio-group inline">
+        <label class="check"><input type="radio" name="deploy_kind" value="0" checked onchange="pelicanDeploy(0)"><span>{{ trans(N ~ '.standalone') }}</span></label>
+        <label class="check"><input type="radio" name="deploy_kind" value="1" onchange="pelicanDeploy(1)"><span>{{ trans(N ~ '.docker') }}</span></label>
+      </div><p class="hint">{{ trans(N ~ '.auto_question') }}</p></div>
+    <div class="field"><span class="field-label">{{ trans(N ~ '.auto_command') }}</span><textarea class="textarea code" id="deploy-cmd" rows="4" readonly></textarea>
+      <div><button type="button" class="btn-link" onclick="navigator.clipboard.writeText(document.getElementById('deploy-cmd').value)">{{ icon('copy', 'icon-sm') }}</button></div></div>
+  </div>
+  <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament::components/modal.actions.close.label') }}</button></div>
+</dialog>
+<script>
+window.pelicanDeploy = async function (docker) {
+  const r = await fetch('/admin/nodes/{{ node.id }}/deploy-command?docker=' + docker, { credentials: 'same-origin' });
+  if (r.ok) document.getElementById('deploy-cmd').value = (await r.json()).command;
+};
+document.querySelector('[data-modal-open="auto-deploy"]')?.addEventListener('click', () => window.pelicanDeploy(0));
+</script>
+{% endif %}
+
+<div id="relations" class="stack" data-tabs-root>
+  <div><nav class="tabs">
+    <button type="button" data-tab="rel-allocations" class="active">{{ icon('network', 'icon-sm') }}{{ trans(N ~ '.allocation') }}<span class="badge">{{ allocations | length }}</span></button>
+    <button type="button" data-tab="rel-servers">{{ icon('brand-docker', 'icon-sm') }}{{ trans(N ~ '.table.servers') }}<span class="badge">{{ servers | length }}</span></button>
+  </nav></div>
+  <section class="card table-card" data-tab-panel="rel-allocations">
+    {% if not readonly %}<div class="table-toolbar"><div class="spacer"></div>
+      <form method="post" action="/admin/nodes/{{ node.id }}/action">{{ csrf_field() }}<input type="hidden" name="op" value="refresh-ips"><button class="btn btn-sm btn-gray" title="{{ trans(N ~ '.refresh') }}">{{ icon('refresh', 'icon-sm') }}</button></form>
+      <button type="button" class="btn btn-sm" data-modal-open="node-alloc-create">{{ icon('world-plus', 'icon-sm') }}{{ trans(N ~ '.create_allocation') }}</button></div>{% endif %}
+    {% if allocations %}<div class="table-wrap"><table class="table">
+      <thead><tr><th>{{ trans(N ~ '.table.ip') }}</th><th>{{ trans(N ~ '.port') }}</th><th>{{ trans(N ~ '.table.alias') }}</th><th>{{ trans(N ~ '.table.allocation_notes') }}</th><th class="wide-only">{{ trans(N ~ '.table.servers') }}</th><th class="sr-only"></th></tr></thead>
+      <tbody>{% for a in allocations %}{% set base = '/admin/nodes/' ~ node.id ~ '/allocations/' ~ a.id %}
+      <tr>
+        <td><form method="post" action="{{ base }}/ip">{{ csrf_field() }}<select class="select" name="ip" style="width:auto" onchange="this.form.requestSubmit()"{% if readonly %} disabled{% endif %}><option>{{ a.ip }}</option>{% for ip in node_ips %}{% if ip[0] != a.ip %}<option>{{ ip[0] }}</option>{% endif %}{% endfor %}</select></form></td>
+        <td class="mono">{{ a.port }}</td>
+        <td><form method="post" action="{{ base }}/alias">{{ csrf_field() }}<input class="input" style="min-width:9rem" name="ip_alias" value="{{ a.alias }}" placeholder="{{ trans(N ~ '.table.no_alias') }}" onchange="this.form.requestSubmit()"{% if readonly %} disabled{% endif %}></form></td>
+        <td><form method="post" action="{{ base }}/notes">{{ csrf_field() }}<input class="input" style="min-width:9rem" name="notes" value="{{ a.notes }}" placeholder="{{ trans(N ~ '.table.no_notes') }}" onchange="this.form.requestSubmit()"{% if readonly %} disabled{% endif %}></form></td>
+        <td class="wide-only">{% if a.server %}<a href="/admin/servers/{{ a.server.id }}/edit">{{ a.server.name }}</a>{% else %}<span class="muted">{{ trans(N ~ '.table.no_server') }}</span>{% endif %}</td>
+        <td class="actions">{% if not readonly and not a.server %}<form method="post" action="{{ base }}/delete" style="display:inline" data-confirm="{{ trans('filament-actions::modal.confirmation') }}" data-confirm-title="{{ trans('filament-actions::delete.single.label') }}">{{ csrf_field() }}<button class="btn-link danger">{{ icon('trash', 'icon-sm') }}{{ trans('filament-actions::delete.single.label') }}</button></form>{% endif %}</td>
+      </tr>{% endfor %}</tbody></table></div>
+    {% else %}<div class="empty"><div class="icon-wrap">{{ icon('network', 'icon-lg') }}</div><h3>{{ trans(N ~ '.no_allocations') }}</h3></div>{% endif %}
+  </section>
+  <section class="card table-card" data-tab-panel="rel-servers" hidden>
+    {% if servers %}<div class="table-wrap"><table class="table"><thead><tr><th>{{ trans(N ~ '.table.name') }}</th><th></th></tr></thead><tbody>
+    {% for s in servers %}<tr class="clickable" data-href="/admin/servers/{{ s.id }}/edit"><td>{{ s.name }}</td><td class="actions"><a class="btn-link" href="/server/{{ s.uuid_short }}">{{ icon('terminal', 'icon-sm') }}</a></td></tr>{% endfor %}
+    </tbody></table></div>{% else %}<div class="empty"><div class="icon-wrap">{{ icon('brand-docker', 'icon-lg') }}</div></div>{% endif %}
+  </section>
+</div>
+{% if not readonly %}
+<dialog id="node-alloc-create" class="modal"><form method="post" action="/admin/nodes/{{ node.id }}/allocations/create">{{ csrf_field() }}
+  <div class="modal-head"><h2>{{ trans(N ~ '.create_allocation') }}</h2></div>
+  <div class="modal-body">
+    {{ f.select('allocation_ip', trans(N ~ '.ip_address'), node_ips, '', {}, required=true, hint=trans(N ~ '.ip_help')) }}
+    {{ f.text('allocation_alias', trans(N ~ '.table.alias'), '', {}, hint=trans(N ~ '.alias_help')) }}
+    {{ f.text('allocation_ports', trans(N ~ '.ports'), '', {}, required=true, placeholder='27015, 27017-27019') }}
+  </div>
+  <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button><button class="btn">{{ trans('filament-actions::create.single.modal.actions.create.label') }}</button></div>
+</form></dialog>
+{% endif %}
+{% endif %}
+</div>
+<script src="{{ asset('js/node-stats.js') }}" defer></script>
+{% endblock %}

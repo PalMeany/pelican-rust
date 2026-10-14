@@ -190,6 +190,10 @@ pub enum Cell {
     Image {
         src: String,
     },
+    /// Trusted HTML produced by the handler (escape inputs yourself).
+    Html {
+        html: String,
+    },
     /// Inline select that posts `field` to `url` on change (`SelectColumn`).
     Select {
         url: String,

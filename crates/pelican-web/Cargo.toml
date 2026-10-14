@@ -11,6 +11,7 @@ pelican-api = { path = "../pelican-api" }
 pelican-db = { path = "../pelican-db" }
 laravel-compat = { path = "../laravel-compat" }
 pelican-wings = { path = "../pelican-wings" }
+egg-format = { path = "../egg-format" }
 axum = { version = "0.8", features = ["macros", "form"] }
 tower = "0.5"
 minijinja = { version = "2", features = ["loader", "json", "urlencode"] }

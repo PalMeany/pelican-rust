@@ -13,6 +13,23 @@ pub fn dump(value: &Value) -> String {
     do_dump(value, 10, 0)
 }
 
+thread_local! {
+    static EMPTY_AS_SEQUENCE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// `Yaml::dump($value, $inline, 2, DUMP_EMPTY_ARRAY_AS_SEQUENCE)` (e.g. `Node::getYamlConfiguration()`):
+/// empty arrays become `[]` instead of `{  }`.
+pub fn dump_empty_as_sequence(value: &Value, inline: i32) -> String {
+    EMPTY_AS_SEQUENCE.with(|f| f.set(true));
+    let out = do_dump(value, inline, 0);
+    EMPTY_AS_SEQUENCE.with(|f| f.set(false));
+    out
+}
+
+fn empty_collection() -> String {
+    if EMPTY_AS_SEQUENCE.with(|f| f.get()) { "[]".into() } else { "{  }".into() }
+}
+
 /// `Dumper::doDump()` (Dumper.php:52-145). Only the flags/blocks reachable with
 /// `DUMP_MULTI_LINE_LITERAL_BLOCK | DUMP_OBJECT_AS_MAP` are implemented; the
 /// compact-nested-mapping / tagged-value branches cannot trigger.
@@ -170,7 +187,7 @@ fn inline_dump(value: &Value) -> String {
         Value::Array(items) => {
             if items.is_empty() {
                 // Empty array: `dumpHashArray([])` → `sprintf('{ %s }', '')`.
-                "{  }".into()
+                empty_collection()
             } else {
                 // Non-empty JSON arrays are always PHP lists.
                 let parts: Vec<String> = items.iter().map(inline_dump).collect();
@@ -179,7 +196,7 @@ fn inline_dump(value: &Value) -> String {
         }
         Value::Object(map) => {
             if map.is_empty() {
-                "{  }".into()
+                empty_collection()
             } else if object_is_list(map) {
                 // Sequential-int-keyed hash dumps as a flow sequence.
                 let parts: Vec<String> = map.values().map(inline_dump).collect();

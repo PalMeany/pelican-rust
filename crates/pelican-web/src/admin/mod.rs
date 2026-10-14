@@ -2,6 +2,7 @@
 //! resources. Permissions follow the spatie names (`viewList mount`, …).
 
 mod mounts;
+mod nodes;
 mod server_relations;
 mod servers;
 mod servers_create;
@@ -22,6 +23,7 @@ use crate::error::{WebError, WebResult};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .merge(mounts::routes())
+        .merge(nodes::routes())
         .merge(servers_create::routes())
         .merge(servers::routes())
         .merge(server_relations::routes())

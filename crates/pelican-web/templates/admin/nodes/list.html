@@ -1,0 +1,22 @@
+{% extends "admin/list.html" %}
+{% block head %}
+<script>
+// NodeClientConnectivity: can this browser reach the node? (no-cors fetch)
+(function () {
+  const s = {{ strings | safe }};
+  const icon = (name, color, title) => '<span class="text-' + color + '" title="' + title + '">' + name + '</span>';
+  async function check(el) {
+    el.innerHTML = icon('…', 'warning', s.checking);
+    try {
+      await fetch(el.dataset.url, { mode: 'no-cors', signal: AbortSignal.timeout(5000) });
+      el.innerHTML = icon('●', 'success', s.online);
+    } catch (e) {
+      el.innerHTML = icon('●', 'danger', s.offline);
+    }
+  }
+  const run = () => document.querySelectorAll('.node-reach').forEach(check);
+  document.addEventListener('DOMContentLoaded', run);
+  document.addEventListener('htmx:afterSettle', run);
+})();
+</script>
+{% endblock %}
