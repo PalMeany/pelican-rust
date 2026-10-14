@@ -22,6 +22,7 @@ steps:
 ---
 name: client/account-api-keys
 fixtures: [base, infra, client-users]
+distinct_seconds: true
 normalize:
   random_columns: [api_keys.identifier]
   random_patterns: ['"secret_token":"([A-Za-z0-9]{32})"']

@@ -90,6 +90,10 @@ pub async fn run(ctx: &Ctx<'_>, s: &Scenario, target: &Target<'_>) -> Result<Run
     let start = now();
     let mut steps = Vec::new();
     for (i, st) in s.steps.iter().enumerate() {
+        if s.distinct_seconds {
+            let ms = chrono::Utc::now().timestamp_subsec_millis();
+            tokio::time::sleep(std::time::Duration::from_millis(u64::from(1000 - ms.min(999)) + 20)).await;
+        }
         if let Some(cmd) = &st.command {
             let code = target.command(cmd).await.with_context(|| format!("step {} command {cmd}", i + 1))?;
             steps.push(StepResult {

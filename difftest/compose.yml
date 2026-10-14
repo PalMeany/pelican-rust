@@ -66,6 +66,9 @@ services:
       POSTGRES_USER: pelican
       POSTGRES_PASSWORD: pelican
       POSTGRES_DB: panel
+    # No autoanalyze: statistics changing between the two panels' runs flips join
+    # plans and with them the natural row order of queries without ORDER BY.
+    command: ["postgres", "-c", "autovacuum=off"]
     tmpfs: ["/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "pelican"]

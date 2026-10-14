@@ -34,6 +34,10 @@ pub struct Scenario {
     /// Skip with a reason (known divergence, not yet implemented, ...).
     #[serde(default)]
     pub skip: Option<String>,
+    /// Start every step in a new wall-clock second: per-second dirty checks
+    /// (api key `last_used_at`) then behave the same however fast a panel is.
+    #[serde(default)]
+    pub distinct_seconds: bool,
     #[serde(skip)]
     pub file: PathBuf,
 }
