@@ -3,14 +3,19 @@
 
 pub mod assets;
 mod auth;
+pub mod cache;
 pub mod csrf;
 pub mod ctx;
 pub mod error;
 pub mod forms;
 pub mod i18n;
+pub mod models;
+pub mod server_info;
 pub mod session;
+pub mod table;
 pub mod views;
 
+mod admin;
 mod app;
 
 use axum::Router;
@@ -48,6 +53,7 @@ pub fn router(state: AppState) -> Router {
         .route("/login/cancel", post(auth::cancel))
         .route("/logout", post(auth::logout))
         .merge(app::routes())
+        .merge(admin::routes())
         .fallback(error::not_found)
         .layer(from_fn(csrf::layer))
         .layer(from_fn_with_state(state.clone(), session::layer));
@@ -57,6 +63,7 @@ pub fn router(state: AppState) -> Router {
             "/pelican.ico",
             get(|| assets::serve(axum::extract::Path("pelican.ico".into()), axum::extract::RawQuery(None))),
         )
+        .route("/storage/{*path}", get(models::serve_storage))
         .merge(pages)
         .layer(from_fn(security_headers))
         .with_state(state)

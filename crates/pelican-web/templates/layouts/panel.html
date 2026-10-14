@@ -40,6 +40,7 @@
         <div class="dropdown-menu">
           <div class="head"><div style="font-weight:600">{{ user.username }}</div><div class="muted small truncate">{{ user.email }}</div></div>
           <a href="/profile">{{ icon('user', 'icon-sm') }}{{ trans('profile.title') }}</a>
+          {% if user.admin and path is not startingwith('/admin') %}<a href="/admin">{{ icon('arrow-forward', 'icon-sm') }}{{ trans('profile.admin') }}</a>{% endif %}
           {% for item in user_menu or [] %}
           <a href="{{ item.url }}">{{ icon(item.icon, 'icon-sm') }}{{ item.label }}</a>
           {% endfor %}

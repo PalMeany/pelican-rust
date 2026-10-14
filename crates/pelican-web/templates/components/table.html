@@ -1,0 +1,132 @@
+{# Generic list table (crate::table::Table). Links and the search/filter form are
+   boosted: htmx fetches the page and swaps only this table (`hx-select`). #}
+
+{% macro cell(c) %}
+{%- if c.type == 'text' -%}
+  <div{% if c.tooltip %} title="{{ c.tooltip }}"{% endif %}{% if c.copy %} class="copyable" data-copy="{{ c.copy }}"{% endif %}>
+    <span{% if c.mono %} class="mono"{% endif %}>{{ c.text }}</span>
+    {% if c.desc %}<div class="desc">{{ c.desc }}</div>{% endif %}
+  </div>
+{%- elif c.type == 'badge' -%}
+  <span class="badge badge-{{ c.color }}{% if c.copy %} copyable{% endif %}"{% if c.tooltip %} title="{{ c.tooltip }}"{% endif %}{% if c.copy %} data-copy="{{ c.copy }}"{% endif %}>{% if c.icon %}{{ icon(c.icon, 'icon-sm') }}{% endif %}{{ c.text }}</span>
+{%- elif c.type == 'badges' -%}
+  <div class="row" style="gap:0.25rem">{% for b in c['items'] %}<span class="badge badge-{{ c.color }}">{{ b }}</span>{% endfor %}</div>
+{%- elif c.type == 'icon' -%}
+  <span class="text-{{ c.color }}"{% if c.tooltip %} title="{{ c.tooltip }}"{% endif %}>{{ icon(c.icon, 'icon') }}</span>
+{%- elif c.type == 'bool' -%}
+  {% if c.value %}<span class="text-success">{{ icon('circle-check', 'icon') }}</span>{% else %}<span class="text-danger">{{ icon('circle-x', 'icon') }}</span>{% endif %}
+{%- elif c.type == 'progress' -%}
+  <div><div class="progress {{ c.color }}"><span style="width:{{ [c.percent, 100] | min }}%"></span></div><div class="progress-label">{{ c.label }}</div></div>
+{%- elif c.type == 'image' -%}
+  {% if c.src %}<img class="server-icon" src="{{ c.src }}" alt="" loading="lazy">{% else %}<span class="server-icon" style="display:inline-block"></span>{% endif %}
+{%- endif -%}
+{% endmacro %}
+
+{% macro action_button(a, csrf, inline=true, back='') %}
+{% if a.method == 'get' %}
+  <a href="{{ a.url }}" class="{% if inline %}btn-link {{ 'danger' if a.color == 'danger' }}{% endif %} {{ 'danger' if a.color == 'danger' and not inline }}" hx-boost="false">{{ icon(a.icon, 'icon-sm') }}{{ a.label }}</a>
+{% else %}
+  <form method="post" action="{{ a.url }}" hx-boost="false" style="display:inline"{% if a.confirm %} data-confirm="{{ a.confirm }}" data-confirm-title="{{ a.label }}" data-confirm-ok="{{ a.label }}" data-confirm-color="{{ a.color }}"{% endif %}>
+    <input type="hidden" name="_token" value="{{ csrf }}">
+    {% if back %}<input type="hidden" name="_back" value="{{ back }}">{% endif %}
+    {% for f in a.fields %}<input type="hidden" name="{{ f[0] }}" value="{{ f[1] }}">{% endfor %}
+    <button type="submit" class="{% if inline %}btn-link {{ 'danger' if a.color == 'danger' }}{% else %}{{ 'danger' if a.color == 'danger' }}{% endif %}">{{ icon(a.icon, 'icon-sm') }}{{ a.label }}</button>
+  </form>
+{% endif %}
+{% endmacro %}
+
+{% macro render(t, csrf) %}
+<div id="{{ t.id }}" class="stack" hx-boost="true" hx-target="#{{ t.id }}" hx-select="#{{ t.id }}" hx-swap="outerHTML"
+  {%- if t.poll %} hx-get="{{ t.current_url }}" hx-trigger="every {{ t.poll }}"{% endif %}>
+  {% if t.tabs %}
+  <div><nav class="tabs">
+    {% for tab in t.tabs %}<a href="{{ tab.url }}" class="{{ 'active' if tab.active }}">{{ tab.label }}{% if tab.badge is not none %}<span class="badge{{ ' badge-primary' if tab.active }}">{{ tab.badge }}</span>{% endif %}</a>{% endfor %}
+  </nav></div>
+  {% endif %}
+  <div class="card table-card">
+    {% if t.searchable or t.filters %}
+    <form class="table-toolbar" method="get" action="{{ t.base_url }}">
+      {% for k in t.keep %}<input type="hidden" name="{{ k[0] }}" value="{{ k[1] }}">{% endfor %}
+      <input type="hidden" name="per_page" value="{{ t.pagination.per_page }}">
+      {% for f in t.filters %}
+      <label class="row small" style="gap:0.5rem">{{ f.label }}
+        <select class="select" id="{{ t.id }}-filter-{{ f.name }}" name="filter[{{ f.name }}]" style="width:auto;min-width:10rem"
+          hx-get="{{ t.base_url }}" hx-trigger="change" hx-include="closest form" hx-push-url="true">
+          <option value="">{{ trans('filament-tables::table.filters.select.placeholder') }}</option>
+          {% for o in f.options %}<option value="{{ o[0] }}"{% if o[0] == f.value %} selected{% endif %}>{{ o[1] }}</option>{% endfor %}
+        </select>
+      </label>
+      {% endfor %}
+      <div class="spacer"></div>
+      {% if t.searchable %}
+      <input class="input search" id="{{ t.id }}-search" type="search" name="search" value="{{ t.search }}"
+        hx-get="{{ t.base_url }}" hx-trigger="input changed delay:400ms, search" hx-include="closest form" hx-push-url="true" placeholder="{{ t.search_placeholder or trans('filament-tables::table.fields.search.placeholder') }}" aria-label="{{ trans('filament-tables::table.fields.search.label') }}">
+      {% endif %}
+    </form>
+    {% endif %}
+    {% if t.rows %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr>
+          {% for c in t.columns %}
+          <th style="text-align:{{ c.align }}"{% if c.wide_only %} class="wide-only"{% endif %}>
+            {% if c.sortable %}<a href="{{ c.sort_url }}">{{ c.label }}{% if c.sorted == 'asc' %}{{ icon('chevron-up', 'icon-sm') }}{% elif c.sorted == 'desc' %}{{ icon('chevron-down', 'icon-sm') }}{% else %}{{ icon('selector', 'icon-sm') }}{% endif %}</a>{% else %}{{ c.label }}{% endif %}
+          </th>
+          {% endfor %}
+          {% if t.has_actions %}<th class="sr-only">{{ t.actions_label }}</th>{% endif %}
+        </tr></thead>
+        <tbody>
+          {% for r in t.rows %}
+          <tr{% if r.url %} class="clickable" data-href="{{ r.url }}"{% endif %}>
+            {% for c in t.columns %}
+            <td style="text-align:{{ c.align }}"{% if c.wide_only %} class="wide-only"{% endif %}>{{ cell(r.cells[c.key]) if r.cells[c.key] }}</td>
+            {% endfor %}
+            {% if t.has_actions %}
+            <td class="actions">
+              {% for a in r.actions %}{{ action_button(a, csrf, true, t.current_url) }}{% endfor %}
+              {% if r.group %}
+              <details class="dropdown" style="display:inline-block">
+                <summary class="icon-btn" aria-label="{{ t.actions_label }}">{{ icon(r.group_icon or 'dots-vertical', 'icon') }}</summary>
+                <div class="dropdown-menu">{% for a in r.group %}{{ action_button(a, csrf, false, t.current_url) }}{% endfor %}</div>
+              </details>
+              {% endif %}
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if t.pagination.total > 0 %}
+    <div class="table-foot">
+      <span class="muted">{{ trans_choice('filament::components/pagination.overview', t.pagination.total, first=t.pagination.first, last=t.pagination.last, total=t.pagination.total) }}</span>
+      <form method="get" action="{{ t.base_url }}" class="row small" style="gap:0.5rem">
+        {% for k in t.keep %}<input type="hidden" name="{{ k[0] }}" value="{{ k[1] }}">{% endfor %}
+        {% if t.search %}<input type="hidden" name="search" value="{{ t.search }}">{% endif %}
+        <label class="row" style="gap:0.5rem">{{ trans('filament::components/pagination.fields.records_per_page.label') }}
+          <select class="select" name="per_page" style="width:auto" onchange="this.form.requestSubmit()">
+            {% for o in t.pagination.per_page_options %}<option value="{{ o[0] }}"{% if o[0] == t.pagination.per_page %} selected{% endif %}>{{ o[1] }}</option>{% endfor %}
+          </select>
+        </label>
+      </form>
+      {% if t.pagination.links %}
+      <nav class="pagination" aria-label="{{ trans('filament::components/pagination.label') }}">
+        {% if t.pagination.prev %}<a href="{{ t.pagination.prev }}" aria-label="{{ trans('filament::components/pagination.actions.previous.label') }}">{{ icon('chevron-left', 'icon-sm') }}</a>{% else %}<span class="disabled">{{ icon('chevron-left', 'icon-sm') }}</span>{% endif %}
+        {% for l in t.pagination.links %}
+          {% if l.url %}<a href="{{ l.url }}" class="{{ 'current' if l.current }}"{% if l.current %} aria-current="page"{% endif %}>{{ l.label }}</a>{% else %}<span class="disabled">{{ l.label }}</span>{% endif %}
+        {% endfor %}
+        {% if t.pagination.next %}<a href="{{ t.pagination.next }}" aria-label="{{ trans('filament::components/pagination.actions.next.label') }}">{{ icon('chevron-right', 'icon-sm') }}</a>{% else %}<span class="disabled">{{ icon('chevron-right', 'icon-sm') }}</span>{% endif %}
+      </nav>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="empty">
+      <div class="icon-wrap">{{ icon(t.empty_icon, 'icon-lg') }}</div>
+      <h3>{{ t.empty_heading }}</h3>
+      {% if t.empty_description %}<p class="muted">{{ t.empty_description }}</p>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}

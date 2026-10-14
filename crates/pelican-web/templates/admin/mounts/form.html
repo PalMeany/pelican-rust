@@ -1,0 +1,31 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if can_delete %}
+    <form method="post" action="/admin/mounts/{{ record.id }}/delete" data-confirm="{{ trans('filament-actions::modal.confirmation') }}"
+      data-confirm-title="{{ trans('filament-actions::delete.single.modal.heading', label=record.name) }}" data-confirm-ok="{{ trans('filament-actions::delete.single.modal.actions.delete.label') }}">
+      {{ csrf_field() }}<button class="btn btn-danger" type="submit">{{ trans('filament-actions::delete.single.label') }}</button>
+    </form>
+    {% endif %}
+    {% if not readonly %}<button class="btn" type="submit" form="record-form" title="{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') if record else trans('filament-panels::resources/pages/create-record.form.actions.create.label') }}">{{ icon('device-floppy' if record else 'file-plus', 'icon-sm') }}{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') if record else trans('filament-panels::resources/pages/create-record.form.actions.create.label') }}</button>{% endif %}
+  </div>
+</div>
+<form id="record-form" method="post" action="{{ action }}" class="grid grid-3">
+  {{ csrf_field() }}
+  <fieldset class="card card-body span-2 grid grid-2" style="margin:0;align-content:start"{% if readonly %} disabled{% endif %}>
+    <div class="span-full">{{ f.text('name', trans('admin/mount.name'), v.name, errors, required=true, hint=trans('admin/mount.name_help'), attrs='maxlength="64"') }}</div>
+    {{ f.radios('read_only', trans('admin/mount.read_only'), [['0', trans('admin/mount.toggles.writable')], ['1', trans('admin/mount.toggles.read_only')]], v.read_only, errors, inline=true, hint=trans('admin/mount.read_only_help')) }}
+    {{ f.radios('user_mountable', trans('admin/mount.user_mountable'), [['0', trans('admin/mount.toggles.not_user_mountable')], ['1', trans('admin/mount.toggles.user_mountable')]], v.user_mountable, errors, inline=true, hint=trans('admin/mount.user_mountable_help')) }}
+    {{ f.text('source', trans('admin/mount.source'), v.source, errors, required=true, hint=trans('admin/mount.source_help'), attrs='maxlength="255"') }}
+    {{ f.text('target', trans('admin/mount.target'), v.target, errors, required=true, hint=trans('admin/mount.target_help'), attrs='maxlength="255"') }}
+    <div class="span-full">{{ f.textarea('description', trans('admin/mount.description'), v.description, errors, hint=trans('admin/mount.description_help')) }}</div>
+  </fieldset>
+  <fieldset class="card card-body stack" style="margin:0;align-content:start"{% if readonly %} disabled{% endif %}>
+    {{ f.select('eggs', trans('admin/mount.eggs'), egg_options, v.eggs, errors, multiple=true) }}
+    {{ f.select('nodes', trans('admin/mount.nodes'), node_options, v.nodes, errors, multiple=true) }}
+  </fieldset>
+</form>
+{% endblock %}

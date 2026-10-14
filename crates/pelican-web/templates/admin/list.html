@@ -1,0 +1,12 @@
+{% extends "layouts/panel.html" %}
+{% import "components/table.html" as tbl %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% for a in header_actions or [] %}<a class="btn {{ a.class or 'btn-gray' }}" href="{{ a.url }}">{% if a.icon %}{{ icon(a.icon, 'icon-sm') }}{% endif %}{{ a.label }}</a>{% endfor %}
+    {% if create %}<a class="btn" href="{{ create.url }}">{{ create.label }}</a>{% endif %}
+  </div>
+</div>
+{{ tbl.render(table, csrf) }}
+{% endblock %}

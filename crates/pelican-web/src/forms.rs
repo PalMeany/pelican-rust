@@ -39,6 +39,14 @@ impl Form {
         self.fields.get(&format!("{key}[]")).or_else(|| self.fields.get(key)).cloned().unwrap_or_default()
     }
 
+    /// Local return URL from the `_back` field (tables add it to row actions).
+    pub fn back(&self, default: &str) -> String {
+        self.opt("_back")
+            .filter(|b| b.starts_with('/') && !b.starts_with("//") && !b.contains('\\'))
+            .unwrap_or(default)
+            .to_string()
+    }
+
     /// Checkbox/toggle: present and not `0`/`false`/empty.
     pub fn bool(&self, key: &str) -> bool {
         self.opt(key).is_some_and(|v| !matches!(v, "" | "0" | "false" | "off"))

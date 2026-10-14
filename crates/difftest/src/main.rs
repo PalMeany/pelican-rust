@@ -37,6 +37,9 @@ struct Args {
     /// Base URL of an already running pelican-rs (default: start in-process).
     #[arg(long)]
     rust_url: Option<String>,
+    /// Reset the database, load these fixtures (comma list) and exit (dev/UI data).
+    #[arg(long)]
+    seed: Option<String>,
 }
 
 #[tokio::main]
@@ -49,6 +52,18 @@ async fn main() -> Result<()> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../difftest");
     let enc = Encrypter::from_env_values(APP_KEY, None)?;
     let db = TestDb::connect(&config_for(&args.backend)?).await.context("connecting to difftest DB")?;
+    if let Some(list) = &args.seed {
+        let mut rows = difftest::scenario::Rows::new();
+        for f in list.split(',').filter(|f| !f.is_empty()) {
+            for (t, l) in difftest::scenario::load_fixture(&root.join("fixtures"), f)? {
+                rows.entry(t).or_default().extend(l);
+            }
+        }
+        db.reset().await?;
+        db.load(&rows, &enc, chrono::Utc::now().naive_utc()).await?;
+        println!("seeded {} tables", rows.len());
+        return Ok(());
+    }
     let wings = MockWings::start().await.context("starting mock wings on :8080")?;
     let http = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())

@@ -30,5 +30,6 @@ hmac = "0.12"
 sha1 = "0.10"
 chrono-tz = "0.10"
 form_urlencoded = "1"
+futures = "0.3"
 indexmap = { version = "2", features = ["serde"] }
 serde_urlencoded = "0.7"

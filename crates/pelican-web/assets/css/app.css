@@ -94,11 +94,11 @@ img { max-width: 100%; }
 .page-head h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
 .page-head .sub { color: var(--text-2); margin-top: 0.25rem; }
 .page-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
-.menu-toggle { display: none; }
+.topbar .menu-toggle { display: none; }
 @media (max-width: 1023px) {
   .sidebar { position: fixed; z-index: 40; left: 0; transform: translateX(-100%); transition: transform 0.2s; box-shadow: var(--shadow-lg); }
   .shell.nav-open .sidebar { transform: none; }
-  .menu-toggle { display: inline-flex; }
+  .topbar .menu-toggle { display: inline-flex; }
   .content { padding: 1.5rem 1rem 3rem; }
 }
 
@@ -220,6 +220,8 @@ table.table { width: 100%; border-collapse: collapse; }
 .table tbody tr:hover { background: var(--hover); }
 .table td.actions { text-align: right; white-space: nowrap; width: 1%; }
 .table td.actions > * { margin-left: 0.25rem; }
+.table .wide-only { }
+@media (max-width: 767px) { .table .wide-only { display: none; } }
 .table .desc { color: var(--text-2); font-size: 0.8125rem; }
 .table-foot { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem 1rem; border-top: 1px solid var(--border); flex-wrap: wrap; font-size: 0.875rem; }
 .pagination { display: flex; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); overflow: hidden; }
@@ -303,7 +305,7 @@ dialog.modal::backdrop { background: rgb(9 9 11 / 0.5); }
 .spinner { width: 1rem; height: 1rem; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .htmx-indicator { display: none; } .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline-block; }
-.server-icon { width: 2.875rem; height: 2.875rem; border-radius: var(--radius-sm); object-fit: cover; background: var(--gray-100); }
+.server-icon { width: 2.875rem; height: 2.875rem; border-radius: var(--radius-sm); object-fit: cover; background: var(--surface-2); border: 1px solid var(--border); }
 .divider { border: 0; border-top: 1px solid var(--border); margin: 0; }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nowrap { white-space: nowrap; }
@@ -311,3 +313,15 @@ dialog.modal::backdrop { background: rgb(9 9 11 / 0.5); }
 .mt-1 { margin-top: 0.25rem; } .mt-2 { margin-top: 0.5rem; } .mt-4 { margin-top: 1rem; }
 .qr { background: #fff; padding: 0.75rem; border-radius: var(--radius-sm); display: inline-block; }
 .recovery-codes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; font-family: var(--mono); font-size: 0.875rem; }
+
+/* ---------- server list cards (livewire/server-entry.blade.php) ---------- */
+.server-card { position: relative; padding: 0.875rem 1rem 1rem 1.25rem; cursor: pointer; overflow: hidden; display: flex; flex-direction: column; gap: 0.75rem; }
+.server-card:hover { border-color: var(--border-strong); }
+.server-card > * { position: relative; }
+.server-card-bar { position: absolute !important; left: 0; top: 0; bottom: 0; width: 0.25rem; }
+.server-card-bg { position: absolute !important; inset: 0; background: right / contain no-repeat; opacity: 0.2; max-width: 680px; max-height: 140px; pointer-events: none; }
+.server-card-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; align-items: center; }
+@media (max-width: 639px) { .server-card-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } .server-card-stats .wide-only { display: none; } }
+.bg-success { background: var(--success-600); } .bg-danger { background: var(--danger-600); } .bg-warning { background: var(--warning-500); }
+.bg-info { background: var(--info-500); } .bg-primary { background: var(--primary-600); } .bg-gray { background: var(--gray-400); }
+.server-card-stats > div { min-width: 0; overflow-wrap: anywhere; }

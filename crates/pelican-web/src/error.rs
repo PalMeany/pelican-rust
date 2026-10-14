@@ -12,6 +12,8 @@ pub enum WebError {
     Forbidden,
     #[error("Page Expired")]
     PageExpired,
+    #[error("Unprocessable Content")]
+    Unprocessable,
     #[error("Content Too Large")]
     PayloadTooLarge,
     #[error("Too Many Requests")]
@@ -35,6 +37,7 @@ impl WebError {
             WebError::Forbidden => StatusCode::FORBIDDEN,
             WebError::PageExpired => StatusCode::from_u16(419).unwrap_or(StatusCode::BAD_REQUEST),
             WebError::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
+            WebError::Unprocessable => StatusCode::UNPROCESSABLE_ENTITY,
             WebError::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -46,6 +49,7 @@ impl WebError {
             WebError::Forbidden => "Forbidden",
             WebError::PageExpired => "Page Expired",
             WebError::PayloadTooLarge => "Content Too Large",
+            WebError::Unprocessable => "Unprocessable Content",
             WebError::TooManyRequests => "Too Many Requests",
             _ => "Server Error",
         }

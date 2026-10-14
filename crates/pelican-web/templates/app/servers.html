@@ -1,5 +1,64 @@
 {% extends "layouts/panel.html" %}
+{% import "components/table.html" as tbl %}
 {% set title = trans('server/dashboard.title') %}
 {% block content %}
 <div class="page-head"><h1>{{ title }}</h1></div>
+{% if grid %}
+<div id="servers-grid" class="stack" hx-boost="true" hx-target="#servers-grid" hx-select="#servers-grid" hx-swap="outerHTML"
+  hx-get="{{ table.current_url }}" hx-trigger="every 15s">
+  <div><nav class="tabs">
+    {% for tab in table.tabs %}<a href="{{ tab.url }}" class="{{ 'active' if tab.active }}">{{ tab.label }}<span class="badge{{ ' badge-primary' if tab.active }}">{{ tab.badge }}</span></a>{% endfor %}
+  </nav></div>
+  <form class="row" method="get" action="/">
+    {% for k in table.keep %}<input type="hidden" name="{{ k[0] }}" value="{{ k[1] }}">{% endfor %}
+    {% for f in table.filters %}
+    <select class="select" id="grid-filter-{{ f.name }}" name="filter[{{ f.name }}]" style="width:auto;min-width:10rem" aria-label="{{ f.label }}"
+      hx-get="/" hx-trigger="change" hx-include="closest form" hx-push-url="true">
+      <option value="">{{ f.label }}: {{ trans('filament-tables::table.filters.select.placeholder') }}</option>
+      {% for o in f.options %}<option value="{{ o[0] }}"{% if o[0] == f.value %} selected{% endif %}>{{ o[1] }}</option>{% endfor %}
+    </select>
+    {% endfor %}
+    <div style="flex:1"></div>
+    <input class="input" id="grid-search" type="search" name="search" value="{{ table.search }}" style="max-width:18rem"
+      placeholder="{{ trans('filament-tables::table.fields.search.placeholder') }}" aria-label="{{ trans('filament-tables::table.fields.search.label') }}"
+      hx-get="/" hx-trigger="input changed delay:400ms, search" hx-include="closest form" hx-push-url="true">
+  </form>
+  {% if cards %}
+  <div class="grid grid-2">
+    {% for c in cards %}
+    <div class="card server-card" data-href="{{ c.url }}" onclick="if(!event.target.closest('a,button,form,details'))location.href=this.dataset.href">
+      <span class="server-card-bar bg-{{ c.condition_color }}"></span>
+      {% if c.icon %}<div class="server-card-bg" style="background-image:url('{{ c.icon }}')"></div>{% endif %}
+      <div class="row" style="flex-wrap:nowrap">
+        <span class="text-{{ c.condition_color }}" title="{{ c.condition_label }}">{{ icon(c.condition_icon, 'icon-lg') }}</span>
+        <h2 class="truncate" style="font-size:1.25rem;font-weight:700;flex:1">{{ c.name }} <span class="muted" style="font-weight:500">({{ c.uptime }})</span></h2>
+        {% if c.actions %}
+        <details class="dropdown">
+          <summary class="icon-btn" aria-label="{{ trans('server/dashboard.power_actions') }}">{{ icon('power', 'icon-lg') }}</summary>
+          <div class="dropdown-menu">{% for a in c.actions %}{{ tbl.action_button(a, csrf, false, table.current_url) }}{% endfor %}</div>
+        </details>
+        {% endif %}
+      </div>
+      {% if c.description %}<p class="muted" style="margin-left:2.5rem">{{ c.description }}</p>{% endif %}
+      <div class="server-card-stats">
+        <div>{{ tbl.cell(c.cpu) }}</div>
+        <div>{{ tbl.cell(c.memory) }}</div>
+        <div>{{ tbl.cell(c.disk) }}</div>
+        <div class="wide-only" style="text-align:center"><div class="small muted">{{ trans('server/dashboard.network') }}</div><div style="font-weight:600">{{ c.address }}</div></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% if table.pagination.links %}
+  <nav class="pagination" style="align-self:center">
+    {% for l in table.pagination.links %}{% if l.url %}<a href="{{ l.url }}" class="{{ 'current' if l.current }}">{{ l.label }}</a>{% else %}<span class="disabled">{{ l.label }}</span>{% endif %}{% endfor %}
+  </nav>
+  {% endif %}
+  {% else %}
+  <div class="card empty"><div class="icon-wrap">{{ icon('brand-docker', 'icon-lg') }}</div><h3>{{ table.empty_heading }}</h3></div>
+  {% endif %}
+</div>
+{% else %}
+{{ tbl.render(table, csrf) }}
+{% endif %}
 {% endblock %}
