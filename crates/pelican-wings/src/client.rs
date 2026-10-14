@@ -131,7 +131,13 @@ impl WingsClient {
     }
 
     pub async fn send(&self, node: &Node, call: Call<'_>) -> Result<WingsResponse, WingsError> {
-        let url = format!("{}/{}", node.connection_address().trim_end_matches('/'), call.path.trim_start_matches('/'));
+        let mut url =
+            format!("{}/{}", node.connection_address().trim_end_matches('/'), call.path.trim_start_matches('/'));
+        if !call.query.is_empty() {
+            // Guzzle `query` option: http_build_query(..., PHP_QUERY_RFC3986).
+            let q: Vec<String> = call.query.iter().map(|(k, v)| format!("{}={}", rfc3986(k), rfc3986(v))).collect();
+            url = format!("{url}?{}", q.join("&"));
+        }
         let client =
             self.http(call.timeout.unwrap_or(self.timeout), call.connect_timeout.unwrap_or(self.connect_timeout))?;
         let mut req = client
@@ -139,9 +145,6 @@ impl WingsClient {
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", node.token));
-        if !call.query.is_empty() {
-            req = req.query(call.query);
-        }
         req = match call.body {
             Body::None => req,
             Body::Json(v) => {
@@ -169,6 +172,17 @@ impl WingsClient {
         }
         Ok(WingsResponse { status, body, content_length })
     }
+}
+
+fn rfc3986(s: &str) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
 }
 
 /// Repository calls used by the panel (remote-api.md §4.4).

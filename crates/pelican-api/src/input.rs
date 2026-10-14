@@ -12,6 +12,10 @@ const NO_TRIM: &[&str] = &["current_password", "password", "password_confirmatio
 #[derive(Clone, Debug, Default)]
 pub struct Input {
     pub data: Value,
+    /// The cleaned query bag alone (`$request->query`).
+    pub query: Value,
+    /// Raw request body (`$request->getContent()`).
+    pub raw: Bytes,
 }
 
 impl Input {
@@ -35,16 +39,21 @@ impl Input {
         clean(&mut query_v, None, trim);
         clean(&mut body_v, None, trim);
         // `getInputSource()->all() + query->all()`: body wins.
-        if let (Value::Object(b), Value::Object(q)) = (&mut body_v, query_v) {
+        if let (Value::Object(b), Value::Object(q)) = (&mut body_v, &query_v) {
             for (k, v) in q {
-                b.entry(k).or_insert(v);
+                b.entry(k.clone()).or_insert_with(|| v.clone());
             }
         }
-        Input { data: body_v }
+        Input { data: body_v, query: query_v, raw: body.clone() }
     }
 
     pub fn from_value(data: Value) -> Input {
-        Input { data }
+        Input { data, ..Default::default() }
+    }
+
+    /// Symfony `$request->get($key)`: query bag first, then the body.
+    pub fn get_query_first(&self, key: &str) -> Option<&Value> {
+        self.query.as_object().and_then(|m| m.get(key)).or_else(|| self.data.as_object().and_then(|m| m.get(key)))
     }
 
     /// `Arr::get($data, 'a.b.0')`.
@@ -226,7 +235,9 @@ impl<S: Send + Sync> axum::extract::FromRequest<S> for In {
         let bytes = axum::body::to_bytes(body, 64 * 1024 * 1024).await.map_err(|_| {
             axum::response::IntoResponse::into_response(crate::error::ApiError::bad_request("Invalid request body."))
         })?;
-        let trim = !skip_trim(parts.uri.path());
+        // `nest()` strips the `/api/client` prefix from `parts.uri`.
+        let full = parts.extensions.get::<axum::extract::OriginalUri>().map(|o| o.0.path().to_string());
+        let trim = !skip_trim(full.as_deref().unwrap_or(parts.uri.path()));
         Ok(In(Input::parse(parts.uri.query(), &parts.headers, &bytes, trim)))
     }
 }

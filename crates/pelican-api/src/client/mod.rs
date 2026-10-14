@@ -4,6 +4,7 @@ mod account;
 mod activity;
 mod backups;
 pub mod data;
+mod files;
 mod servers;
 mod startup;
 mod subusers;
@@ -36,6 +37,19 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route("/servers/{server}/power", p(post(servers::power)))
         .route("/servers/{server}/users", p(get(subusers::index).post(subusers::store)))
         .route("/servers/{server}/backups", p(get(backups::index).post(backups::store)))
+        .route("/servers/{server}/files/list", p(get(files::list_directory)))
+        .route("/servers/{server}/files/contents", p(get(files::contents)))
+        .route("/servers/{server}/files/download", p(get(files::download)))
+        .route("/servers/{server}/files/rename", p(put(files::rename)))
+        .route("/servers/{server}/files/copy", p(post(files::copy)))
+        .route("/servers/{server}/files/write", p(post(files::write)))
+        .route("/servers/{server}/files/compress", p(post(files::compress)))
+        .route("/servers/{server}/files/decompress", p(post(files::decompress)))
+        .route("/servers/{server}/files/delete", p(post(files::delete)))
+        .route("/servers/{server}/files/create-folder", p(post(files::create_folder)))
+        .route("/servers/{server}/files/chmod", p(post(files::chmod)))
+        .route("/servers/{server}/files/pull", p(post(files::pull)))
+        .route("/servers/{server}/files/upload", p(get(files::upload)))
         .route("/servers/{server}/startup", p(get(startup::index)))
         .route("/servers/{server}/startup/variable", p(put(startup::update)))
         .route("/servers/{server}/backups/{backup}", p(get(backups::view).delete(backups::delete)))

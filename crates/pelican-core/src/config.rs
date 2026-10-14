@@ -69,6 +69,8 @@ pub struct Config {
     pub session_cookie: String,
     /// `PANEL_USE_BINARY_PREFIX` (config/panel.php), default true.
     pub use_binary_prefix: bool,
+    /// `PANEL_FILES_MAX_EDIT_SIZE` (config/panel.php), default 4 MiB; 0 disables the check.
+    pub files_max_edit_size: i64,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -124,6 +126,7 @@ impl Config {
             wings_connect_timeout: env.int_or("GUZZLE_CONNECT_TIMEOUT", 5).max(0) as u64,
             session_cookie: env.string_or("SESSION_COOKIE", "pelican_session"),
             use_binary_prefix: env.bool_or("PANEL_USE_BINARY_PREFIX", true),
+            files_max_edit_size: env.int_or("PANEL_FILES_MAX_EDIT_SIZE", 4 * 1024 * 1024),
             env,
         };
         Ok((cfg, enc))

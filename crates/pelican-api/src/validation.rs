@@ -415,7 +415,7 @@ impl<'a> Validator<'a> {
                     || chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").is_ok()
             }),
             "timezone" => v.as_str().is_some_and(is_timezone),
-            "url" => v.as_str().is_some_and(|s| s.starts_with("http://") || s.starts_with("https://")),
+            "url" => v.as_str().is_some_and(crate::url_rule::is_url),
             other => {
                 tracing::error!("validation rule `{other}` is not implemented");
                 false

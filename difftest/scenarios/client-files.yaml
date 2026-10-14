@@ -1,0 +1,65 @@
+name: client/files-read
+fixtures: [base, infra, client-users]
+wings:
+  responses:
+    - method: GET
+      path: /api/servers/*/files/list-directory
+      json:
+        - { name: "docs", created: "2024-05-01T10:20:30Z", modified: "2024-05-02T11:00:00+03:00", mode: "drwxr-xr-x", mode_bits: "755", size: 4096, directory: true, file: false, symlink: false, mime: "inode/directory" }
+        - { name: "server.properties", created: "2024-05-01T10:20:30Z", modified: "2024-05-01T10:20:31Z", mode: "-rw-r--r--", mode_bits: "644", size: "12", directory: false, file: true }
+        - { name: 7, created: "2024-05-01T10:20:30-07:00", modified: "2024-05-01T10:20:30Z", mode: "Lrwxrwxrwx", mode_bits: "777", size: 0, file: 1, symlink: true, mime: "text/plain" }
+    - { method: GET, path: /api/servers/*/files/contents, body: "motd=Привет, мир\nmax-players=20\n" }
+steps:
+  - { path: "/api/client/servers/0b5c6a0e-3f0e-4c1e-9d55-6c1d7c0a2d11/files/list?directory=%2F%20sub%20dir%20", bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { path: "/api/client/servers/0b5c6a0e/files/list?directory=%20x%2By%20", bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/files/list, bearer: pacc_admin000001AdminClientSecret000000000000001 }
+  - { path: "/api/client/servers/0b5c6a0e/files/list?directory[]=x", bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/files/list, bearer: pacc_user3key001User3ClientSecret000000000001 }
+  - { path: "/api/client/servers/0b5c6a0e/files/contents?file=%2Fserver.properties", bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { path: /api/client/servers/0b5c6a0e/files/contents, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: "/api/client/servers/0b5c6a0e/files/download?file=%2Fa%2520b%20c.txt", bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { path: /api/client/servers/0b5c6a0e/files/upload, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { path: /api/client/servers/0b5c6a0e/files/upload, bearer: pacc_user3key001User3ClientSecret000000000001 }
+---
+name: client/files-write
+fixtures: [base, infra, client-users]
+wings:
+  responses:
+    - method: POST
+      path: /api/servers/*/files/compress
+      json: { name: "archive-2024.tar.gz", created: "2024-05-01T10:20:30Z", modified: "2024-05-01T10:20:30Z", mode: "-rw-r--r--", mode_bits: "644", size: 1234, directory: false, file: true, symlink: false, mime: "application/gzip" }
+steps:
+  - { method: POST, path: "/api/client/servers/0b5c6a0e/files/write?file=%2Fnew%20file.txt", bearer: pacc_user0000001UserClientSecret0000000000000001, body: "  hello\nworld  ", expect_status: 204 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/files/write, bearer: pacc_user0000001UserClientSecret0000000000000001, body: "x" }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/files/create-folder, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: " dir ", root: "/x" }, expect_status: 204 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e-3f0e-4c1e-9d55-6c1d7c0a2d11/files/create-folder, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: " dir " } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/files/create-folder, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: "dir", root: null } }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/files/rename, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { root: "/", files: [{ from: "a/b.txt", to: "c.txt" }, { from: "d", to: "e" }] }, expect_status: 204 }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/files/rename, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { root: "", files: [{ from: "a" }, "x"] } }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/files/rename, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { root: "/", files: { "k": { from: "a", to: "b" } } } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/files/copy, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { location: "/a.txt" }, expect_status: 204 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/files/compress, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { files: ["a", "b/c"], extension: "zip" }, expect_status: 200 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/files/compress, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { root: "/r", files: ["a"], name: "n", extension: "rar" } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/files/decompress, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { file: "a.zip" }, expect_status: 204 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/files/delete, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { root: "/", files: ["a", "b"] }, expect_status: 204 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/files/delete, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { root: null, files: "a" } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/files/chmod, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { root: "/", files: [{ file: "a", mode: "755" }, { file: "b", mode: 644 }] }, expect_status: 204 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/files/chmod, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { root: "/", files: [{ file: "a", mode: "rwx" }] } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/files/pull, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { url: "https://example.com/file.zip?x=1", directory: "/dl", use_header: true, foreground: "0", filename: null }, expect_status: 204 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/files/pull, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { url: "not a url", use_header: "yes" } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/files/pull, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { url: "http://[::1]:8080/x" } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/files/delete, bearer: pacc_user3key001User3ClientSecret000000000001, json: { root: "/", files: ["a"] } }
+---
+name: client/files-wings-errors
+fixtures: [base, infra, client-users]
+wings:
+  responses:
+    - { method: GET, path: /api/servers/*/files/contents, status: 404, json: { error: "not found" } }
+    - { method: POST, path: /api/servers/*/files/write, status: 400, json: { error: "exists" } }
+    - { method: GET, path: /api/servers/*/files/list-directory, status: 500, json: { error: "boom" } }
+    - { method: POST, path: /api/servers/*/files/compress, json: { error: "no name" } }
+steps:
+  - { path: "/api/client/servers/0b5c6a0e/files/contents?file=x", bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: POST, path: "/api/client/servers/0b5c6a0e/files/write?file=x", bearer: pacc_user0000001UserClientSecret0000000000000001, body: "x" }
+  - { path: /api/client/servers/0b5c6a0e/files/list, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/files/compress, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { files: ["a"] } }
