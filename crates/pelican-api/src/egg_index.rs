@@ -18,7 +18,7 @@ pub type EggIndex = IndexMap<String, IndexMap<String, String>>;
 static INDEX: RwLock<Option<EggIndex>> = RwLock::new(None);
 static UPDATES: RwLock<Option<HashMap<String, (Instant, bool)>>> = RwLock::new(None);
 
-const DEFAULT_INDEX_URL: &str =
+pub const DEFAULT_INDEX_URL: &str =
     "https://raw.githubusercontent.com/pelican-eggs/pelican-eggs.github.io/refs/heads/main/content/pelican.json";
 
 fn client(timeout: u64) -> Result<reqwest::Client, String> {
@@ -38,6 +38,15 @@ pub fn index() -> Option<EggIndex> {
 /// `UpdateEggIndexCommand`: fetch `panel.cdn.egg_index_url` and store the index.
 pub async fn update_index(st: &AppState) -> Result<EggIndex, String> {
     let url = st.config.env.string_or("PANEL_EGG_INDEX_URL", DEFAULT_INDEX_URL);
+    let index = fetch_index(&url).await?;
+    if let Ok(mut g) = INDEX.write() {
+        *g = Some(index.clone());
+    }
+    Ok(index)
+}
+
+/// Download and group the index (`nests[].Eggs[]` → nest name → download URL → egg name).
+pub async fn fetch_index(url: &str) -> Result<EggIndex, String> {
     let resp = client(5)?.get(url).send().await.map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
         return Err(format!("HTTP request returned status code {}", resp.status().as_u16()));
@@ -49,14 +58,10 @@ pub async fn update_index(st: &AppState) -> Result<EggIndex, String> {
         let mut eggs = IndexMap::new();
         for egg in nest.get("Eggs").and_then(Value::as_array).into_iter().flatten() {
             let url = pelican_core::php::string(egg.get("download_url").unwrap_or(&Value::Null));
-            let egg_name =
-                pelican_core::php::string(egg.get("egg").and_then(|e| e.get("name")).unwrap_or(&Value::Null));
+            let egg_name = pelican_core::php::string(egg.get("egg").and_then(|e| e.get("name")).unwrap_or(&Value::Null));
             eggs.insert(url, egg_name);
         }
         index.insert(name, eggs);
-    }
-    if let Ok(mut g) = INDEX.write() {
-        *g = Some(index.clone());
     }
     Ok(index)
 }

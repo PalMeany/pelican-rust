@@ -1,0 +1,87 @@
+{% extends "layouts/base.html" %}
+{% import "components/forms.html" as f %}
+{% set I = 'installer' %}
+{% block body %}
+<main class="simple installer">
+  <div class="simple-card" style="max-width:56rem;width:100%">
+    <div class="logo"><img src="{{ asset('img/pelican.svg') }}" alt="{{ app_name }}"></div>
+    <form method="post" action="/installer" class="stack" hx-boost="false">
+      <input type="hidden" name="_install_token" value="{{ csrf }}">
+      <input type="hidden" name="step" value="{{ step }}">
+      {% for h in hidden %}<input type="hidden" name="{{ h[0] }}" value="{{ h[1] }}">{% endfor %}
+      <div class="row" style="justify-content:space-between">
+        <h1 style="margin:0">{{ title }}</h1>
+        <label class="row small" style="gap:.5rem">{{ icon('flag', 'icon-sm') }}{{ trans('profile.language') }}
+          <select class="select" name="language" style="width:auto" onchange="this.form.querySelector('[name=go]').value='language'; this.form.submit()">
+            {% for l in languages %}<option value="{{ l[0] }}"{% if l[0] == language %} selected{% endif %}>{{ l[1] }}</option>{% endfor %}
+          </select></label>
+      </div>
+      <ol class="wizard-steps">
+        {% for s in steps %}<li class="{{ 'done' if loop.index0 < step_index }}{{ ' current' if loop.index0 == step_index }}">{{ s.label }}</li>{% endfor %}
+      </ol>
+      {% if notice %}<div class="banner {{ notice.status }}">{{ icon('alert-triangle') }}<div><strong>{{ notice.title }}</strong>{% if notice.body %}<div style="white-space:pre-wrap">{{ notice.body }}</div>{% endif %}</div></div>{% endif %}
+
+      {% if step == 'requirements' %}
+        {% for r in requirements %}
+        <section class="card card-body">
+          <h3 class="row">{{ icon('check' if r.ok else 'x', 'icon-sm text-' ~ ('success' if r.ok else 'danger')) }}{{ trans(I ~ '.requirements.sections.permissions.title') }}</h3>
+          <p class="muted small">{{ r.names }}</p>
+          <p>{{ trans(I ~ '.requirements.sections.permissions.good') if r.ok else trans(I ~ '.requirements.sections.permissions.bad', folders=r.bad) }}</p>
+        </section>
+        {% endfor %}
+      {% elif step == 'environment' %}
+        <div class="grid grid-2">
+          {{ f.text('APP_NAME', trans(I ~ '.environment.fields.app_name'), v.APP_NAME, errors, required=true, hint=trans(I ~ '.environment.fields.app_name_help')) }}
+          {{ f.text('APP_URL', trans(I ~ '.environment.fields.app_url'), v.APP_URL, errors, required=true, hint=trans(I ~ '.environment.fields.app_url_help')) }}
+        </div>
+        <fieldset class="fieldset"><legend>{{ trans(I ~ '.environment.fields.account.section') }}</legend>
+          <div class="grid grid-3">
+            {{ f.text('user_email', trans(I ~ '.environment.fields.account.email'), v.user_email, errors, type='email', required=true, placeholder='admin@example.com') }}
+            {{ f.text('user_username', trans(I ~ '.environment.fields.account.username'), v.user_username, errors, required=true, placeholder='admin') }}
+            {{ f.text('user_password', trans(I ~ '.environment.fields.account.password'), v.user_password, errors, type='password', required=true) }}
+          </div>
+        </fieldset>
+      {% elif step == 'database' %}
+        {{ f.radios('DB_CONNECTION', trans(I ~ '.database.driver'), drivers, v.DB_CONNECTION, errors, inline=true, hint=trans(I ~ '.database.driver_help')) }}
+        <div class="grid grid-2">
+          {{ f.text('DB_DATABASE', trans(I ~ '.database.fields.path') if v.DB_CONNECTION == 'sqlite' else trans(I ~ '.database.fields.name'), v.DB_DATABASE, errors, required=true, hint=trans(I ~ '.database.fields.path_help') if v.DB_CONNECTION == 'sqlite' else trans(I ~ '.database.fields.name_help')) }}
+          <div data-show-if="DB_CONNECTION=mariadb,mysql,pgsql">{{ f.text('DB_HOST', trans(I ~ '.database.fields.host'), v.DB_HOST, errors, placeholder='127.0.0.1', hint=trans(I ~ '.database.fields.host_help')) }}</div>
+          <div data-show-if="DB_CONNECTION=mariadb,mysql,pgsql">{{ f.text('DB_PORT', trans(I ~ '.database.fields.port'), v.DB_PORT, errors, type='number', attrs='min="1" max="65535"', hint=trans(I ~ '.database.fields.port_help')) }}</div>
+          <div data-show-if="DB_CONNECTION=mariadb,mysql,pgsql">{{ f.text('DB_USERNAME', trans(I ~ '.database.fields.username'), v.DB_USERNAME, errors, placeholder='pelican', hint=trans(I ~ '.database.fields.username_help')) }}</div>
+          <div data-show-if="DB_CONNECTION=mariadb,mysql,pgsql">{{ f.text('DB_PASSWORD', trans(I ~ '.database.fields.password'), v.DB_PASSWORD, errors, type='password', hint=trans(I ~ '.database.fields.password_help')) }}</div>
+        </div>
+      {% elif step == 'egg' %}
+        {% if index_error %}<div class="banner danger">{{ icon('egg') }}<div><strong>{{ trans(I ~ '.egg.exceptions.failed_to_update') }}</strong><div>{{ index_error }}</div></div></div>{% endif %}
+        {% if index %}
+        <div data-tabs-root data-tabs-local class="stack">
+          <div><nav class="tabs" style="flex-wrap:wrap">{% for nest in index %}<button type="button" data-tab="nest-{{ loop.index }}" class="{{ 'active' if loop.first }}">{{ nest[0] }} <span class="badge">{{ nest[1] | length }}</span></button>{% endfor %}</nav></div>
+          {% for nest in index %}
+          <div class="grid grid-4" data-tab-panel="nest-{{ loop.index }}"{% if not loop.first %} hidden{% endif %}>
+            {% for e in nest[1] %}<label class="check"><input type="checkbox" name="eggs[]" value="{{ e[0] }}"{% if e[0] in v.eggs %} checked{% endif %}>{{ e[1] }}</label>{% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}<p class="muted">{{ trans(I ~ '.egg.exceptions.no_eggs') }}</p>{% endif %}
+      {% elif step == 'cache' %}
+        {{ f.radios('CACHE_STORE', trans(I ~ '.cache.driver'), [['file', 'Filesystem'], ['redis', 'Redis']], v.CACHE_STORE, errors, inline=true, hint=trans(I ~ '.cache.driver_help')) }}
+        <div class="grid grid-2" data-show-if="CACHE_STORE=redis">
+          {{ f.text('REDIS_HOST', trans(I ~ '.cache.fields.host'), v.REDIS_HOST, errors, placeholder='127.0.0.1', hint=trans(I ~ '.cache.fields.host_help')) }}
+          {{ f.text('REDIS_PORT', trans(I ~ '.cache.fields.port'), v.REDIS_PORT, errors, placeholder='6379', hint=trans(I ~ '.cache.fields.port_help')) }}
+          {{ f.text('REDIS_USERNAME', trans(I ~ '.cache.fields.username'), v.REDIS_USERNAME, errors, hint=trans(I ~ '.cache.fields.username_help')) }}
+          {{ f.text('REDIS_PASSWORD', trans(I ~ '.cache.fields.password'), v.REDIS_PASSWORD, errors, type='password', hint=trans(I ~ '.cache.fields.password_help')) }}
+        </div>
+      {% elif step == 'queue' %}
+        {{ f.radios('QUEUE_CONNECTION', trans(I ~ '.queue.driver'), [['database', 'Database'], ['redis', 'Redis'], ['sync', 'Sync']], v.QUEUE_CONNECTION, errors, inline=true, hint=trans(I ~ '.queue.driver_help')) }}
+      {% elif step == 'session' %}
+        {{ f.radios('SESSION_DRIVER', trans(I ~ '.session.driver'), [['file', 'Filesystem'], ['database', 'Database'], ['cookie', 'Cookie'], ['redis', 'Redis']], v.SESSION_DRIVER, errors, inline=true, hint=trans(I ~ '.session.driver_help')) }}
+      {% endif %}
+
+      <input type="hidden" name="go" value="next">
+      <div class="row" style="justify-content:space-between">
+        {% if step_index > 0 %}<button type="submit" class="btn btn-gray" formnovalidate onclick="this.form.querySelector('[name=go]').value='back'">{{ trans('filament-schemas::components.wizard.actions.previous_step.label') }}</button>{% else %}<span></span>{% endif %}
+        <button type="submit" class="btn">{{ trans(I ~ '.finish') if last else trans('filament-schemas::components.wizard.actions.next_step.label') }}</button>
+      </div>
+    </form>
+  </div>
+</main>
+{% endblock %}

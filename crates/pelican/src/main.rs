@@ -51,10 +51,9 @@ async fn main() -> Result<()> {
     tracing_subscriber::registry().with(console).with(file).init();
     match cli.cmd {
         Cmd::Serve { listen } => {
-            let state = pelican::boot(env, &cli.path).await?;
             let listener = tokio::net::TcpListener::bind(&listen).await?;
             tracing::info!("listening on {listen}");
-            pelican::serve(state, listener).await
+            pelican::serve_or_install(env, &cli.path, listener).await
         }
         Cmd::ScheduleProcess => {
             let state = pelican::boot(env, &cli.path).await?;

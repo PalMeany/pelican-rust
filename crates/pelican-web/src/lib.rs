@@ -10,6 +10,7 @@ pub mod ctx;
 pub mod error;
 pub mod forms;
 pub mod i18n;
+pub mod installer;
 pub mod models;
 pub mod server_info;
 pub mod session;
@@ -60,6 +61,7 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/oauth/callback/{driver}", get(auth::oauth::callback))
         .route("/password-reset/request", get(auth::password_reset::request_form).post(auth::password_reset::request))
         .route("/password-reset/reset", get(auth::password_reset::reset_form).post(auth::password_reset::reset))
+        .route("/installer/complete", get(installer_complete))
         .merge(app::routes())
         .merge(admin::routes())
         .merge(server::routes())
@@ -76,4 +78,21 @@ pub fn router(state: AppState) -> Router {
         .merge(pages)
         .layer(from_fn(security_headers))
         .with_state(state)
+}
+
+/// The installer's last redirect: sign the new admin in (`auth()->login($user, true)`)
+/// and open the admin panel. Without a valid one-time token this is the login page.
+async fn installer_complete(web: ctx::Web) -> axum::response::Response {
+    let token = web
+        .query
+        .as_deref()
+        .and_then(|q| form_urlencoded::parse(q.as_bytes()).find(|(k, _)| k == "token").map(|(_, v)| v.into_owned()))
+        .unwrap_or_default();
+    match installer::take_login(&token) {
+        Some(user_id) => {
+            web.session.login(user_id, true);
+            web.redirect("/admin")
+        }
+        None => web.redirect("/login"),
+    }
 }

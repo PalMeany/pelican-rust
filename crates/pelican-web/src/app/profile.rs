@@ -135,7 +135,7 @@ fn native_name(code: &str) -> &str {
 }
 
 /// `LanguageService::getAvailableLanguages()`: code → display name.
-fn languages() -> Vec<(String, String)> {
+pub(crate) fn languages() -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = crate::i18n::locales()
         .into_iter()
         .map(|code| {

@@ -69,8 +69,10 @@
 - Хвосты M5: вебхуки на события моделей eloquent.*, egg check-updates/update-index (с UI), plugins API (M7),
   S3-бэкапы (MinIO), конфигурация ноды YAML через API.
 - M6 (`.worktrees/m6`, dev-панель — контейнер `pelican-m6-dev` на :8088, SQLite из `.worktrees/.difftest/m6dev`):
-  дальше — интеграция ui-b/ui-c, admin dashboard/settings/health/logs/plugins, перенос сервера, server
-  users/backups/schedules/webhooks, сброс пароля, затем инсталлятор и E2E с настоящим Wings.
+  готовы admin dashboard/settings/health/logs, перенос сервера, server users/backups/schedules, сброс пароля,
+  OAuth/капча/аватары, веб-инсталлятор (ADR-0016). Дальше — интеграция B3 (webhooks сервера, backup hosts) и
+  C3 (массовые действия), passkeys, inline-создание владельца/аллокации в мастере, E2E бэкапов/переноса/SFTP,
+  слияние m6 в main.
 - Запись в SQLite dev-окружения с хоста не видна контейнеру (кэш ФС VM) — менять данные только через панель.
 
 ## Диск (просьба пользователя)

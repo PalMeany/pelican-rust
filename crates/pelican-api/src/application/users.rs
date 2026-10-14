@@ -279,6 +279,75 @@ pub async fn create_user(st: &AppState, username: &str, email: &str, oauth: Valu
     Ok(user)
 }
 
+/// `DatabaseSeeder`: `Role::firstOrCreate(['name' => Role::ROOT_ADMIN])` (guard `web`).
+pub async fn ensure_root_admin_role(st: &AppState) -> ApiResult<i64> {
+    if let Some(r) = roles::Entity::find().filter(roles::Column::Name.eq("Root Admin")).one(&st.db).await? {
+        return Ok(r.id.0);
+    }
+    let now = Timestamp(pelican_core::time::now());
+    let id = pelican_db::write::insert_id(
+        &st.db,
+        &roles::ActiveModel {
+            name: Set("Root Admin".into()),
+            guard_name: Set("web".into()),
+            created_at: Set(Some(now)),
+            updated_at: Set(Some(now)),
+            ..Default::default()
+        },
+    )
+    .await?
+    .ok_or_else(|| ApiError::internal("QueryException"))?;
+    Ok(id)
+}
+
+/// `UserCreationService::handle([... 'root_admin' => true])` for the installer: the
+/// given password, the Root Admin role and the AccountCreated mail (no reset token).
+pub async fn create_admin(st: &AppState, username: &str, email: &str, password: &str) -> ApiResult<users::Model> {
+    let (username, email) = (username.to_lowercase(), email.to_lowercase());
+    let taken = users::Entity::find()
+        .filter(sea_orm::Condition::any().add(users::Column::Username.eq(username.clone())).add(users::Column::Email.eq(email.clone())))
+        .one(&st.db)
+        .await?
+        .is_some();
+    if taken {
+        return Err(ApiError::display("ValidationException", 422, "The username or email has already been taken."));
+    }
+    let now = Timestamp(pelican_core::time::now());
+    let txn = st.db.begin().await?;
+    let am = users::ActiveModel {
+        external_id: Set(None),
+        is_managed_externally: Set(Bool(false)),
+        email: Set(email),
+        username: Set(username),
+        password: Set(hash(st, password)?),
+        language: Set("en".into()),
+        timezone: Set(st.config.env.string_or("APP_TIMEZONE", "UTC")),
+        uuid: Set(uuid::Uuid::new_v4().to_string()),
+        mfa_app_secret: Set(None),
+        mfa_app_recovery_codes: Set(None),
+        mfa_email_enabled: Set(Bool(false)),
+        oauth: Set(Some(pelican_db::Json(json!([])))),
+        created_at: Set(Some(now)),
+        updated_at: Set(Some(now)),
+        ..Default::default()
+    };
+    let user = pelican_db::write::insert(&txn, am).await?;
+    let role = roles::Entity::find()
+        .filter(roles::Column::Name.eq("Root Admin"))
+        .one(&txn)
+        .await?
+        .ok_or_else(|| ApiError::internal("RoleDoesNotExist"))?;
+    txn.execute_raw(raw::stmt(
+        txn.get_database_backend(),
+        "insert into {model_has_roles} ({role_id}, {model_type}, {model_id}) values (?, ?, ?)",
+        vec![role.id.into(), "user".into(), user.id.into()],
+    ))
+    .await?;
+    txn.commit().await?;
+    crate::services::account_created(st, &user, None).await?;
+    Ok(user)
+}
+
 /// `PATCH /users/{user}` (`UserUpdateService`).
 pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, In(input): In) -> ApiResult<Response> {
     ctx.acl("user", WRITE)?;

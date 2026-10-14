@@ -36,12 +36,64 @@ pub async fn boot(env: Env, base: &Path) -> Result<AppState> {
 
 /// Serve the panel on an already bound listener.
 pub async fn serve(state: AppState, listener: tokio::net::TcpListener) -> Result<()> {
+    axum::serve(listener, start_panel(state).into_make_service_with_connect_info::<SocketAddr>()).await?;
+    Ok(())
+}
+
+/// Background tasks (scheduler, `.env` reloader) and the panel router for a booted state.
+fn start_panel(state: AppState) -> axum::Router {
     let live = Live::new(state.clone());
     if state.config.env.bool_or("PELICAN_SCHEDULER", true) {
         pelican_api::jobs::spawn_scheduler(live.clone());
     }
     spawn_reloader(live.clone());
-    axum::serve(listener, app(live).into_make_service_with_connect_info::<SocketAddr>()).await?;
+    app(live)
+}
+
+/// `pelican serve`: the panel, or the web installer while `APP_INSTALLED` is false
+/// (ADR-0016). The installer hands over a booted state and the same listener then
+/// serves the panel.
+pub async fn serve_or_install(env: Env, base: &Path, listener: tokio::net::TcpListener) -> Result<()> {
+    if env.bool_or("APP_INSTALLED", true) {
+        let state = boot(env, base).await?;
+        return serve(state, listener).await;
+    }
+    ensure_app_key(&env, base)?;
+    tracing::info!("APP_INSTALLED is false: serving the web installer at /installer");
+    let current = std::sync::Arc::new(std::sync::RwLock::new(axum::Router::new()));
+    let switch = current.clone();
+    let installer = pelican_web::installer::router(
+        base.to_path_buf(),
+        Box::new(move |state| {
+            *switch.write().unwrap_or_else(|e| e.into_inner()) = start_panel(state);
+            tracing::info!("installation finished: serving the panel");
+        }),
+    );
+    *current.write().unwrap_or_else(|e| e.into_inner()) = installer;
+    let svc = axum::Router::new().fallback(move |req: axum::extract::Request| {
+        use tower::ServiceExt;
+        let router = current.read().unwrap_or_else(|e| e.into_inner()).clone();
+        async move { axum::response::IntoResponse::into_response(router.oneshot(req).await) }
+    });
+    axum::serve(listener, svc.into_make_service_with_connect_info::<SocketAddr>()).await?;
+    Ok(())
+}
+
+/// `php artisan key:generate` when the installer starts without an `APP_KEY`.
+fn ensure_app_key(env: &Env, base: &Path) -> Result<()> {
+    if env.string("APP_KEY").is_some_and(|k| !k.is_empty()) {
+        return Ok(());
+    }
+    use rand::RngCore;
+    let mut key = [0u8; 32];
+    rand::rng().fill_bytes(&mut key);
+    let value = format!("base64:{}", base64::Engine::encode(&base64::engine::general_purpose::STANDARD, key));
+    let file = base.join(".env");
+    if !file.exists() {
+        std::fs::write(&file, "")?;
+    }
+    pelican_core::env::write_variables(&file, &[("APP_KEY".into(), pelican_core::env::EnvWrite::Str(value))], true)?;
+    tracing::info!("generated a new APP_KEY");
     Ok(())
 }
 

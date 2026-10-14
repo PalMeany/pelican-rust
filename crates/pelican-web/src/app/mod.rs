@@ -1,6 +1,7 @@
 //! App panel (`/`): server list and profile (app/Filament/App, app/Filament/Pages/Auth).
 
 mod profile;
+pub(crate) use profile::languages;
 mod servers;
 
 use axum::Router;
