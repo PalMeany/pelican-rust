@@ -90,10 +90,14 @@ user_viewable, user_editable, rules, created_at, updated_at`. Casts: `user_viewa
 `rules` → array (JSON column since `2024_07_25_072050_convert_rules_to_array.php`), dates immutable.
 Unique indexes `(egg_id, env_variable)` and `(egg_id, name)` (`2025_04_01_033956_egg_variable_unique_foreign_key.php`).
 
+`name`, `description`, `env_variable`, `default_value`, `user_viewable`, `user_editable`, `rules` are NOT NULL,
+so an imported variable with a null/missing `description` or `default_value` fails at SQL level.
+
 **Physical column order matters for export** (see §4.2, variables): `sort` was added with
 `->after('egg_id')` (`2024_04_20_214441_add_egg_var_sort.php`). MySQL/MariaDB honour `after`, so the order is
 `id, egg_id, sort, name, …`; SQLite and PostgreSQL ignore `after`, so `sort` is the last column
-(`…, rules, created_at, updated_at, sort`).
+(`…, rules, created_at, updated_at, sort`). Confirmed by the schema dumps in this repo
+(`pelican-rs/crates/pelican-db/schema/{mysql,mariadb}.sql:174-186` vs `pgsql.sql:229-242`, `sqlite.sql:117`).
 
 ---
 
@@ -433,8 +437,9 @@ Notes:
    | `server.build.environment.` | `server.environment.` |
 
    (`str_replace` with arrays replaces each pair over the whole string before moving to the next pair. Note
-   `server.build.memory` also matches inside an already-upgraded `server.build.memory_limit`, producing
-   `server.build.memory_limit_limit` — this is the original behaviour.)
+   `server.build.memory` also matches inside `server.build.memory_limit` — both one produced by the previous
+   pair from `server.build.env.SERVER_MEMORY` and one already present in the file — producing
+   `server.build.memory_limit_limit`. This is the original behaviour.)
 4. `scripts.installation` (lines 183-190): array/object values JSON-encoded the same way (normally all strings).
 5. Variables bool fix (lines 194-202): for each variable whose `default_value` is a PHP bool →
    `'true'` / `'false'` string. (Ints/floats are left as numbers.)
@@ -670,13 +675,15 @@ they were not produced by the current dumper; they are import fixtures, not expo
 2. Whether `Yaml::parse` of arbitrary JSON bodies (API import) is fully equivalent to `json_decode` — Symfony 7.4
    handles multi-line flow collections and JSON escapes, but duplicate keys, very long lines, or `\u` surrogate
    pairs were not verified.
-3. Column order of `egg_variables` on MySQL vs SQLite/Postgres was inferred from migrations (`->after()` is only
-   honoured by MySQL/MariaDB); a database created by restoring a dump could differ.
+3. Column order of `egg_variables` on MySQL vs SQLite/Postgres is confirmed by the schema dumps, but a database
+   created by restoring a dump from another driver, or altered by hand, could differ; the PHP export simply
+   follows whatever `SELECT *` returns.
 4. Behaviour of `EggFormat::tryFrom(null)` when `format` is omitted: PHP 8.x coerces null for internal enum
    methods with a deprecation, returning null → YAML. A future PHP may throw.
-5. `str_replace` placeholder upgrade can produce `server.build.memory_limit_limit` when a file already uses
-   `server.build.memory_limit`; assumed to be an upstream bug, reproduce only if byte-compatibility of stored
-   `config_files` is required.
+5. `str_replace` placeholder upgrade produces `server.build.memory_limit_limit` for both
+   `server.build.env.SERVER_MEMORY` and an already-current `server.build.memory_limit` (derived by reading the
+   code, not executed); assumed to be an upstream bug. Reproduce it only if stored `config_files` must be
+   byte-compatible.
 6. MySQL default collation makes the `updateOrCreate` env_variable match case-insensitive; SQLite/Postgres are
    case-sensitive. The Rust port should choose one (recommend exact match + uppercase normalisation).
 7. PHP `json_encode` of floats (`serialize_precision = -1`) and Symfony's float dumping were not exercised;
