@@ -109,12 +109,22 @@ impl<'a> Normalizer<'a> {
             // Unix time claims relative to the run start, random `unique_id` masked.
             let claims = match serde_json::from_str::<serde_json::Value>(&claims) {
                 Ok(serde_json::Value::Object(mut obj)) => {
-                    let start = self.start.and_utc().timestamp();
-                    for k in ["iat", "nbf", "exp"] {
-                        if let Some(t) = obj.get(k).and_then(|v| v.as_i64()) {
-                            let bucket = ((t - start) as f64 / 10.0).round() as i64 * 10;
-                            obj.insert(k.into(), serde_json::Value::String(format!("<unix{bucket:+}>")));
+                    // Time claims are compared relative to `iat` (exact), `iat` itself
+                    // only has to fall inside the run window.
+                    let (start, end) = (self.start.and_utc().timestamp(), self.end.and_utc().timestamp());
+                    if let Some(iat) = obj.get("iat").and_then(|v| v.as_i64()) {
+                        for k in ["nbf", "exp"] {
+                            if let Some(t) = obj.get(k).and_then(|v| v.as_i64()) {
+                                // PHP computes `exp` before `iat`: allow the 1 s skew.
+                                let d = ((t - iat) as f64 / 10.0).round() as i64 * 10;
+                                obj.insert(k.into(), serde_json::Value::String(format!("<iat{d:+}>")));
+                            }
                         }
+                        let ok = iat >= start - 2 && iat <= end + 2;
+                        obj.insert(
+                            "iat".into(),
+                            serde_json::Value::String(if ok { "<now>".into() } else { format!("<unix:{iat}>") }),
+                        );
                     }
                     if let Some(u) = obj.get("unique_id").and_then(|v| v.as_str()) {
                         let len = u.len();

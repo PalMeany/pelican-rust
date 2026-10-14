@@ -1,0 +1,29 @@
+name: client/backups-read
+fixtures: [base, infra, client-users, remote-extra]
+steps:
+  - { path: /api/client/servers/0b5c6a0e/backups, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { path: "/api/client/servers/0b5c6a0e/backups?per_page=1&page=2", bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/backups/9a9a9a9a-0000-4000-8000-000000000002, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/backups/9a9a9a9a-0000-4000-8000-000000000003, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/backups, bearer: pacc_user3key001User3ClientSecret000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/backups/9a9a9a9a-0000-4000-8000-000000000002/download, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+---
+name: client/backups-write
+fixtures: [base, infra, client-users, remote-extra]
+wings:
+  responses:
+    - { method: DELETE, path: /api/servers/*/backup/9a9a9a9a-0000-4000-8000-000000000001, status: 404, json: { error: "not found" } }
+steps:
+  - { method: POST, path: /api/client/servers/0b5c6a0e/backups, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: "  my backup ", is_locked: true, ignored: "*.log\n\ncache/\r" }, expect_status: 200 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/backups, bearer: pacc_user0000001UserClientSecret0000000000000001, json: {} }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/backups, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { is_locked: "yes" } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/backups/9a9a9a9a-0000-4000-8000-000000000002/lock, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/backups/9a9a9a9a-0000-4000-8000-000000000002/rename, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: renamed } }
+  - { method: PUT, path: /api/client/servers/0b5c6a0e/backups/9a9a9a9a-0000-4000-8000-000000000002/rename, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: renamed } }
+  - { method: DELETE, path: /api/client/servers/0b5c6a0e/backups/9a9a9a9a-0000-4000-8000-000000000002, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/backups/9a9a9a9a-0000-4000-8000-000000000001/restore, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { truncate: true } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/backups/9a9a9a9a-0000-4000-8000-000000000002/lock, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/backups/9a9a9a9a-0000-4000-8000-000000000002/restore, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { truncate: "0" } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/backups/9a9a9a9a-0000-4000-8000-000000000002/restore, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { truncate: false } }
+  - { method: DELETE, path: /api/client/servers/0b5c6a0e/backups/9a9a9a9a-0000-4000-8000-000000000001, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: DELETE, path: /api/client/servers/0b5c6a0e/backups/9a9a9a9a-0000-4000-8000-000000000002, bearer: pacc_user3key001User3ClientSecret000000000001 }

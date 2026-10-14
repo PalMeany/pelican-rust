@@ -218,3 +218,41 @@ impl WingsClient {
         self.send(node, call).await.map(|_| ())
     }
 }
+
+/// Backup repository calls (B1–B3).
+impl WingsClient {
+    /// B1 `POST /api/servers/{uuid}/backup`.
+    pub async fn create_backup(
+        &self,
+        node: &Node,
+        server: &str,
+        adapter: &str,
+        backup: &str,
+        ignore: &str,
+    ) -> Result<(), WingsError> {
+        let path = format!("/api/servers/{server}/backup");
+        let body = serde_json::json!({"adapter": adapter, "uuid": backup, "ignore": ignore});
+        self.send(node, Call::new(Method::POST, &path).json(body)).await.map(|_| ())
+    }
+
+    /// B2 `POST /api/servers/{uuid}/backup/{backup}/restore`.
+    pub async fn restore_backup(
+        &self,
+        node: &Node,
+        server: &str,
+        backup: &str,
+        adapter: &str,
+        truncate: bool,
+        url: &str,
+    ) -> Result<(), WingsError> {
+        let path = format!("/api/servers/{server}/backup/{backup}/restore");
+        let body = serde_json::json!({"adapter": adapter, "truncate_directory": truncate, "download_url": url});
+        self.send(node, Call::new(Method::POST, &path).json(body)).await.map(|_| ())
+    }
+
+    /// B3 `DELETE /api/servers/{uuid}/backup/{backup}`.
+    pub async fn delete_backup(&self, node: &Node, server: &str, backup: &str) -> Result<(), WingsError> {
+        let path = format!("/api/servers/{server}/backup/{backup}");
+        self.send(node, Call::new(Method::DELETE, &path)).await.map(|_| ())
+    }
+}

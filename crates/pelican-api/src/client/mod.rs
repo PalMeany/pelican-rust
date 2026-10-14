@@ -2,6 +2,7 @@
 
 mod account;
 mod activity;
+mod backups;
 pub mod data;
 mod servers;
 mod subusers;
@@ -33,5 +34,11 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route("/servers/{server}/command", p(post(servers::command)))
         .route("/servers/{server}/power", p(post(servers::power)))
         .route("/servers/{server}/users", p(get(subusers::index).post(subusers::store)))
+        .route("/servers/{server}/backups", p(get(backups::index).post(backups::store)))
+        .route("/servers/{server}/backups/{backup}", p(get(backups::view).delete(backups::delete)))
+        .route("/servers/{server}/backups/{backup}/download", p(get(backups::download)))
+        .route("/servers/{server}/backups/{backup}/rename", p(put(backups::rename)))
+        .route("/servers/{server}/backups/{backup}/lock", p(post(backups::lock)))
+        .route("/servers/{server}/backups/{backup}/restore", p(post(backups::restore)))
         .route("/servers/{server}/users/{user}", p(get(subusers::view).post(subusers::update).delete(subusers::delete)))
 }
