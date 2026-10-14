@@ -70,7 +70,14 @@
   `f.password`, `f.textarea(..., code=true)`, `f.select(name, label, [[v, label],…], value, errors, multiple=, placeholder=)`,
   `f.toggle(name, label, checked)` (шлёт 0/1), `f.radios(name, label, options, value, errors, inline=true)` (ToggleButtons),
   `f.checkbox`. Секции — `<fieldset class="card card-body grid grid-2">`, колонки `span-2`, `span-full`.
-  Вкладки внутри формы — `<nav class="tabs">` + `hidden` панели (см. app.js: `data-tab`), или отдельные страницы.
+- TagsInput — `f.tags(name, label, values_list, errors, hint=, placeholder=, suggestions='datalist-id')`
+  (скрытое поле с JSON-массивом; на сервере `form.tags("name")` → `Vec<String>`; без разбиения по запятым).
+  В повторителе — `f.tags_input('rules[]', list)` и `crate::forms::parse_tags(&form.list("rules")[i])`.
+- KeyValue — `f.kv('key[]', 'value[]', label, [[k, v], …], errors, error_name='field', key_label=, value_label=,
+  add_label=, reset=[[k, v]], reset_label=)` (строки с удалением, «добавить», «сбросить к умолчанию»);
+  на сервере `form.list("key").zip(form.list("value"))`.
+- Вкладки внутри формы — `<nav class="tabs">` + панели `data-tab-panel` с `hidden` у неактивных; активная вкладка —
+  `admin.tab(&["a", "b"])` (`?tab=`, первая по умолчанию), скрытое `<input name="_tab">` для редиректа после сохранения.
 - Кнопки шапки (Delete/Save) — как в `admin/mounts/form.html`; удаление — POST-форма с `data-confirm*`.
 
 ## База данных
@@ -93,6 +100,11 @@
   `btn-sm`, `badge badge-<color>`, `banner <color>`, `muted`, `small`, `kv` (`<dl>`), `code-block`, `tabs`.
 - Модалка: `<dialog id="x" class="modal">` + кнопка `data-modal-open="x"`, закрытие `data-modal-close`.
 - Копирование: `data-copy="текст"`. Подтверждение формы: `data-confirm="вопрос" data-confirm-title data-confirm-ok`.
+- Имена переменных контекста не должны совпадать с функциями шаблона (`icon`, `trans`, `trans_choice`, `asset`,
+  `csrf_field`) — иначе «value of type … is not callable».
+- Свой JS — файлом `assets/js/<module>.js` (`{% block head %}<script src="{{ asset('js/x.js') }}" defer></script>`),
+  с делегированными обработчиками на `document`. Инлайн-`<script>` с `const`/`let` на верхнем уровне ломается при
+  повторном заходе на страницу через htmx (повторное объявление).
 
 ## Проверка
 - `scripts/cargo check -p pelican-web` и `scripts/cargo test -p pelican-web` без ошибок и предупреждений в твоих файлах.
