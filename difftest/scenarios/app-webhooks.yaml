@@ -1,0 +1,154 @@
+name: app/webhooks-read
+description: WebhookController index/view/types/events — ACL, validation of per_page/scope, filters, sorts, includes.
+fixtures: [base, infra, app-extra, app-webhooks]
+steps:
+  # --- index ---------------------------------------------------------------
+  - { path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 200 }
+  - { path: "/api/application/webhooks?per_page=2&page=2", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks?sort=-created_at,type", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks?filter[name]=SAMPLE", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks?filter[description]=FIRES", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks?filter[type]=DISCORD", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks?filter[scope]=SERV", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks?filter[endpoint]=NOPE.INVALID", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks?filter[server_id]=1", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks?filter[name]=PLUGIN&include=deliveries", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks?filter[nope]=x&sort=nope", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  # per_page here is a VALIDATED form field: out-of-range/non-numeric → 422,
+  # unlike every other application list endpoint.
+  - { path: "/api/application/webhooks?per_page=101", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks?per_page=0", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks?per_page=-1", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks?per_page=abc", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks?per_page=100", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks?scope=bogus", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  # per_page read from a JSON body as well as the query string.
+  - { path: /api/application/webhooks, json: { per_page: 1 }, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  # --- view ------------------------------------------------------------------
+  - { path: "/api/application/webhooks/1?include=deliveries", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  # 27 seeded deliveries: the include reports only the latest 25 by id DESC.
+  - { path: "/api/application/webhooks/5?include=deliveries", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks/2?include=server,deliveries", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks/4?include=deliveries", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  # Mixed key may read the webhook and its nested server object.
+  - { path: "/api/application/webhooks/2?include=server", bearer: papp_whmix000001WhMixSecret00000000000000001 }
+  # Read-only webhook permission but NO server permission: null_resource.
+  - { path: "/api/application/webhooks/2?include=server,deliveries", bearer: papp_whreadn0001WhReadSecret000000000000000001 }
+  - { path: /api/application/webhooks/999, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/webhooks/abc, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  # --- ACL -------------------------------------------------------------------
+  # WRITE alone never implies READ.
+  - { path: /api/application/webhooks, bearer: papp_whwrite0001WhWriteSecret000000000000000001, expect_status: 403 }
+  # staffread carries `user: R` only — the webhook ACL denies.
+  - { path: /api/application/webhooks, bearer: papp_staffread01StaffReadSecret00000000000000001, expect_status: 403 }
+  - { path: /api/application/webhooks, bearer: pacc_staffacct01StaffAcctSecret00000000000000001, expect_status: 403 }
+  # --- types / events --------------------------------------------------------
+  - { path: /api/application/webhooks/types, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 200 }
+  - { path: "/api/application/webhooks/types?per_page=101", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  # The catalogue order is exactly what panel-orig exports (`filamentCheckboxList`).
+  - { path: /api/application/webhooks/events, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks/events?scope=server", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks/events?scope=bogus", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/webhooks/events?per_page=3", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+---
+name: app/webhooks-write
+description: StoreWebhookRequest/UpdateWebhookRequest semantics and DELETE (soft delete).
+fixtures: [base, infra, app-extra, app-webhooks]
+steps:
+  # --- store ---------------------------------------------------------------
+  # Minimal payload: defaults scope=global, type=regular, nullable columns NULL.
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Minimal Webhook, endpoint: "https://example.com/hooks/a", events: ['eloquent.created: App\Models\User'] }, expect_status: 201 }
+  # Full body; header names normalize space to dash before saving.
+  - { method: POST, path: "/api/application/webhooks?include=deliveries", bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Full Webhook, description: Everything given, endpoint: "http://wings.test:8080/hook", type: regular, scope: server, server_id: 1, events: ['server:power.start', 'server:sftp.denied'], payload: { template: x }, headers: { "X Test": spaced } } }
+  # Server scoped without an explicit scope: derived from server_id.
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Implied Scope, endpoint: "http://wings.test:8080/hook", server_id: 2, events: ['server:backup.start'] }, expect_status: 201 }
+  # Trimmed strings and explicit nulls.
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: "  Padded Name  ", description: null, endpoint: "  https://example.com/hooks/b  ", events: ['eloquent.deleted: App\Models\Role'], payload: null, headers: null } }
+  # Empty events arrays fail min:1; bogus catalogue entries fail per index.
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: No Events, endpoint: "https://example.com/hooks/c", events: [] } }
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Cross Scope Events, endpoint: "https://example.com/hooks/d", scope: global, events: ['server:power.start'] } }
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Server Missing Id, endpoint: "https://example.com/hooks/e", scope: server, events: ['server:power.stop'] } }
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Global With Server, endpoint: "https://example.com/hooks/f", scope: global, server_id: 1, events: ['eloquent.created: App\Models\User'] } }
+  # Field-level rule failures in definition order.
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: {} }
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Missing Endpoint, events: ['eloquent.created: App\Models\User'] } }
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Bad URL, endpoint: not-a-url, events: ['eloquent.created: App\Models\User'] } }
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: over-the-one-hundred-ninety-character-limit-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, endpoint: "https://example.com/hooks/g", events: ['eloquent.created: App\Models\User'] } }
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Bad Type, endpoint: "https://example.com/hooks/h", type: discord, events: ['eloquent.created: App\Models\User'] } }
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Bad Scope, endpoint: "https://example.com/hooks/i", scope: universe, events: ['eloquent.created: App\Models\User'] } }
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Ghost Server, endpoint: "https://example.com/hooks/j", server_id: 777, events: ['eloquent.created: App\Models\User'] } }
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Not String Event, endpoint: "https://example.com/hooks/k", events: [42] } }
+  # Header names/values are checked at the boundary.
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Header Injection, endpoint: "https://example.com/hooks/l", events: ['eloquent.created: App\Models\User'], headers: { "Bad\rName": v } } }
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Header Value CRLF, endpoint: "https://example.com/hooks/m", events: ['eloquent.created: App\Models\User'], headers: { "X-Bad": "a\r\nb" } } }
+  # Unusual but legal token characters pass through unchanged.
+  - { method: POST, path: /api/application/webhooks, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Odd Tokens, endpoint: "https://example.com/hooks/n", events: ['eloquent.created: App\Models\User'], headers: { "X~A.B+C^D|E": ok } } }
+  # --- ACL -------------------------------------------------------------------
+  # WRITE-only may store (WRITE does not imply READ anywhere else either).
+  - { method: POST, path: /api/application/webhooks, bearer: papp_whwrite0001WhWriteSecret000000000000000001, json: { name: Write Only Key, endpoint: "https://example.com/hooks/o", events: ['eloquent.created: App\Models\User'] }, expect_status: 201 }
+  - { method: POST, path: /api/application/webhooks, bearer: papp_staffread01StaffReadSecret00000000000000001, json: { name: Denied, endpoint: "https://example.com/hooks/p", events: ['eloquent.created: App\Models\User'] }, expect_status: 403 }
+  # --- update ----------------------------------------------------------------
+  # Nothing sent: no dirty attribute, no UPDATE, updated_at untouched.
+  - { method: PATCH, path: /api/application/webhooks/1, bearer: papp_admin000001AdminAppSecret000000000000000001, json: {}, expect_status: 200 }
+  - { method: PATCH, path: /api/application/webhooks/1, bearer: papp_admin000001AdminAppSecret000000000000000001, json: {}, expect_status: 200 }
+  - { method: PATCH, path: /api/application/webhooks/1, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: Renamed Global }, expect_status: 200 }
+  # Assigning a server implies (and persists!) the server scope — and the global
+  # events the request keeps are validated against that scope first.
+  - { method: PATCH, path: /api/application/webhooks/1, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { server_id: 2 } }
+  - { method: PATCH, path: /api/application/webhooks/1, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { server_id: 2, events: ['server:allocation.primary'] }, expect_status: 200 }
+  # Clearing the server of a server-scoped webhook is rejected (scope stays server).
+  - { method: PATCH, path: /api/application/webhooks/1, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { server_id: null } }
+  # Switching to global without sending events pulls the stored (server) events
+  # into validation → 422.
+  - { method: PATCH, path: /api/application/webhooks/1, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { scope: global } }
+  # ...and with proper global events it clears server_id entirely.
+  - { method: PATCH, path: /api/application/webhooks/1, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { scope: global, events: ['eloquent.updated: App\Models\Role', 'eloquent.deleted: App\Models\Node'] } }
+  # A plugin type re-validates against the merged stored payload when changed.
+  - { method: PATCH, path: /api/application/webhooks/4, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { type: regular }, expect_status: 200 }
+  # Same patch twice: second save sees no dirty attribute.
+  - { method: PATCH, path: /api/application/webhooks/4, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { type: regular }, expect_status: 200 }
+  - { method: PATCH, path: /api/application/webhooks/4, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { type: notregistered } }
+  # Validation on PATCH bodies.
+  - { method: PATCH, path: /api/application/webhooks/2, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: over-the-one-hundred-ninety-character-limit-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx } }
+  - { method: PATCH, path: /api/application/webhooks/2, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { endpoint: nope } }
+  - { method: PATCH, path: /api/application/webhooks/2, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { events: [] } }
+  - { method: PATCH, path: /api/application/webhooks/2, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { events: ['eloquent.created: App\Models\User'] } }
+  - { method: PATCH, path: /api/application/webhooks/2, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { headers: { "X Static": renamed } } }
+  - { method: PATCH, path: /api/application/webhooks/2, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { headers: { "Bad\rName": v } } }
+  - { method: PATCH, path: /api/application/webhooks/2, bearer: papp_whwrite0001WhWriteSecret000000000000000001, json: { name: Staff Write Only } }
+  - { method: PATCH, path: /api/application/webhooks/999, bearer: papp_admin000001AdminAppSecret000000000000000001, json: {} }
+  # --- delete ----------------------------------------------------------------
+  - { method: DELETE, path: /api/application/webhooks/3, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 204 }
+  # Already soft-deleted: the row no longer binds.
+  - { method: DELETE, path: /api/application/webhooks/3, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: DELETE, path: /api/application/webhooks/999, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  # Binding 404 on the soft-deleted row precedes auth; use the admin key.
+  - { method: DELETE, path: /api/application/webhooks/3, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+---
+name: app/webhooks-test
+description: POST /webhooks/{id}/test — ProcessWebhook runs inline (QUEUE_CONNECTION=sync), deliveries recorded in webhooks.
+fixtures: [base, infra, app-extra, app-webhooks]
+steps:
+  # Default sample data (global scope): the full getWebhookSampleData payload,
+  # X-Webhook-Event header filled from {{event}} ("created: Server").
+  - { method: POST, path: /api/application/webhooks/1/test, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 202 }
+  # Server scope default: getServerWebhookSampleData, raw event 'server:file.write'.
+  - { method: POST, path: /api/application/webhooks/2/test, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 202 }
+  # Explicit event keeps it verbatim in the delivery row; data replaces the sample.
+  - { method: POST, path: /api/application/webhooks/1/test, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { event: 'eloquent.updated: App\Models\Node', data: [{ echo: 42 }] } }
+  # Explicit event without data: the global sample regardless of the event name.
+  - { method: POST, path: /api/application/webhooks/1/test, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { event: 'server:power.restart' } }
+  # A data-only call keeps the default event names.
+  - { method: POST, path: /api/application/webhooks/2/test, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { data: ["plain-string"] } }
+  # Non-JSON string element: json_decode fails → Arr::wrap([]) + event appended.
+  - { method: POST, path: /api/application/webhooks/1/test, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { data: ["plain-string"] } }
+  # Transport failure: delivery recorded without successful_at.
+  - { method: POST, path: /api/application/webhooks/3/test, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 202 }
+  # WRITE-only key can fire a test but cannot read the result back.
+  - { method: POST, path: /api/application/webhooks/1/test, bearer: papp_whwrite0001WhWriteSecret000000000000000001, expect_status: 202 }
+  - { path: /api/application/webhooks/1?include=deliveries, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  # Validation of the request itself.
+  - { method: POST, path: /api/application/webhooks/1/test, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { event: 42 } }
+  - { method: POST, path: /api/application/webhooks/1/test, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { data: not-an-array } }
+  - { method: POST, path: /api/application/webhooks/999/test, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/webhooks/1/test, bearer: papp_staffread01StaffReadSecret00000000000000001, expect_status: 403 }

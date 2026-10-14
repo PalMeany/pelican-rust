@@ -16,6 +16,7 @@ chrono-tz = "0.10"
 base64.workspace = true
 sha2 = "0.10"
 hmac = "0.12"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 sha1 = "0.10"
 uuid.workspace = true
 sea-orm.workspace = true

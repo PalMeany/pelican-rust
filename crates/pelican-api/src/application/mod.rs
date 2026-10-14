@@ -9,6 +9,7 @@ mod roles;
 mod servers;
 mod servers_write;
 mod users;
+mod webhooks;
 
 use axum::Router;
 use axum::routing::{MethodRouter, delete, get, patch, post};
@@ -162,6 +163,11 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route("/eggs/{egg}", p(get(eggs::view).delete(eggs::delete)))
         .route("/eggs/{egg}/export", p(get(eggs::export)))
         .route("/eggs/uuid/{egg_uuid}", p(delete(eggs::delete)))
+        .route("/webhooks", p(get(webhooks::index).post(webhooks::store)))
+        .route("/webhooks/types", p(get(webhooks::types)))
+        .route("/webhooks/events", p(get(webhooks::events)))
+        .route("/webhooks/{webhook}", p(get(webhooks::view).patch(webhooks::update).delete(webhooks::delete)))
+        .route("/webhooks/{webhook}/test", p(post(webhooks::test)))
         .route("/database-hosts", p(get(database_hosts::index).post(database_hosts::store)))
         .route(
             "/database-hosts/{database_host}",
