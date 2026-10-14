@@ -1,0 +1,161 @@
+{# Server › Settings (app/Filament/Server/Pages/Settings.php): information
+   (live-saved name/description, icon upload/delete), limits, SFTP details,
+   reinstall with confirmation and the notification toggles. #}
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% set SI = 'server/setting.server_info' %}
+{% set EI = 'admin/egg.import' %}
+{% block head %}
+<script src="{{ asset('js/settings.js') }}" defer></script>
+{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ title }}</h1></div>
+
+{# Section 'Server Information': Information fieldset (name/description grid +
+   icon), Limits fieldset, SFTP fieldset. #}
+<section class="card card-body stack">
+  <h3>{{ info_title }}</h3>
+
+  <fieldset>
+    <legend>{{ information_label }}</legend>
+    <div class="grid grid-2">
+      <div class="stack">
+        {# TextInput 'name': live(onBlur) → Settings::updateName() #}
+        <form method="post" action="{{ base }}/settings/rename" data-live hx-boost="false">
+          {{ csrf_field() }}
+          {{ f.text('name', trans(SI ~ '.name'), s_name, {}, required=true, disabled=not can_rename, attrs='maxlength="255"', autocomplete='off') }}
+        </form>
+        {% if editable_desc %}
+        {# Textarea 'description': hidden(!editable_server_descriptions),
+           live(onBlur) → Settings::updateDescription() #}
+        <form method="post" action="{{ base }}/settings/description" data-live hx-boost="false">
+          {{ csrf_field() }}
+          {{ f.textarea('description', trans(SI ~ '.description'), s_desc, disabled=not can_desc) }}
+        </form>
+        {% endif %}
+      </div>
+      {% if icon_img %}
+      {# Image + UploadIcon/DeleteIcon actions (settings.change-icon). #}
+      <div class="row" style="justify-content:center;align-items:flex-start">
+        <img src="{{ icon_img }}" alt="" width="150" height="150"
+          style="object-fit:contain"{% if egg_icon_hint %} title="{{ icon_tooltip }}"{% endif %}>
+        {% if can_icon %}
+        <div class="row" style="gap:.25rem">
+          <button type="button" class="btn btn-sm btn-gray" data-modal-open="upload-icon" title="{{ import_icon_label }}">
+            {{ icon('photo-up', 'icon-sm') }}</button>
+          <form method="post" action="{{ base }}/settings/icon/delete" hx-boost="false">
+            {{ csrf_field() }}
+            <button type="submit" class="btn btn-sm btn-danger" title="{{ delete_icon_label }}">{{ icon('trash', 'icon-sm') }}</button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+    <div class="grid grid-3">
+      {# readonly uuid / uuid_short / node name inputs #}
+      <div class="field span-2"><label for="f-uuid">{{ trans(SI ~ '.uuid') }}</label><input class="input copyable" id="f-uuid" readonly value="{{ s_uuid }}" data-copy="{{ s_uuid }}"></div>
+      <div class="field"><label for="f-uuid-short">{{ trans(SI ~ '.uuid_short') }}</label><input class="input copyable" id="f-uuid-short" readonly value="{{ s_uuid_short }}" data-copy="{{ s_uuid_short }}"></div>
+      <div class="field span-2"><label for="f-node-name">{{ trans(SI ~ '.node_name') }}</label><input class="input" id="f-node-name" readonly value="{{ s_node }}"></div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>{{ limits_title }}</legend>
+    <div class="grid grid-3">
+      {% for l in limits %}
+      <div class="field"><div class="input-group"><span class="addon">{{ icon(l.icon, 'icon-sm') }}&nbsp;{{ l.label }}</span>
+        <input class="input" readonly value="{{ l.value }}"></div></div>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  {% if can_sftp %}
+  {# Fieldset 'SFTP Information': hidden without file.sftp. #}
+  <fieldset>
+    <legend>{{ trans(SI ~ '.sftp.title') }}</legend>
+    <div class="grid grid-3">
+      <div class="field">
+        <label for="f-sftp-conn">{{ trans(SI ~ '.sftp.connection') }}</label>
+        <input class="input copyable mono" id="f-sftp-conn" readonly value="{{ sftp_conn }}" data-copy="{{ sftp_conn }}">
+        {# ConnectSftpAction hint: a direct link to the same sftp:// URL. #}
+        <p class="hint"><a class="btn-link" href="{{ sftp_conn }}">{{ icon('plug', 'icon-sm') }}{{ trans(SI ~ '.sftp.action') }}</a></p>
+      </div>
+      <div class="field">
+        <label for="f-sftp-user">{{ trans(SI ~ '.sftp.username') }}</label>
+        <input class="input copyable mono" id="f-sftp-user" readonly value="{{ sftp_user }}" data-copy="{{ sftp_user }}">
+      </div>
+      {# TextEntry 'password': informational only. #}
+      <div class="field">
+        <span class="field-label">{{ trans(SI ~ '.sftp.password') }}</span>
+        <p class="hint">{{ sftp_password_body }}</p>
+      </div>
+    </div>
+  </fieldset>
+  {% endif %}
+</section>
+
+{# Section 'Reinstall Server': hidden without settings.reinstall. #}
+{% if can_reinstall %}
+<section class="card card-body stack">
+  <h3>{{ trans('server/setting.reinstall.title') }}</h3>
+  {% for b in reinstall_bodies %}<p class="muted">{{ b }}</p>{% endfor %}
+  <div class="row" style="justify-content:flex-end">
+    <form method="post" action="{{ base }}/settings/reinstall" hx-boost="false"
+      data-confirm="{{ reinstall_desc }}" data-confirm-title="{{ reinstall_confirm }}" data-confirm-ok="{{ reinstall_ok }}">
+      {{ csrf_field() }}
+      <button type="submit" class="btn btn-danger">{{ trans('server/setting.reinstall.action') }}</button>
+    </form>
+  </div>
+</section>
+{% endif %}
+
+{# Section 'Notifications': two live toggles → updateNotificationSetting(). #}
+<section class="card card-body stack">
+  <h3>{{ trans('server/setting.notifications.title') }}</h3>
+  <form method="post" action="{{ base }}/settings/notifications" data-live hx-boost="false">
+    {{ csrf_field() }}<input type="hidden" name="_back" value="{{ base }}/settings">
+    {{ f.toggle('manual_backup_notifications', trans('server/setting.notifications.backup_manual.label'), notif_manual, hint=manual_helper) }}
+  </form>
+  <form method="post" action="{{ base }}/settings/notifications" data-live hx-boost="false">
+    {{ csrf_field() }}<input type="hidden" name="_back" value="{{ base }}/settings">
+    {{ f.toggle('scheduled_backup_notifications', trans('server/setting.notifications.backup_scheduled.label'), notif_scheduled, hint=scheduled_helper) }}
+  </form>
+</section>
+
+{# UploadIcon modal: URL tab posts the URL, File tab uploads via js/settings.js
+   (X-CSRF-TOKEN header — the CSRF middleware only buffers urlencoded bodies).
+   The imageEditor/live URL preview of Filament are not reproduced. #}
+<dialog id="upload-icon" class="modal">
+  <div class="modal-body stack" data-tabs-root>
+    <nav class="tabs">
+      <button type="button" data-tab="url" class="active">{{ icon('world-upload', 'icon-sm') }}{{ trans(EI ~ '.url') }}</button>
+      <button type="button" data-tab="file">{{ icon('photo-up', 'icon-sm') }}{{ trans(EI ~ '.file') }}</button>
+    </nav>
+    <section class="stack" data-tab-panel="url">
+      <form method="post" action="{{ base }}/settings/icon/url" hx-boost="false">
+        {{ csrf_field() }}
+        <input type="hidden" name="_back" value="{{ base }}/settings">
+        {{ f.text('icon_url', trans(EI ~ '.icon_url'), '', {}, type='url', placeholder='https://…', autocomplete='off') }}
+        <div class="row" style="justify-content:flex-end">
+          <button type="submit" class="btn">{{ import_icon_label }}</button>
+        </div>
+      </form>
+    </section>
+    <section class="stack" data-tab-panel="file" hidden>
+      <form method="post" action="{{ base }}/settings/icon/file" enctype="multipart/form-data" data-icon-upload>
+        {{ csrf_field() }}
+        <input type="hidden" name="_back" value="{{ base }}/settings">
+        <div class="field">
+          <input class="input" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" name="icon">
+        </div>
+        <p class="error" data-upload-error hidden></p>
+        <div class="row" style="justify-content:flex-end">
+          <button type="submit" class="btn">{{ import_icon_label }}</button>
+        </div>
+      </form>
+    </section>
+  </div>
+  <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button></div>
+</dialog>
+{% endblock %}
