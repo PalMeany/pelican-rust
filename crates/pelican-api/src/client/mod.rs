@@ -4,7 +4,9 @@ mod account;
 mod activity;
 mod backups;
 pub mod data;
+mod databases;
 mod files;
+mod network;
 mod servers;
 mod startup;
 mod subusers;
@@ -37,6 +39,9 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route("/servers/{server}/power", p(post(servers::power)))
         .route("/servers/{server}/users", p(get(subusers::index).post(subusers::store)))
         .route("/servers/{server}/backups", p(get(backups::index).post(backups::store)))
+        .route("/servers/{server}/databases", p(get(databases::index).post(databases::store)))
+        .route("/servers/{server}/databases/{database}/rotate-password", p(post(databases::rotate_password)))
+        .route("/servers/{server}/databases/{database}", p(delete(databases::delete)))
         .route("/servers/{server}/files/list", p(get(files::list_directory)))
         .route("/servers/{server}/files/contents", p(get(files::contents)))
         .route("/servers/{server}/files/download", p(get(files::download)))
@@ -50,6 +55,9 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route("/servers/{server}/files/chmod", p(post(files::chmod)))
         .route("/servers/{server}/files/pull", p(post(files::pull)))
         .route("/servers/{server}/files/upload", p(get(files::upload)))
+        .route("/servers/{server}/network/allocations", p(get(network::index).post(network::store)))
+        .route("/servers/{server}/network/allocations/{allocation}", p(post(network::update).delete(network::delete)))
+        .route("/servers/{server}/network/allocations/{allocation}/primary", p(post(network::set_primary)))
         .route("/servers/{server}/startup", p(get(startup::index)))
         .route("/servers/{server}/startup/variable", p(put(startup::update)))
         .route("/servers/{server}/backups/{backup}", p(get(backups::view).delete(backups::delete)))

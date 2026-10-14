@@ -20,6 +20,10 @@ x-panel-env: &panel-env
   SESSION_DRIVER: "array"
   QUEUE_CONNECTION: "sync"
   MAIL_MAILER: "log"
+  # Client allocation auto-assignment (network scenarios): free port 25570 exists, 25571 gets created.
+  PANEL_CLIENT_ALLOCATIONS_ENABLED: "true"
+  PANEL_CLIENT_ALLOCATIONS_RANGE_START: "25570"
+  PANEL_CLIENT_ALLOCATIONS_RANGE_END: "25571"
   DB_CONNECTION: "${DB_CONNECTION:-mariadb}"
   DB_HOST: "${DB_HOST:-mariadb}"
   DB_PORT: "${DB_PORT:-3306}"

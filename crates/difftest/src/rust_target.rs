@@ -16,6 +16,11 @@ pub async fn start(backend: &str, app_key: &str) -> anyhow::Result<String> {
     set("APP_URL", "http://localhost:18000");
     set("APP_ENV", "production");
     set("TRUSTED_PROXIES", "0.0.0.0/0");
+    // Same per-request cache semantics as panel-orig (difftest/compose.yml).
+    set("CACHE_STORE", "array");
+    set("PANEL_CLIENT_ALLOCATIONS_ENABLED", "true");
+    set("PANEL_CLIENT_ALLOCATIONS_RANGE_START", "25570");
+    set("PANEL_CLIENT_ALLOCATIONS_RANGE_END", "25571");
     set("DB_CONNECTION", cfg.driver.as_str());
     set("DB_HOST", &cfg.host);
     set("DB_PORT", &cfg.port.to_string());

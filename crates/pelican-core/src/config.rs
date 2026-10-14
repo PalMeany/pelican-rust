@@ -71,6 +71,11 @@ pub struct Config {
     pub use_binary_prefix: bool,
     /// `PANEL_FILES_MAX_EDIT_SIZE` (config/panel.php), default 4 MiB; 0 disables the check.
     pub files_max_edit_size: i64,
+    /// `PANEL_CLIENT_DATABASES_ENABLED` / `_ALLOW_RANDOM` (config/panel.php), default true.
+    pub client_databases_enabled: bool,
+    pub client_databases_allow_random: bool,
+    /// `CACHE_STORE` (config/cache.php), default `file`; `array` disables throttle persistence.
+    pub cache_store: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -127,6 +132,9 @@ impl Config {
             session_cookie: env.string_or("SESSION_COOKIE", "pelican_session"),
             use_binary_prefix: env.bool_or("PANEL_USE_BINARY_PREFIX", true),
             files_max_edit_size: env.int_or("PANEL_FILES_MAX_EDIT_SIZE", 4 * 1024 * 1024),
+            client_databases_enabled: env.bool_or("PANEL_CLIENT_DATABASES_ENABLED", true),
+            client_databases_allow_random: env.bool_or("PANEL_CLIENT_DATABASES_ALLOW_RANDOM", true),
+            cache_store: env.string_or("CACHE_STORE", "file"),
             env,
         };
         Ok((cfg, enc))

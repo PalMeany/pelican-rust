@@ -1,0 +1,62 @@
+# Client API network-allocation endpoints (client-api.md §8.7).
+name: client/network-list
+fixtures: [base, infra, client-users, client-network]
+steps:
+  - { path: /api/client/servers/0b5c6a0e/network/allocations, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { path: "/api/client/servers/0b5c6a0e/network/allocations?include=nope&page=2", bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/network/allocations, bearer: pacc_user3key001User3ClientSecret000000000001 }
+  - { path: /api/client/servers/3d8f9d3b/network/allocations, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/network/allocations, bearer: pacc_user4key001User4ClientSecret000000000001 }
+---
+name: client/network-notes
+fixtures: [base, infra, client-users, client-network]
+steps:
+  # set notes (fixture alloc2 notes is null → changed → activity logged)
+  - { method: POST, path: /api/client/servers/0b5c6a0e/network/allocations/2, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { notes: "backup port" } }
+  # validation: missing key (`present`), non-string, over-long
+  - { method: POST, path: /api/client/servers/0b5c6a0e/network/allocations/2, bearer: pacc_user0000001UserClientSecret0000000000000001, json: {} }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/network/allocations/2, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { notes: 123 } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/network/allocations/2, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { notes: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" } }
+  # clear via "" (ConvertEmptyStringsToNull → null; different from current → activity)
+  - { method: POST, path: /api/client/servers/0b5c6a0e/network/allocations/2, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { notes: "" } }
+  # unchanged value on alloc1 ("primary"): clean model saves nothing (no updated_at bump, no activity)
+  - { method: POST, path: /api/client/servers/0b5c6a0e/network/allocations/1, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { notes: primary } }
+  # foreign/unassigned and missing allocation ids
+  - { method: POST, path: /api/client/servers/0b5c6a0e/network/allocations/9999, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { notes: x } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/network/allocations/4, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { notes: x } }
+---
+name: client/network-primary-create-delete
+fixtures: [base, infra, client-users, client-network]
+steps:
+  # auto-creation is disabled by default env (PANEL_CLIENT_ALLOCATIONS_ENABLED
+  # unset): owner key and admin key, kept at 2 hits/min per server because the
+  # rust panel keeps a process-wide limiter while the original resets its array
+  # cache store every request.
+  - { method: POST, path: /api/client/servers/0b5c6a0e/network/allocations, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/network/allocations, bearer: pacc_admin000001AdminClientSecret000000000000001 }
+  # make a non-primary allocation primary
+  - { method: POST, path: /api/client/servers/0b5c6a0e/network/allocations/2/primary, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/network/allocations, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  # delete the now-primary allocation → releases it and re-picks lowest id (1)
+  - { method: DELETE, path: /api/client/servers/0b5c6a0e/network/allocations/2, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: DELETE, path: /api/client/servers/0b5c6a0e/network/allocations/2, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: DELETE, path: /api/client/servers/0b5c6a0e/network/allocations/9999, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  # delete the (re-)primary allocation → primary moves to the remaining id 3
+  - { method: DELETE, path: /api/client/servers/0b5c6a0e/network/allocations/1, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  # keepOne guard: no other allocation left on the node
+  - { method: DELETE, path: /api/client/servers/0b5c6a0e/network/allocations/3, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  # server with allocation_limit=0: create hits the limit guard, delete has no limit set
+  - { method: POST, path: /api/client/servers/3d8f9d3b/network/allocations, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: DELETE, path: /api/client/servers/3d8f9d3b/network/allocations/6, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  # suspended server → ServerStateConflict on mutating routes
+  - { method: POST, path: /api/client/servers/2d7e8c2a/network/allocations/5, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { notes: x } }
+---
+name: client/network-create
+fixtures: [base, infra, client-users]
+steps:
+  - { method: POST, path: /api/client/servers/0b5c6a0e/network/allocations, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/network/allocations, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/network/allocations, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/network/allocations, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: DELETE, path: /api/client/servers/0b5c6a0e/network/allocations/2, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 204 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/network/allocations, bearer: pacc_user0000001UserClientSecret0000000000000001 }

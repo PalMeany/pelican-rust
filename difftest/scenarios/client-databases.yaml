@@ -1,0 +1,23 @@
+name: client/databases-read
+fixtures: [base, infra, client-users, databases]
+steps:
+  - { path: /api/client/servers/0b5c6a0e/databases, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { path: "/api/client/servers/0b5c6a0e/databases?include=password", bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { path: "/api/client/servers/0b5c6a0e/databases?include=password", bearer: pacc_admin000001AdminClientSecret000000000000001 }
+  - { path: /api/client/servers/0b5c6a0e/databases, bearer: pacc_user3key001User3ClientSecret000000000001 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/databases/99/rotate-password, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+---
+name: client/databases-write
+fixtures: [base, infra, client-users, databases]
+normalize:
+  random_patterns: ['u1_([A-Za-z0-9]{10})\b', '"password":"([A-Za-z0-9!@=.+^]{24})"', 'password\\":\\"([A-Za-z0-9!@=.+^]{24})']
+steps:
+  - { method: POST, path: /api/client/servers/0b5c6a0e/databases, bearer: pacc_user0000001UserClientSecret0000000000000001, json: {}, expect_status: 422 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/databases, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { database: "a b", remote: "bad remote!" } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/databases, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { database: "  my_db-1 ", remote: "10.0.0.%" }, expect_status: 200 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/databases, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { database: "my_db-1", remote: "%" } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/databases/1/rotate-password, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 200 }
+  - { path: /api/client/servers/0b5c6a0e/databases, bearer: pacc_user0000001UserClientSecret0000000000000001 }
+  - { method: DELETE, path: /api/client/servers/0b5c6a0e/databases/1, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 204 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/databases, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { database: "my_db-1", remote: "%" } }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/databases, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { database: "s1_existing", remote: "%" } }

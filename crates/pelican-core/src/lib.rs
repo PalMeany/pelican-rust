@@ -4,6 +4,7 @@
 pub mod activity;
 pub mod auth;
 pub mod config;
+pub mod databases;
 pub mod env;
 pub mod events;
 pub mod i18n;

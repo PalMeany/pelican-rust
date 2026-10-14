@@ -8,6 +8,9 @@ use parking_lot::Mutex;
 #[derive(Default)]
 pub struct RateLimiter {
     inner: Mutex<HashMap<String, Entry>>,
+    /// `CACHE_STORE=array`: Laravel's array store lives for one request, so
+    /// counters never carry over (every call starts from an empty store).
+    ephemeral: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -26,6 +29,18 @@ pub enum Throttle {
 }
 
 impl RateLimiter {
+    pub fn new(cache_store: &str) -> Self {
+        RateLimiter { inner: Mutex::default(), ephemeral: cache_store == "array" }
+    }
+
+    fn lock(&self) -> parking_lot::MutexGuard<'_, HashMap<String, Entry>> {
+        let mut map = self.inner.lock();
+        if self.ephemeral {
+            map.clear();
+        }
+        map
+    }
+
     fn get(map: &mut HashMap<String, Entry>, key: &str, now: i64) -> Option<i64> {
         match map.get(key) {
             Some(e) if e.expires_at > now => Some(e.value),
@@ -40,7 +55,7 @@ impl RateLimiter {
     /// `tooManyAttempts` then `hit` — exactly what ThrottleRequests does
     /// before passing the request on. `now` is unix seconds.
     pub fn attempt(&self, key: &str, max: u32, decay_seconds: i64, now: i64) -> Throttle {
-        let mut map = self.inner.lock();
+        let mut map = self.lock();
         if map.len() > 10_000 {
             map.retain(|_, e| e.expires_at > now);
         }
@@ -73,7 +88,7 @@ impl RateLimiter {
     /// `RateLimiter::tooManyAttempts`: Some(available_in) when blocked; resets
     /// the counter if the window expired.
     pub fn too_many_attempts(&self, key: &str, max: u32, now: i64) -> Option<i64> {
-        let mut map = self.inner.lock();
+        let mut map = self.lock();
         let attempts = Self::get(&mut map, key, now).unwrap_or(0);
         if attempts >= i64::from(max) {
             let timer_key = format!("{key}:timer");
@@ -87,7 +102,7 @@ impl RateLimiter {
 
     /// `RateLimiter::hit($key, $decay)`.
     pub fn hit(&self, key: &str, decay_seconds: i64, now: i64) -> i64 {
-        let mut map = self.inner.lock();
+        let mut map = self.lock();
         let timer_key = format!("{key}:timer");
         if Self::get(&mut map, &timer_key, now).is_none() {
             map.insert(timer_key, Entry { value: now + decay_seconds, expires_at: now + decay_seconds });
@@ -106,7 +121,7 @@ impl RateLimiter {
 
     /// Current hits for a key (no side effects).
     pub fn attempts(&self, key: &str, now: i64) -> i64 {
-        let mut map = self.inner.lock();
+        let mut map = self.lock();
         Self::get(&mut map, key, now).unwrap_or(0)
     }
 

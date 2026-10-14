@@ -1,0 +1,33 @@
+# Extra state for client network-allocation scenarios (network/allocations):
+# a fourth server with allocation_limit=0 so the limit-reached and
+# no-limit-set DisplayException branches are reachable while healthy.
+servers:
+  - id: 4
+    uuid: 3d8f9d3b-6c3b-4f40-a188-9e4f9d3c5f44
+    uuid_short: 3d8f9d3b
+    node_id: 1
+    name: Alloc Limit Zero
+    description: ""
+    status: null
+    skip_scripts: 0
+    owner_id: 2
+    memory: 512
+    swap: -1
+    disk: 1024
+    io: 500
+    cpu: 50
+    threads: null
+    oom_killer: 0
+    allocation_id: 6
+    egg_id: 1
+    startup: java -jar app.jar
+    image: ghcr.io/parkervcp/yolks:java_21
+    allocation_limit: 0
+    database_limit: 0
+    backup_limit: 1
+    docker_labels: []
+    installed_at: "2026-01-04 00:10:00"
+    created_at: "2026-01-04 00:00:00"
+    updated_at: "2026-01-04 00:00:00"
+allocations:
+  - { id: 6, node_id: 1, ip: 0.0.0.0, port: 27015, server_id: 4, is_locked: 0, show_port: 1, created_at: "2026-01-04 00:00:00", updated_at: "2026-01-04 00:00:00" }

@@ -25,7 +25,8 @@ impl AppState {
         let driver = config.db.driver;
         let wings =
             pelican_wings::WingsClient::new(config.is_production(), config.wings_timeout, config.wings_connect_timeout);
-        AppState(Arc::new(Inner { wings, config, enc, db, limiter: RateLimiter::default(), driver }))
+        let limiter = RateLimiter::new(&config.cache_store);
+        AppState(Arc::new(Inner { wings, config, enc, db, limiter, driver }))
     }
 
     /// Connection data for a node (decrypts `daemon_token`).
