@@ -29,11 +29,11 @@ use crate::query::{filters, partial, sorts};
 use crate::validation::{CustomRule, Validator, php_regex_match, php_string};
 
 /// `filamentCheckboxList(scope)` dumps (exported from panel-orig; order matters).
-static EVENTS: LazyLock<Value> =
+pub static EVENTS: LazyLock<Value> =
     LazyLock::new(|| serde_json::from_str(include_str!("../../data/webhook-events.json")).unwrap_or(Value::Null));
 
 /// Only one schema is registered in core (`WebhookServiceProvider`).
-const REGULAR: &str = "regular";
+pub const REGULAR: &str = "regular";
 // Object-rule failures report their class basename through `Str::snake`
 // (`Illuminate\Validation\Rules\{In,Enum}` and the header-name closure).
 // Object rules report their string form here: `Rule::in` fails as "in"
@@ -249,7 +249,7 @@ impl<'a> AfterCheck<'a> {
 /// The delivered payload template samples (`getWebhookSampleData` /
 /// `getServerWebhookSampleData`, verbatim from WebhookConfiguration.php).
 
-static GLOBAL_SAMPLE: LazyLock<Value> = LazyLock::new(|| {
+pub static GLOBAL_SAMPLE: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str::<Value>(concat!(
         r#"{"id":4,"uuid":"4864a058-9a3b-44a9-a6cf-c1355e89406e","uuid_short":"4864a058","node_id":1,"#,
         r#""name":"Example Server","owner_id":1,"memory":6144,"swap":0,"disk":20480,"io":500,"cpu":300,"egg_id":1,"#,
@@ -300,7 +300,7 @@ static GLOBAL_SAMPLE: LazyLock<Value> = LazyLock::new(|| {
     .unwrap_or(Value::Null)
 });
 
-static SERVER_SAMPLE: LazyLock<Value> = LazyLock::new(|| {
+pub static SERVER_SAMPLE: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str::<Value>(concat!(
         r#"{"user":{"uuid":"12345678-1234-5678-9012-123456789012","username":"admin","email":"admin@example.com","#,
         r#""image":"https://www.gravatar.com/avatar/default","admin":true,"language":"en","#,
@@ -422,7 +422,7 @@ async fn process_webhook(
 }
 
 /// `ProcessWebhook` on the caller's connection (dispatched inside a transaction).
-pub(crate) async fn process_webhook_in<C: sea_orm::ConnectionTrait>(
+pub async fn process_webhook_in<C: sea_orm::ConnectionTrait>(
     st: &AppState,
     db: &C,
     wh: &webhook_configurations::Model,

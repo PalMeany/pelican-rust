@@ -1,0 +1,33 @@
+{# ImportEggAction modal: file (read client-side into contents[]) and URL tabs. #}
+{% macro modal(multiple=true, url='') %}
+{% set E = 'admin/egg.import' %}
+<dialog id="egg-import" class="modal" style="width:min(56rem, 100% - 2rem)">
+  <form method="post" action="/admin/eggs/import" data-egg-import data-tabs-root data-tabs-local>
+    {{ csrf_field() }}
+    <div class="modal-head"><h2>{{ trans('filament-actions::import.modal.actions.import.label') }}</h2></div>
+    <div class="modal-body stack">
+      <div><nav class="tabs">
+        <button type="button" data-tab="file" class="active">{{ icon('file-upload', 'icon-sm') }}{{ trans(E ~ '.file') }}</button>
+        <button type="button" data-tab="url">{{ icon('world-upload', 'icon-sm') }}{{ trans(E ~ '.url') }}</button>
+      </nav></div>
+      <section class="stack" data-tab-panel="file">
+        <div class="field">
+          <label>{{ trans('admin/egg.model_label') }}</label>
+          <input class="input" type="file" accept=".json,.yaml,.yml,application/json,application/x-yaml,text/yaml"{% if multiple %} multiple{% endif %} data-egg-files>
+          <p class="hint">{{ trans(E ~ '.egg_help') }}</p>
+        </div>
+        <div data-egg-file-contents hidden></div>
+      </section>
+      <section class="stack" data-tab-panel="url" hidden>
+        <div class="field">
+          <p class="hint">{{ trans(E ~ '.url_help') }}</p>
+          <div class="stack" data-kv><div class="row" data-kv-row><input class="input" type="url" name="urls[]" value="{{ url }}" placeholder="https://github.com/pelican-eggs/generic/blob/main/nodejs/egg-node-js-generic.json" pattern=".*\.(json|yaml|yml)$"></div></div>
+          {% if multiple %}<div><button type="button" class="btn btn-sm btn-gray" data-kv-add>{{ icon('plus', 'icon-sm') }}{{ trans(E ~ '.add_url') }}</button></div>{% endif %}
+        </div>
+      </section>
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+      <button type="submit" class="btn">{{ trans('filament-actions::import.modal.actions.import.label') }}</button></div>
+  </form>
+</dialog>
+{% endmacro %}

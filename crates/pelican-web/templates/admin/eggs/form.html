@@ -1,0 +1,160 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% import "admin/eggs/_import.html" as imp %}
+{% set N = 'admin/egg' %}
+{% block head %}
+<link rel="stylesheet" href="{{ asset('vendor/codemirror/codemirror.css') }}">
+<link rel="stylesheet" href="{{ asset('vendor/codemirror/theme-dark.css') }}">
+<script src="{{ asset('vendor/codemirror/codemirror.js') }}" defer></script>
+<script src="{{ asset('vendor/codemirror/mode/shell.js') }}" defer></script>
+<script src="{{ asset('js/eggs.js') }}" defer></script>
+{% endblock %}
+
+{# One repeater item of the variables tab. #}
+{% macro var_item(x, i, errors, readonly) %}
+<details class="card egg-var" data-var-item{% if errors['var_name_' ~ i] or errors['var_env_' ~ i] %} open{% endif %}>
+  <summary class="card-head"><h3 data-var-title>{{ x.name or trans(N ~ '.add_new_variable') }}</h3>
+    {% if not readonly %}<span class="row" style="gap:0.25rem">
+      <button type="button" class="icon-btn" data-var-move="-1" title="↑">{{ icon('arrow-up', 'icon-sm') }}</button>
+      <button type="button" class="icon-btn" data-var-move="1" title="↓">{{ icon('arrow-down', 'icon-sm') }}</button>
+      <button type="button" class="icon-btn danger" data-var-remove title="{{ trans('filament-actions::delete.single.label') }}">{{ icon('trash', 'icon-sm') }}</button>
+    </span>{% endif %}</summary>
+  <div class="card-body stack">
+    <input type="hidden" name="var_id[]" value="{{ x.id or '' }}">
+    <div class="field{% if errors['var_name_' ~ i] %} has-error{% endif %}"><label>{{ trans(N ~ '.name') }}<span class="req">*</span></label>
+      <input class="input" name="var_name[]" value="{{ x.name }}" maxlength="255" required data-var-name>
+      {% if errors['var_name_' ~ i] %}<p class="error">{{ errors['var_name_' ~ i] }}</p>{% endif %}</div>
+    <div class="field"><label>{{ trans(N ~ '.description') }}</label><textarea class="textarea" name="var_description[]" rows="2">{{ x.description }}</textarea></div>
+    <div class="stack">
+      <div class="field{% if errors['var_env_' ~ i] %} has-error{% endif %}"><label>{{ trans(N ~ '.environment_variable') }}<span class="req">*</span></label>
+        <div class="input-group"><span class="addon">{{ '{{' }}</span><input class="input mono" name="var_env[]" value="{{ x.env_variable }}" maxlength="255" required data-var-env><span class="addon">{{ '}}' }}</span></div>
+        {% if errors['var_env_' ~ i] %}<p class="error">{{ errors['var_env_' ~ i] }}</p>{% endif %}</div>
+      <div class="field"><label>{{ trans(N ~ '.default_value') }}</label><input class="input" name="var_default[]" value="{{ x.default_value }}"></div>
+    </div>
+    <fieldset class="fieldset"><legend>{{ trans(N ~ '.user_permissions') }}</legend><div class="row">
+      <label class="check"><input type="checkbox" data-bool{% if x.user_viewable %} checked{% endif %}><input type="hidden" name="var_viewable[]" value="{{ '1' if x.user_viewable else '0' }}">{{ trans(N ~ '.viewable') }}</label>
+      <label class="check"><input type="checkbox" data-bool{% if x.user_editable %} checked{% endif %}><input type="hidden" name="var_editable[]" value="{{ '1' if x.user_editable else '0' }}">{{ trans(N ~ '.editable') }}</label>
+    </div></fieldset>
+    <div class="field"><label>{{ trans(N ~ '.rules') }}</label>
+      {{ f.tags_input('var_rules[]', x.rules, suggestions='egg-rule-suggestions', disabled=readonly) }}
+    </div>
+  </div>
+</details>
+{% endmacro %}
+
+{% block content %}
+<div data-tabs-root class="stack">
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if readonly %}{% if egg %}<a class="btn" href="/admin/eggs/{{ egg.id }}/edit">{{ icon('pencil', 'icon-sm') }}{{ trans('filament-actions::edit.single.label') }}</a>{% endif %}
+    {% else %}
+    {% if can_delete %}
+    <form method="post" action="/admin/eggs/{{ egg.id }}/action" data-confirm="{{ trans('filament-actions::modal.confirmation') }}" data-confirm-title="{{ trans('filament-actions::delete.single.modal.heading', label=egg.name) }}" data-confirm-ok="{{ trans('filament-actions::delete.single.label') }}">
+      {{ csrf_field() }}<input type="hidden" name="op" value="delete">
+      <button class="btn btn-danger" type="submit"{% if servers %} disabled{% endif %} title="{{ trans(N ~ '.in_use') if servers else trans('filament-actions::delete.single.label') }}">{{ icon('trash', 'icon-sm') }}</button></form>
+    {% endif %}
+    {% if can_export %}<details class="dropdown"><summary class="btn btn-gray" title="{{ trans('filament-actions::export.modal.actions.export.label') }}">{{ icon('download', 'icon-sm') }}</summary>
+      <div class="dropdown-menu">
+        <a href="/admin/eggs/{{ egg.id }}/export/json">{{ trans(N ~ '.export.as', format='json') }}</a>
+        <a href="/admin/eggs/{{ egg.id }}/export/yaml">{{ trans(N ~ '.export.as', format='yaml') }}</a>
+      </div></details>{% endif %}
+    {% if can_import %}<button type="button" class="btn btn-gray" data-modal-open="egg-import" title="{{ trans('filament-actions::import.modal.actions.import.label') }}">{{ icon('file-import', 'icon-sm') }}</button>{% endif %}
+    <button class="btn" type="submit" form="egg-form" title="{{ trans('filament-panels::resources/pages/create-record.form.actions.create.label') if creating else trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}">{{ icon('file-plus' if creating else 'device-floppy', 'icon-sm') }}</button>
+    {% endif %}
+  </div>
+</div>
+<div><nav class="tabs">
+  {% for t in [['configuration', 'egg'], ['process_management', 'server-cog'], ['egg_variables', 'variable'], ['install_script', 'file-download']] %}<button type="button" data-tab="{{ t[0] }}" class="{{ 'active' if tab == t[0] }}">{{ icon(t[1], 'icon-sm') }}{{ trans(N ~ '.tabs.' ~ t[0]) }}</button>{% endfor %}
+</nav></div>
+
+<form id="egg-form" method="post" action="{{ action }}" data-egg-form>
+{{ csrf_field() }}<input type="hidden" name="_tab" value="{{ tab }}">
+<fieldset style="border:0;padding:0;margin:0"{% if readonly %} disabled{% endif %}>
+
+<section class="card card-body stack" data-tab-panel="configuration"{% if tab != 'configuration' %} hidden{% endif %}>
+  {% if creating %}
+  <div class="grid grid-2">
+    {{ f.text('name', trans(N ~ '.name'), v.name, errors, required=true, hint=trans(N ~ '.name_help'), attrs='maxlength="255"') }}
+    {{ f.text('author', trans(N ~ '.author'), v.author, errors, type='email', required=true, hint=trans(N ~ '.author_help'), attrs='maxlength="255"') }}
+    <div class="span-full">{{ f.textarea('description', trans(N ~ '.description'), v.description, errors, rows=2, hint=trans(N ~ '.description_help')) }}</div>
+  </div>
+  {% else %}
+  <div class="grid grid-3">
+    {% if egg_icon %}<div class="span-full"><img src="{{ egg_icon }}" alt="" style="width:150px;height:150px;object-fit:contain"></div>{% endif %}
+    {{ f.text('name', trans(N ~ '.name'), v.name, errors, required=true, hint=trans(N ~ '.name_help'), attrs='maxlength="255"') }}
+    <div class="span-2">{{ f.textarea('description', trans(N ~ '.description'), v.description, errors, rows=3, hint=trans(N ~ '.description_help')) }}</div>
+  </div>
+  <div class="grid grid-3">
+    <div class="field"><label>{{ trans(N ~ '.egg_id') }}</label><input class="input" disabled value="{{ egg.id }}"></div>
+    <div class="field"><label>{{ trans(N ~ '.egg_uuid') }}</label><input class="input copyable" readonly value="{{ egg.uuid or '' }}" data-copy="{{ egg.uuid or '' }}"><p class="hint">{{ trans(N ~ '.uuid_help') }}</p></div>
+    <div class="field"><label>{{ trans(N ~ '.author') }}</label><input class="input" disabled value="{{ v.author }}"><p class="hint">{{ trans(N ~ '.author_help_edit') }}</p></div>
+  </div>
+  {% endif %}
+  {{ f.toggle('force_outgoing_ip', trans(N ~ '.force_ip'), v.force_outgoing_ip, tooltip=trans(N ~ '.force_ip_help')) }}
+
+  {{ f.kv('startup_name[]', 'startup_command[]', trans(N ~ '.startup_commands'), v.startup_commands, errors, error_name='startup_commands', hint=trans(N ~ '.startup_help'), key_label=trans(N ~ '.startup_name'), value_label=trans(N ~ '.startup_command'), add_label=trans(N ~ '.add_startup'), required=true, disabled=readonly, mono_value=true) }}
+
+  <div class="grid grid-2">
+    {{ f.tags('file_denylist', trans(N ~ '.file_denylist'), v.file_denylist, errors, placeholder='denied-file.txt', hint=trans(N ~ '.file_denylist_help'), disabled=readonly) }}
+    {{ f.text('update_url', trans(N ~ '.update_url'), v.update_url, errors, type='url', hint=trans(N ~ '.update_url_help')) }}
+    {{ f.tags('features', trans(N ~ '.features'), v.features, errors, disabled=readonly) }}
+    {{ f.tags('tags', trans(N ~ '.tags'), v.tags, errors, disabled=readonly) }}
+  </div>
+
+  {{ f.kv('image_name[]', 'image_uri[]', trans(N ~ '.docker_images'), v.docker_images, errors, error_name='docker_images', hint=trans(N ~ '.docker_help'), key_label=trans(N ~ '.docker_name'), value_label=trans(N ~ '.docker_uri'), add_label=trans(N ~ '.add_image'), required=true, disabled=readonly, mono_value=true) }}
+</section>
+
+<section class="card card-body grid grid-2" data-tab-panel="process_management"{% if tab != 'process_management' %} hidden{% endif %}>
+  {% if not readonly %}<div class="span-full">{{ f.select('config_from', trans(N ~ '.copy_from'), others, v.config_from, errors, placeholder=trans(N ~ '.none'), hint=trans(N ~ '.copy_from_help'), attrs='data-copy-process') }}</div>{% endif %}
+  {{ f.text('config_stop', trans(N ~ '.stop_command'), v.config_stop, errors, hint=trans(N ~ '.stop_command_help'), attrs='maxlength="255"') }}
+  {{ f.textarea('config_startup', trans(N ~ '.start_config'), v.config_startup, errors, rows=10, code=true, hint=trans(N ~ '.start_config_help')) }}
+  {{ f.textarea('config_files', trans(N ~ '.config_files'), v.config_files, errors, rows=10, code=true, hint=trans(N ~ '.config_files_help')) }}
+  {{ f.textarea('config_logs', trans(N ~ '.log_config'), v.config_logs, errors, rows=10, code=true, hint=trans(N ~ '.log_config_help')) }}
+</section>
+
+<section class="stack" data-tab-panel="egg_variables"{% if tab != 'egg_variables' %} hidden{% endif %}>
+  <div class="grid grid-2" style="align-items:start" data-var-list>
+    {% for x in v.variables %}{{ var_item(x, loop.index0, errors, readonly) }}{% endfor %}
+  </div>
+  {% if not readonly %}<div><button type="button" class="btn btn-gray" data-var-add>{{ icon('plus', 'icon-sm') }}{{ trans(N ~ '.add_new_variable') }}</button></div>
+  <template id="egg-var-template">{{ var_item({'name': '', 'description': '', 'env_variable': '', 'default_value': '', 'user_viewable': false, 'user_editable': false, 'rules': [], 'id': none}, -1, {}, false) }}</template>
+  {% endif %}
+  <datalist id="egg-rule-suggestions">{% for r in ['required', 'nullable', 'string', 'integer', 'numeric', 'boolean', 'alpha', 'alpha_dash', 'alpha_num', 'url', 'email', 'regex:', 'min:', 'max:', 'between:', 'between:1024,65535', 'in:', 'in:true,false'] %}<option value="{{ r }}">{% endfor %}</datalist>
+</section>
+
+<section class="card card-body stack" data-tab-panel="install_script"{% if tab != 'install_script' %} hidden{% endif %}>
+  <div class="grid grid-3">
+    {% if not readonly %}{{ f.select('copy_script_from', trans(N ~ '.copy_from'), others, v.copy_script_from, errors, placeholder=trans(N ~ '.none'), attrs='data-copy-script') }}{% endif %}
+    {{ f.text('script_container', trans(N ~ '.script_container'), v.script_container, errors, required=true, placeholder='ghcr.io/pelican-eggs/installers:debian', attrs='maxlength="255"') }}
+    {{ f.select('script_entry', trans(N ~ '.script_entry'), [['bash', 'bash'], ['ash', 'ash'], ['/bin/bash', '/bin/bash']], v.script_entry, errors, required=true) }}
+  </div>
+  <textarea class="textarea code" name="script_install" id="egg-script" rows="20"{% if readonly %} readonly{% endif %}>{{ v.script_install }}</textarea>
+</section>
+</fieldset>
+</form>
+
+{% if egg %}
+<section class="card">
+  <div class="card-head"><h2>{{ trans(N ~ '.servers') }}</h2></div>
+  {% if servers %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>{{ trans('admin/server.owner') }}</th><th>{{ trans('admin/server.name') }}</th><th>{{ trans('admin/server.node') }}</th><th>{{ trans('admin/server.docker_image') }}</th><th>{{ trans('admin/server.primary_allocation') }}</th><th></th></tr></thead>
+    <tbody>{% for s in servers %}<tr>
+      <td>{% if s.owner_url %}<a href="{{ s.owner_url }}">{{ s.owner }}</a>{% else %}{{ s.owner }}{% endif %}</td>
+      <td>{% if s.url %}<a href="{{ s.url }}">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}</td>
+      <td>{% if s.node_url %}<a href="{{ s.node_url }}">{{ s.node }}</a>{% else %}{{ s.node }}{% endif %}</td>
+      <td><span class="badge">{{ s.image }}</span></td>
+      <td>{{ s.allocation or trans('admin/server.none') }}</td>
+      <td class="row" style="justify-content:flex-end"><a class="icon-btn" href="/server/{{ s.uuid_short }}" title="{{ trans('admin/server.console') }}">{{ icon('terminal', 'icon-sm') }}</a>{% if s.url %}<a class="icon-btn" href="{{ s.url }}" title="{{ trans('filament-actions::edit.single.label') }}">{{ icon('pencil', 'icon-sm') }}</a>{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}
+  <div class="empty"><div class="icon-wrap">{{ icon('x', 'icon-lg') }}</div><h3>{{ trans(N ~ '.no_servers_help') }}</h3><p class="muted">{{ trans(N ~ '.no_servers') }}</p></div>
+  {% endif %}
+</section>
+{% endif %}
+</div>
+{% if can_import %}{{ imp.modal(false, egg.update_url or '') }}{% endif %}
+<script type="application/json" id="egg-strings">{{ {"new_variable": trans(N ~ '.add_new_variable')} | tojson }}</script>
+{% endblock %}

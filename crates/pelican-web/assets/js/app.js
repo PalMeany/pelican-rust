@@ -153,6 +153,7 @@
     root.querySelectorAll('[data-tab]').forEach((x) => x.classList.toggle('active', x === b));
     root.querySelectorAll('[data-tab-panel]').forEach((p) => { p.hidden = p.dataset.tabPanel !== b.dataset.tab; });
     root.querySelectorAll('input[name="_tab"]').forEach((i) => { i.value = b.dataset.tab; });
+    if (root !== document && root.hasAttribute('data-tabs-local')) return;
     try { const u = new URL(window.location.href); u.searchParams.set('tab', b.dataset.tab); history.replaceState(null, '', u); } catch (_) { /* ignore */ }
   }
   document.addEventListener('click', (e) => {
@@ -199,6 +200,69 @@
     const clone = row.cloneNode(true);
     clone.querySelectorAll('input').forEach((i) => { i.value = ''; });
     list.appendChild(clone);
+    clone.querySelector('input')?.focus();
+  });
+  document.addEventListener('click', (e) => {
+    const rm = e.target.closest('[data-kv-remove]');
+    if (rm) {
+      const row = rm.closest('[data-kv-row]');
+      if (row.parentElement.querySelectorAll('[data-kv-row]').length > 1) row.remove();
+      else row.querySelectorAll('input').forEach((i) => { i.value = ''; });
+      return;
+    }
+    const reset = e.target.closest('[data-kv-reset]');
+    if (!reset) return;
+    const list = reset.closest('.field')?.querySelector('[data-kv]');
+    const rows = list ? [...list.querySelectorAll('[data-kv-row]')] : [];
+    if (!rows.length) return;
+    let pairs = [];
+    try { pairs = JSON.parse(reset.dataset.kvReset); } catch (_) { /* keep empty */ }
+    if (!pairs.length) pairs = [['', '']];
+    rows.slice(1).forEach((r) => r.remove());
+    pairs.forEach((p, i) => {
+      const r = i === 0 ? rows[0] : rows[0].cloneNode(true);
+      const inputs = r.querySelectorAll('input');
+      if (inputs[0]) inputs[0].value = p[0] ?? '';
+      if (inputs[1]) inputs[1].value = p[1] ?? '';
+      if (i > 0) list.appendChild(r);
+    });
+  });
+
+  // TagsInput: [data-tags] keeps a JSON array in its hidden input; Enter (or leaving the entry) adds a tag.
+  function syncTags(box) {
+    const values = [...box.querySelectorAll('[data-tag]')].map((c) => c.dataset.tag);
+    const hidden = box.querySelector('input[type=hidden]');
+    if (hidden) hidden.value = JSON.stringify(values);
+  }
+  function addTag(entry) {
+    const box = entry.closest('[data-tags]');
+    const value = entry.value.trim();
+    entry.value = '';
+    if (!box || !value) return;
+    if ([...box.querySelectorAll('[data-tag]')].some((c) => c.dataset.tag === value)) return;
+    const chip = document.createElement('span');
+    chip.className = 'chip'; chip.dataset.tag = value; chip.textContent = value;
+    const rm = document.createElement('button');
+    rm.type = 'button'; rm.setAttribute('data-tag-remove', ''); rm.setAttribute('aria-label', '\u00d7'); rm.textContent = '\u00d7';
+    chip.appendChild(rm);
+    box.insertBefore(chip, entry);
+    syncTags(box);
+  }
+  document.addEventListener('keydown', (e) => {
+    const entry = e.target.closest('.tags-entry');
+    if (!entry) return;
+    if (e.key === 'Enter') { e.preventDefault(); addTag(entry); }
+    if (e.key === 'Backspace' && !entry.value) {
+      const chips = entry.closest('[data-tags]').querySelectorAll('[data-tag]');
+      if (chips.length) { chips[chips.length - 1].remove(); syncTags(entry.closest('[data-tags]')); }
+    }
+  });
+  document.addEventListener('focusout', (e) => { const entry = e.target.closest?.('.tags-entry'); if (entry) addTag(entry); });
+  document.addEventListener('click', (e) => {
+    const rm = e.target.closest('[data-tag-remove]');
+    if (rm) { const box = rm.closest('[data-tags]'); rm.closest('[data-tag]').remove(); syncTags(box); return; }
+    const box = e.target.closest('[data-tags]');
+    if (box && e.target === box) box.querySelector('.tags-entry')?.focus();
   });
 
   // Reveal / hide password inputs.

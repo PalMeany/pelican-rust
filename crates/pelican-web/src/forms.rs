@@ -48,6 +48,11 @@ impl Form {
     }
 
     /// Checkbox/toggle: present and not `0`/`false`/empty.
+    /// A TagsInput field: JSON array of strings (blank entries dropped).
+    pub fn tags(&self, key: &str) -> Vec<String> {
+        parse_tags(self.get(key))
+    }
+
     pub fn bool(&self, key: &str) -> bool {
         self.opt(key).is_some_and(|v| !matches!(v, "" | "0" | "false" | "off"))
     }
@@ -96,5 +101,25 @@ impl Errors {
             e.add(&field, msg);
         }
         e
+    }
+}
+
+/// Decode a TagsInput value (JSON array); anything else is a single tag.
+pub fn parse_tags(raw: &str) -> Vec<String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Vec::new();
+    }
+    match serde_json::from_str::<Vec<Value>>(raw) {
+        Ok(items) => items
+            .into_iter()
+            .filter_map(|v| match v {
+                Value::String(s) => Some(s),
+                Value::Null => None,
+                other => Some(other.to_string()),
+            })
+            .filter(|s| !s.trim().is_empty())
+            .collect(),
+        Err(_) => vec![raw.to_string()],
     }
 }

@@ -53,10 +53,10 @@
 </div>
 {% endmacro %}
 
-{% macro toggle(name, label, checked=false, hint='', errors={}, disabled=false) %}
+{% macro toggle(name, label, checked=false, hint='', errors={}, disabled=false, tooltip='') %}
 <div class="field{% if errors[name] %} has-error{% endif %}">
   <input type="hidden" name="{{ name }}" value="0">
-  <label class="toggle"><input type="checkbox" name="{{ name }}" value="1"{% if checked %} checked{% endif %}{% if disabled %} disabled{% endif %}><span class="track"></span><span>{{ label }}</span></label>
+  <label class="toggle"><input type="checkbox" name="{{ name }}" value="1"{% if checked %} checked{% endif %}{% if disabled %} disabled{% endif %}><span class="track"></span><span>{{ label }}</span>{% if tooltip %}<span class="muted" title="{{ tooltip }}">{{ icon('question-mark', 'icon-sm') }}</span>{% endif %}</label>
   {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
   {{ error(errors, name) }}
 </div>
@@ -114,5 +114,42 @@
   {{ radios('unlimited_' ~ name, label, [['1', trans('admin/server.unlimited')], ['0', trans('admin/server.limited')]], '1' if unlimited else '0', errors, inline=true) }}
   <div data-show-if="unlimited_{{ name }}=0"{% if unlimited %} hidden{% endif %}>{{ text(name, limit_label, value, errors, type='number', suffix=suffix, hint=hint, attrs='min="0"') }}</div>
   {% if with_overallocate %}<div data-show-if="unlimited_{{ name }}=0"{% if unlimited %} hidden{% endif %}>{{ text(name ~ '_overallocate', over_label, over_value, errors, type='number', suffix='%', attrs='min="-1" max="100"') }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+{# TagsInput: chips + entry; the hidden field holds a JSON array of strings. #}
+{% macro tags_input(name, values=[], placeholder='', suggestions='', disabled=false) %}
+<div class="tags-input{% if disabled %} disabled{% endif %}" data-tags>
+  <input type="hidden" name="{{ name }}" value='{{ (values or []) | tojson }}'>
+  {% for t in values or [] %}<span class="chip" data-tag="{{ t }}">{{ t }}{% if not disabled %}<button type="button" data-tag-remove aria-label="&times;">&times;</button>{% endif %}</span>{% endfor %}
+  {% if not disabled %}<input class="tags-entry" placeholder="{{ placeholder }}"{% if suggestions %} list="{{ suggestions }}"{% endif %}>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro tags(name, label, values=[], errors={}, hint='', placeholder='', suggestions='', disabled=false) %}
+<div class="field{% if errors[name] %} has-error{% endif %}">
+  {% if label %}<label>{{ label }}</label>{% endif %}
+  {{ tags_input(name, values, placeholder, suggestions, disabled) }}
+  {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
+  {{ error(errors, name) }}
+</div>
+{% endmacro %}
+
+{# KeyValue: rows of `<key_name>[]` / `<value_name>[]` inputs; `reset` (rows) adds the reset hint action. #}
+{% macro kv(key_name, value_name, label, rows=[], errors={}, error_name='', hint='', key_label='', value_label='', add_label='', required=false, disabled=false, mono_value=false, reset=none, reset_label='') %}
+<div class="field{% if errors[error_name] %} has-error{% endif %}">
+  {% if label or reset is not none %}<div class="row" style="justify-content:space-between">
+    {% if label %}<label>{{ label }}{% if required %}<span class="req">*</span>{% endif %}</label>{% endif %}
+    {% if reset is not none and not disabled %}<button type="button" class="btn-link danger" data-kv-reset='{{ reset | tojson }}'>{{ icon('trash', 'icon-sm') }}{{ reset_label }}</button>{% endif %}
+  </div>{% endif %}
+  <div class="kv-grid muted small"><span>{{ key_label or trans('filament-forms::components.key_value.fields.key.label') }}</span><span>{{ value_label or trans('filament-forms::components.key_value.fields.value.label') }}</span><span></span></div>
+  <div class="stack" data-kv>{% for r in (rows or [['', '']]) %}<div class="kv-grid" data-kv-row>
+    <input class="input" name="{{ key_name }}" value="{{ r[0] }}"{% if disabled %} disabled{% endif %}>
+    <input class="input{% if mono_value %} mono{% endif %}" name="{{ value_name }}" value="{{ r[1] }}"{% if disabled %} disabled{% endif %}>
+    {% if not disabled %}<button type="button" class="icon-btn danger" data-kv-remove title="{{ trans('filament-forms::components.key_value.actions.delete.label') }}">{{ icon('trash', 'icon-sm') }}</button>{% else %}<span></span>{% endif %}
+  </div>{% endfor %}</div>
+  {% if not disabled %}<div><button type="button" class="btn btn-sm btn-gray" data-kv-add>{{ icon('plus', 'icon-sm') }}{{ add_label or trans('filament-forms::components.key_value.actions.add.label') }}</button></div>{% endif %}
+  {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
+  {{ error(errors, error_name) }}
 </div>
 {% endmacro %}

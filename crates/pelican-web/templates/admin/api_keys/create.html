@@ -1,0 +1,58 @@
+{# Admin › API Keys › create (app/Filament/Admin/Resources/ApiKeys/Pages/CreateApiKey). #}
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% macro perm(name, label, value, options, errors) %}
+<div class="field{% if errors[name] %} has-error{% endif %}">
+  <span class="field-label">{{ label }}<span class="req">*</span></span>
+  <div class="radio-group inline">
+    {% for o in options %}
+    <label class="check text-{{ o[3] }}"><input type="radio" name="{{ name }}" value="{{ o[0] }}"{% if (o[0] | string) == (value | string) %} checked{% endif %}><span>{{ icon(o[2], 'icon-sm') }}{{ o[1] }}</span></label>
+    {% endfor %}
+  </div>
+  {{ f.error(errors, name) }}
+</div>
+{% endmacro %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    <a class="btn btn-gray" href="/admin/api-keys" title="{{ trans('filament-panels::resources/pages/create-record.form.actions.cancel.label') }}">{{ icon('arrow-left', 'icon-sm') }}</a>
+    {# Header create action only (CreateRecord, getFormActions = []); token shows once in the table's key column afterwards. #}
+    <button class="btn" type="submit" form="api-key-form" title="{{ trans('filament-panels::resources/pages/create-record.form.actions.create.label') }}">{{ icon('file-plus', 'icon-sm') }}{{ trans('filament-panels::resources/pages/create-record.form.actions.create.label') }}</button>
+  </div>
+</div>
+<form id="api-key-form" method="post" action="{{ action }}" class="stack">
+  {{ csrf_field() }}
+  <fieldset class="card card-body grid grid-2" style="margin:0;align-content:start">
+    <div class="card-head span-full"><h2>{{ trans('admin/apikey.permissions.all') }}</h2><p class="muted small">{{ trans('admin/apikey.permissions.all_description') }}</p></div>
+    <div class="field span-full">
+      <div class="radio-group inline">
+        {% for o in permission_options %}
+        <label class="check text-{{ o[3] }}"><input type="radio" name="permissions_all" value="{{ o[0] }}"{% if (o[0] | string) == (v.permissions_all | string) %} checked{% endif %} data-set-all><span>{{ icon(o[2], 'icon-sm') }}{{ o[1] }}</span></label>
+        {% endfor %}
+      </div>
+      {{ f.error(errors, 'permissions_all') }}
+    </div>
+  </fieldset>
+  <fieldset class="card card-body grid grid-3" style="margin:0;align-content:start">
+    <h2 class="span-full">Permissions</h2>
+    {% for r in resources %}
+    {{ perm('permission_' ~ r[0], r[1], v['permissions'][r[0]], permission_options, errors) }}
+    {% endfor %}
+  </fieldset>
+  <fieldset class="card card-body stack" style="margin:0;align-content:start">
+    {{ f.tags('allowed_ips', trans('admin/apikey.whitelist'), v.allowed_ips, errors, hint=trans('admin/apikey.whitelist_help'), placeholder=trans('admin/apikey.whitelist_placeholder')) }}
+    <div>{{ f.textarea('memo', trans('admin/apikey.description'), v.memo, errors, required=true, hint=trans('admin/apikey.description_help')) }}</div>
+  </fieldset>
+</form>
+<script>
+  // `permissions_all` is live and sets every per-resource toggle to its state.
+  document.querySelectorAll('input[data-set-all]').forEach((r) => {
+    r.addEventListener('change', () => {
+      document.querySelectorAll('#api-key-form input[name^="permission_"]').forEach((x) => {
+        x.checked = x.value === r.value;
+      });
+    });
+  });
+</script>
+{% endblock %}

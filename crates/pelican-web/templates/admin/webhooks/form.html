@@ -1,0 +1,72 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% set S = 'admin/webhook' %}
+{% block content %}
+<div data-tabs-root class="stack">
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if mode == 'create' %}
+      <a class="btn btn-gray" href="/admin/webhooks" title="{{ trans('filament-panels::resources/pages/create-record.form.actions.cancel.label') }}">{{ icon('arrow-left', 'icon-sm') }}</a>
+      <button class="btn" type="submit" form="webhook-form" title="{{ trans('filament-panels::resources/pages/create-record.form.actions.create.label') }}">{{ icon('plus', 'icon-sm') }}</button>
+    {% elif mode == 'edit' %}
+      {% if can_delete %}
+      <form method="post" action="/admin/webhooks/{{ record.id }}/delete" data-confirm="{{ trans('filament-actions::modal.confirmation') }}"
+        data-confirm-title="{{ trans('filament-actions::delete.single.modal.heading', label=v.name) }}" data-confirm-ok="{{ trans('filament-actions::delete.single.modal.actions.delete.label') }}">
+        {{ csrf_field() }}<button class="btn btn-danger" type="submit">{{ trans('filament-actions::delete.single.label') }}</button>
+      </form>
+      {% endif %}
+      {% if can_test and has_events %}
+      <form method="post" action="/admin/webhooks/{{ record.id }}/test">
+        {{ csrf_field() }}<button class="btn btn-gray" type="submit" title="{{ trans(S ~ '.test_now') }}">{{ icon('test-pipe', 'icon-sm') }}{{ trans(S ~ '.test_now') }}</button>
+      </form>
+      {% endif %}
+      <button class="btn" type="submit" form="webhook-form" title="{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}">{{ icon('device-floppy', 'icon-sm') }}</button>
+    {% else %}
+      <a class="btn" href="/admin/webhooks/{{ record.id }}/edit">{{ trans('filament-actions::edit.single.label') }}</a>
+    {% endif %}
+  </div>
+</div>
+<nav class="tabs">
+  {% for t in [['information', 'info-circle', trans(S ~ '.information')], ['payload', 'file-code', trans(S ~ '.payload')], ['events', 'star', trans(S ~ '.events')]] %}
+  <button type="button" data-tab="{{ t[0] }}" class="{{ 'active' if tab == t[0] }}">{{ icon(t[1], 'icon-sm') }}{{ t[2] }}</button>
+  {% endfor %}
+</nav>
+
+<form id="webhook-form" method="post" action="{{ action }}">
+{{ csrf_field() }}<input type="hidden" name="_tab" value="{{ tab }}">
+<fieldset style="border:0;padding:0;margin:0" {% if readonly %}disabled{% endif %}>
+
+<section class="card card-body grid grid-2" data-tab-panel="information"{% if tab != 'information' %} hidden{% endif %}>
+  {{ f.text('name', trans(S ~ '.name'), v.name, errors, required=true, attrs='maxlength="255"') }}
+  {# Disabled relationship select (`Select::relationship('server','id')`): server_id never changes through this form. #}
+  {{ f.select('server_id', trans(S ~ '.server'), server_options, server_id, errors, disabled=true, placeholder='—') }}
+  <input type="hidden" name="scope" value="{{ scope }}">
+  <div class="span-full">{{ f.text('description', trans(S ~ '.description'), v.description, errors, required=true) }}</div>
+  <div class="span-full">{{ f.radios('type', trans(S ~ '.type'), type_options, v.type, errors, inline=true) }}</div>
+  <div class="span-full">{{ f.text('endpoint', trans(S ~ '.endpoint'), v.endpoint, errors, required=true) }}</div>
+</section>
+
+<section class="card card-body stack" data-tab-panel="payload"{% if tab != 'payload' %} hidden{% endif %}>
+  {% if unavailable_type_text %}
+  <div class="banner warning">{{ icon('puzzle-off', 'icon') }}<div><strong>{{ trans(S ~ '.unavailable_type') }}</strong><div>{{ unavailable_type_text }}</div></div></div>
+  {% else %}
+  {{ f.kv('headers_key[]', 'headers_val[]', trans(S ~ '.headers'), headers, errors, error_name='headers', reset=headers_default, reset_label=trans(S ~ '.reset_headers'), disabled=readonly) }}
+  {% endif %}
+</section>
+
+<section class="card card-body" data-tab-panel="events"{% if tab != 'events' %} hidden{% endif %}>
+  <div class="field{% if errors['events'] %} has-error{% endif %}">
+    <div class="grid grid-3" style="align-items:start">
+      {% for e in events_options %}
+      <div>{{ f.checkbox('events[]', e[1], e[0] in events_selected, e[0]) }}</div>
+      {% endfor %}
+    </div>
+    {{ f.error(errors, 'events') }}
+  </div>
+</section>
+
+</fieldset>
+</form>
+</div>
+{% endblock %}

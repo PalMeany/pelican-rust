@@ -73,6 +73,26 @@ pub async fn export(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
     v.validate()?;
     let json_format = input.get("format").and_then(Value::as_str) == Some("json");
     let e = bound(&ctx)?;
+    let doc = export_document(&st, &e).await?;
+    let (body, ext) = if json_format {
+        (egg_format::export::to_json(&doc).ok_or_else(|| ApiError::internal("JsonException"))?, "json")
+    } else {
+        (egg_format::export::to_yaml(&doc), "yaml")
+    };
+    let filename = format!("egg-{}.{ext}", egg_format::export::kebab_name(&e.name));
+    Ok((
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, format!("application/{ext}")),
+            (header::CONTENT_DISPOSITION, format!("attachment; filename={filename}")),
+        ],
+        body,
+    )
+        .into_response())
+}
+
+/// `EggExporterService` document (also used by the web UI).
+pub async fn export_document(st: &AppState, e: &eggs::Model) -> ApiResult<Value> {
     let parent = |id: Option<Int>| {
         let st = st.clone();
         async move {
@@ -151,21 +171,7 @@ pub async fn export(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
         }},
         "variables": variables,
     });
-    let (body, ext) = if json_format {
-        (egg_format::export::to_json(&doc).ok_or_else(|| ApiError::internal("JsonException"))?, "json")
-    } else {
-        (egg_format::export::to_yaml(&doc), "yaml")
-    };
-    let filename = format!("egg-{}.{ext}", egg_format::export::kebab_name(&e.name));
-    Ok((
-        StatusCode::OK,
-        [
-            (header::CONTENT_TYPE, format!("application/{ext}")),
-            (header::CONTENT_DISPOSITION, format!("attachment; filename={filename}")),
-        ],
-        body,
-    )
-        .into_response())
+    Ok(doc)
 }
 
 fn import_err(e: ImportError) -> ApiError {
@@ -210,7 +216,21 @@ fn json_or_null(v: Option<&Value>) -> Option<Json> {
 pub async fn import(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, In(input): In) -> ApiResult<Response> {
     ctx.acl("egg", WRITE)?;
     let content = String::from_utf8_lossy(&input.raw).into_owned();
-    let parsed = egg_format::import::parse(&content).map_err(import_err)?;
+    let egg = import_egg(&st, &content).await?;
+    let fresh = eggs::Entity::find_by_id(egg).one(&st.db).await?.ok_or_else(ApiError::model_not_found)?;
+    Ok(PhpJson::with_status(StatusCode::CREATED, egg_item(&st, &ctx, &fresh, &Includes::parse(&input)).await?)
+        .into_response())
+}
+
+/// `EggImporterService::fromContent()` (also used by the web UI); returns the egg id.
+pub async fn import_egg(st: &AppState, content: &str) -> ApiResult<Int> {
+    import_egg_into(st, content, None).await
+}
+
+/// `EggImporterService::fromContent($content, $format, $egg)`: `target` (when given) is
+/// overwritten instead of the egg matching the parsed uuid.
+pub async fn import_egg_into(st: &AppState, content: &str, target: Option<i64>) -> ApiResult<Int> {
+    let parsed = egg_format::import::parse(content).map_err(import_err)?;
     let vars: Vec<Value> = match parsed.get("variables") {
         Some(Value::Array(a)) => a.clone(),
         Some(Value::Object(m)) => m.values().cloned().collect(),
@@ -220,11 +240,14 @@ pub async fn import(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
     let uuid = opt_str(parsed.get("uuid")).unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let now = Timestamp(pelican_core::time::now());
     let txn = st.db.begin().await?;
-    let existing = eggs::Entity::find().filter(eggs::Column::Uuid.eq(uuid.clone())).one(&txn).await?;
+    let existing = match target {
+        Some(id) => eggs::Entity::find_by_id(id).one(&txn).await?,
+        None => eggs::Entity::find().filter(eggs::Column::Uuid.eq(uuid.clone())).one(&txn).await?,
+    };
 
     // Icon: written before the commit; failures are reported and ignored.
     if let Some(Value::String(icon)) = parsed.get("icon") {
-        save_icon(&st, &uuid, icon);
+        save_icon(st, &uuid, icon);
     }
     let denylist: Value = match parsed.get("file_denylist") {
         Some(Value::Array(a)) => {
@@ -343,9 +366,7 @@ pub async fn import(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
         .await?;
     }
     txn.commit().await?;
-    let fresh = eggs::Entity::find_by_id(egg).one(&st.db).await?.ok_or_else(ApiError::model_not_found)?;
-    Ok(PhpJson::with_status(StatusCode::CREATED, egg_item(&st, &ctx, &fresh, &Includes::parse(&input)).await?)
-        .into_response())
+    Ok(egg)
 }
 
 /// `saveEggIconFromBase64()` → `HasIcon::writeIcon()` on the public disk.
@@ -373,6 +394,12 @@ fn save_icon(st: &AppState, uuid: &str, data_uri: &str) {
 pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) -> ApiResult<Response> {
     ctx.acl("egg", WRITE)?;
     let e = bound(&ctx)?;
+    delete_egg(&st, &e).await?;
+    Ok(no_content())
+}
+
+/// Egg deletion with the `deleting` guards (also used by the web UI).
+pub async fn delete_egg(st: &AppState, e: &eggs::Model) -> ApiResult<()> {
     if servers::Entity::find().filter(servers::Column::EggId.eq(e.id)).one(&st.db).await?.is_some() {
         return Err(ApiError::display(
             "HasActiveServersException",
@@ -388,5 +415,5 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
         ));
     }
     eggs::Entity::delete_by_id(e.id).exec(&st.db).await?;
-    Ok(no_content())
+    Ok(())
 }

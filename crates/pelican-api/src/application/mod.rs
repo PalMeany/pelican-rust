@@ -2,14 +2,14 @@
 
 pub mod data;
 pub mod database_hosts;
-mod eggs;
+pub mod eggs;
 mod mounts;
 pub mod nodes;
 mod roles;
 pub mod servers;
 mod servers_write;
 mod users;
-pub(crate) mod webhooks;
+pub mod webhooks;
 
 use axum::Router;
 use axum::routing::{MethodRouter, delete, get, patch, post};

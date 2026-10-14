@@ -1,0 +1,15 @@
+{% extends "layouts/panel.html" %}
+{% import "components/table.html" as tbl %}
+{% import "admin/eggs/_import.html" as imp %}
+{% block head %}<script src="{{ asset('js/eggs.js') }}" defer></script>{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if can_import %}<button type="button" class="btn btn-gray" data-modal-open="egg-import" title="{{ trans('filament-actions::import.modal.actions.import.label') }}">{{ icon('file-import', 'icon-sm') }}</button>{% endif %}
+    {% if create %}<a class="btn" href="{{ create.url }}">{{ create.label }}</a>{% endif %}
+  </div>
+</div>
+{{ tbl.render(table, csrf) }}
+{% if can_import %}{{ imp.modal(true) }}{% endif %}
+{% endblock %}

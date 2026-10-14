@@ -90,6 +90,15 @@ impl Web {
     }
 
     /// Variables every template sees.
+    /// The `?tab=` of a tabbed page (`persistTabInQueryString`), limited to `tabs` (first = default).
+    pub fn tab(&self, tabs: &[&str]) -> String {
+        self.query
+            .as_deref()
+            .and_then(|q| form_urlencoded::parse(q.as_bytes()).find(|(k, _)| k == "tab").map(|(_, v)| v.into_owned()))
+            .filter(|t| tabs.contains(&t.as_str()))
+            .unwrap_or_else(|| tabs.first().copied().unwrap_or_default().to_string())
+    }
+
     pub fn base(&self) -> Value {
         let user = self.user.as_ref().map(|u| {
             Value::from_serialize(UserView {
