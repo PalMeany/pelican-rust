@@ -116,19 +116,22 @@ Application API → UI → плагины → PHP-sidecar.
 - [~] Admin: каркас (доступ isAdmin, сайдбар с группами и бейджами по правам spatie)
   - [x] mounts (эталон)
   - [x] database hosts, webhooks, api keys (воркер ui-a, ревью + доработки)
-  - [ ] воркеры: users, roles, backup hosts (ui-b)
+  - [x] users, roles (воркер ui-b)
+  - [ ] backup hosts (воркер, очередь B2)
   - [x] servers: список (группировка, inline основная аллокация), редактирование (5 вкладок, переменные, маунты, синхронизация с Wings), действия, создание (htmx-перерисовка по ноде/яйцу, откат при недоступном Wings), отношения allocations/databases
   - [ ] servers: перенос на другую ноду (TransferServerService), inline-создание владельца/аллокации в мастере
   - [x] nodes: список (здоровье, доступность из браузера), создание, вкладки (обзор с графиками, настройки, YAML-конфиг, авто-деплой, сброс токена, диагностика), аллокации, серверы
   - [x] eggs: список (теги, число серверов), импорт (файлы/URL), 4 вкладки формы, CopyFrom, повторитель переменных, экспорт JSON/YAML, обновление по update_url, копия, удаление
   - [ ] eggs: вкладка импорта из индекса GitHub (`eggs.index`), видимость «Обновить» по флагу проверки обновлений (сейчас — при наличии update_url), массовые delete/update
-  - [ ] dashboard, settings, health, logs, plugins
+  - [x] dashboard (виджеты версии/разработчика/первой ноды/поддержки/помощи), health (проверки как в оригинале, раз в 5 мин планировщиком, бейдж в меню), logs (файлы Laravel + просмотрщик, ADR-0015)
+  - [x] перечитывание `.env` на лету для страницы настроек (ADR-0014)
+  - [ ] settings (воркер, очередь C2), plugins (после M7)
 - [x] App: список серверов (вкладки my/other/all, таблица/сетка по кастомизации, ресурсы из Wings с кешем 15 с, power-действия, фильтры egg/owner, per_page в кастомизации)
 - [~] Server: каркас (доступ к тенанту, права сабюзера, навигация, баннер конфликта)
   - [x] консоль (xterm.js 5.5 + WebSocket Wings, power через set state, история команд, графики)
   - [x] файлы (список, массовые действия, права, архивы, загрузка напрямую в Wings, поиск, редактор CodeMirror 5)
-  - [ ] воркеры (ui-c): databases, network, activity, startup, settings, mounts
-  - [ ] users (сабюзеры), backups, schedules, webhooks
+  - [x] databases, network, activity (воркер ui-c); блокировка страниц в конфликтном состоянии (BlockAccessInConflict)
+  - [ ] startup, settings, mounts (очередь C2); users/сабюзеры (B2); backups, schedules, webhooks (после B2)
 - [ ] Инсталлятор
 - [ ] E2E-проверки ключевых сценариев в браузере (нужен настоящий Wings в VM: консоль, файлы, power, установка)
 
