@@ -25,7 +25,7 @@ use crate::services::LogActivity;
 use crate::validation::Validator;
 
 /// `Allocation::address`: alias (ip_alias else ip), bracketed when IPv6, + `:port`.
-fn alloc_address(a: &allocations::Model) -> String {
+pub fn alloc_address(a: &allocations::Model) -> String {
     let alias = a.ip_alias.clone().unwrap_or_else(|| a.ip.clone());
     let addr = if alias.parse::<Ipv6Addr>().is_ok() { format!("[{alias}]") } else { alias };
     format!("{addr}:{}", a.port.0)
@@ -49,7 +49,7 @@ fn no_space() -> ApiError {
 }
 
 /// The plain `hasMany` query of `Server::allocations()`, no ORDER BY (ADR-0011).
-async fn server_allocations<C: ConnectionTrait>(db: &C, server_id: i64) -> ApiResult<Vec<allocations::Model>> {
+pub async fn server_allocations<C: ConnectionTrait>(db: &C, server_id: i64) -> ApiResult<Vec<allocations::Model>> {
     Ok(allocations::Model::find_by_statement(raw::stmt(
         db.get_database_backend(),
         "select * from {allocations} where {allocations.server_id} = ?",
@@ -60,7 +60,7 @@ async fn server_allocations<C: ConnectionTrait>(db: &C, server_id: i64) -> ApiRe
 }
 
 /// Server's allocations on one node excluding one id (`keepOne` check).
-async fn other_node_allocations<C: ConnectionTrait>(
+pub async fn other_node_allocations<C: ConnectionTrait>(
     db: &C,
     server_id: i64,
     node_id: i64,
@@ -83,7 +83,7 @@ fn rand_pick<T>(v: &[T]) -> Option<&T> {
 
 /// Webmozart `Assert::integerish` over the env string (is_numeric + integral);
 /// failure bubbles up as an uncaught `InvalidArgumentException` → generic 500.
-fn integerish(v: Option<&str>) -> ApiResult<i64> {
+pub fn integerish(v: Option<&str>) -> ApiResult<i64> {
     let bad = || ApiError::internal("InvalidArgumentException");
     let Some(s) = v else { return Err(bad()) };
     if !pelican_core::php::is_numeric_str(s) {
@@ -201,7 +201,7 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) -
 /// `FindAssignableAllocationService::createNewAllocation` for one numeric port:
 /// pick a free port in the range and insert an unassigned allocation through
 /// AssignmentService semantics, then hand the row back for assignment.
-async fn create_new_allocation<C: ConnectionTrait>(
+pub async fn create_new_allocation<C: ConnectionTrait>(
     txn: &C,
     server: &servers::Model,
     primary: &allocations::Model,

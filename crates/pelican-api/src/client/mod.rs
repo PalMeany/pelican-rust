@@ -6,7 +6,7 @@ pub mod backups;
 pub mod data;
 pub mod databases;
 mod files;
-mod network;
+pub mod network;
 mod schedules;
 mod servers;
 mod settings;

@@ -2,7 +2,7 @@
   <span class="avatar" style="width:2.5rem;height:2.5rem">{{ a.avatar }}</span>
   <div style="min-width:0">
     <div><strong>{{ a.username }}</strong> <span class="muted">— {{ a.event }}</span></div>
-    <div>{{ a.label }}</div>
+    <div>{{ a.label | safe }}</div>
     <div class="muted small">{% if a.ip %}{{ a.ip }} — {% endif %}<span title="{{ a.timestamp | datetime }}">{{ a.timestamp | ago }}</span>
       {% if a.has_metadata %}<details style="display:inline-block;margin-left:0.5rem"><summary class="btn-link small">{{ icon('info-circle', 'icon-sm') }}</summary><pre class="code-block" style="white-space:pre-wrap">{{ a.properties }}</pre></details>{% endif %}
     </div>

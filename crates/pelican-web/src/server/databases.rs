@@ -8,7 +8,6 @@ use std::net::IpAddr;
 use std::sync::Arc;
 
 use axum::Router;
-use axum::extract::Path;
 use axum::response::Response;
 use axum::routing::{get, post};
 use minijinja::{Value as Mj, context};
@@ -25,7 +24,7 @@ use rand::seq::IndexedRandom;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, QueryFilter, TransactionTrait};
 use serde_json::{Value, json};
 
-use super::ServerPanel;
+use super::{RecordId, ServerPanel};
 use crate::error::{WebError, WebResult};
 use crate::forms::{Errors, Form};
 use crate::table::{Action, Cell, Column, ListParams, Row, Table};
@@ -359,7 +358,7 @@ async fn create(p: ServerPanel, form: Form) -> WebResult<Response> {
 
 /// `GET /server/{server}/databases/{id}` — the fields of `defaultForm`
 /// (the ViewAction content): password/JDBC only with `database.view-password`.
-async fn view(p: ServerPanel, Path(id): Path<i64>) -> WebResult {
+async fn view(p: ServerPanel, RecordId(id): RecordId) -> WebResult {
     p.authorize("database.read")?;
     let d = find(&p, id).await?;
     let host = host_of(&p.st.db, d.database_host_id).await?;
@@ -400,7 +399,7 @@ async fn view(p: ServerPanel, Path(id): Path<i64>) -> WebResult {
 
 /// `POST …/rotate-password` — `RotateDatabasePasswordAction`: service call plus
 /// the same activity event as the Client API.
-async fn rotate_password(p: ServerPanel, Path(id): Path<i64>, form: Form) -> WebResult<Response> {
+async fn rotate_password(p: ServerPanel, RecordId(id): RecordId, form: Form) -> WebResult<Response> {
     p.authorize("database.update")?;
     let d = find(&p, id).await?;
     let back = form.back(&format!("{}/databases/{id}", p.base_url()));
@@ -431,7 +430,7 @@ async fn rotate_password(p: ServerPanel, Path(id): Path<i64>, form: Form) -> Web
 }
 
 /// `POST …/delete` — `DeleteAction` (`DatabaseManagementService::delete()`).
-async fn delete(p: ServerPanel, Path(id): Path<i64>, form: Form) -> WebResult<Response> {
+async fn delete(p: ServerPanel, RecordId(id): RecordId, form: Form) -> WebResult<Response> {
     p.authorize("database.delete")?;
     let d = find(&p, id).await?;
     let back = form.back(&format!("{}/databases", p.base_url()));

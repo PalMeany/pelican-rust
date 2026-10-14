@@ -1,0 +1,30 @@
+{# Server › Activity entry detail — the ViewAction schema of
+   Activities/ActivityResource (event, user with hint edit action, timestamp
+   and the KeyValue properties), served as a page instead of the modal. #}
+{% extends "layouts/panel.html" %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if edit_url %}<a class="btn btn-gray" href="{{ edit_url }}" hx-boost="false">{{ icon('edit', 'icon-sm') }}{{ trans('filament-actions::edit.single.label') }}</a>{% endif %}
+  </div>
+</div>
+<div class="card card-body stack">
+  <dl class="kv">
+    <dt>{{ trans('server/activity.event') }}</dt>
+    <dd><span class="badge badge-primary">{{ icon(event_icon, 'icon-sm') }}{{ label | safe }}</span> <span class="muted small mono">{{ event }}</span></dd>
+    <dt>{{ trans('server/activity.user') }}</dt>
+    <dd>{{ actor }}</dd>
+    <dt>{{ trans('server/activity.timestamp') }}</dt>
+    <dd>{{ timestamp | datetime }}</dd>
+  </dl>
+</div>
+{% if has_metadata %}
+<div class="card card-body stack">
+  <h2 class="small muted">{{ trans('server/activity.metadata') }}</h2>
+  <dl class="kv">
+    {% for m in metadata %}<dt class="mono">{{ m.key }}</dt><dd class="mono" style="white-space:pre-wrap;word-break:break-word">{{ m.value }}</dd>{% endfor %}
+  </dl>
+</div>
+{% endif %}
+{% endblock %}

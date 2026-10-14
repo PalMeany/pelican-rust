@@ -100,10 +100,23 @@ fn csrf_field(state: &State) -> Value {
 }
 
 /// `{{ icon('tabler-name') }}`: inline SVG from `assets/icons/*.svg`.
+/// Escape text for HTML built in Rust (`Cell::Html`).
+pub fn escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&#039;")
+}
+
+/// Inline icon markup, as the `icon()` template function renders it.
+pub fn icon_html(name: &str, class: &str) -> String {
+    assets::icon_svg(name).unwrap_or_default().replacen(
+        "<svg",
+        &format!(r#"<svg class="{class}" aria-hidden="true""#),
+        1,
+    )
+}
+
 fn icon(name: &str, rest: Rest<Value>) -> Value {
     let class = rest.first().map(|v| v.to_string()).unwrap_or_else(|| "icon".into());
-    let svg = assets::icon_svg(name).unwrap_or_default();
-    Value::from_safe_string(svg.replacen("<svg", &format!(r#"<svg class="{class}" aria-hidden="true""#), 1))
+    Value::from_safe_string(icon_html(name, &class))
 }
 
 fn build(views_path: Option<PathBuf>) -> Environment<'static> {

@@ -1,0 +1,26 @@
+{# Server › Network (app/Filament/Server/Resources/Allocations): the server's
+   allocations with inline notes editing (TextInputColumn via js/network.js),
+   the primary-star toggle and DetachAction row actions, plus the toolbar
+   add-allocation action (FindAssignableAllocationService). #}
+{% extends "layouts/panel.html" %}
+{% import "components/table.html" as tbl %}
+{% block head %}<script src="{{ asset('js/network.js') }}" defer></script>{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {# Toolbar Action 'add_allocation': runs immediately, no modal; disabled
+       without a primary allocation or at the allocation limit. #}
+    {% if can_add %}
+    <form method="post" action="{{ base }}/network/add" hx-boost="false">
+      {{ csrf_field() }}
+      <button type="submit" class="btn" title="{{ add_tooltip }}">
+        {{ icon(add_icon, 'icon-sm') }}</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{{ tbl.render(table, csrf) }}
+{# js/network.js turns the notes cells into inputs for rows with the
+   make-primary action (rendered exactly when `allocation.update` is granted). #}
+{% endblock %}

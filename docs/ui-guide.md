@@ -41,6 +41,10 @@
 - Логика уже реализована для Client API в `crates/pelican-api/src/client/*.rs` (+ клиент Wings `pelican_wings`):
   вызывай её функции (сделай `pub`, если нужно, сохранив поведение API — по ним идут диф-тесты), а не HTTP.
   Активити — как в Client API (`server:*` события, субъект — сервер).
+- Маршруты вида `/server/{server}/…/{id}`: id записи — экстрактор `super::RecordId` (`RecordId(id): RecordId`),
+  НЕ `Path<i64>` (в пути два параметра — `Path<i64>` падает во время выполнения).
+- Страницы с `BlockAccessInConflict` (files, backups, schedules, users, databases, network, startup, settings, mounts)
+  блокируются экстрактором `ServerPanel` централизованно (список `CONFLICT_BLOCKED` в `server/mod.rs`).
 
 ## Списки (`src/table.rs`, `templates/components/table.html`)
 1. `let p = ListParams::parse(admin.query.as_deref(), &[10, 25, 50, 0], 10);` (0 = «All»).
@@ -101,7 +105,9 @@
 - Модалка: `<dialog id="x" class="modal">` + кнопка `data-modal-open="x"`, закрытие `data-modal-close`.
 - Копирование: `data-copy="текст"`. Подтверждение формы: `data-confirm="вопрос" data-confirm-title data-confirm-ok`.
 - Имена переменных контекста не должны совпадать с функциями шаблона (`icon`, `trans`, `trans_choice`, `asset`,
-  `csrf_field`) — иначе «value of type … is not callable».
+  `csrf_field`) — иначе «value of type … is not callable» — и с базовыми переменными макета (`user`, `path`, `csrf`,
+  `flash`, `locale`, `timezone`, `app_name`, `app_url`, `binary_prefix`, `hx`, `nav`, `user_menu`, `home_url`,
+  `banners`, `server`) — иначе ломается шапка/меню.
 - Свой JS — файлом `assets/js/<module>.js` (`{% block head %}<script src="{{ asset('js/x.js') }}" defer></script>`),
   с делегированными обработчиками на `document`. Инлайн-`<script>` с `const`/`let` на верхнем уровне ломается при
   повторном заходе на страницу через htmx (повторное объявление).

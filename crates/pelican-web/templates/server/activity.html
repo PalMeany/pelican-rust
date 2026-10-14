@@ -1,0 +1,11 @@
+{# Server › Activity list (app/Filament/Server/Resources/Activities/
+   ActivityResource::defaultTable): event, user and timestamp columns with
+   the event/user select filters and the record ViewAction (detail page). #}
+{% extends "layouts/panel.html" %}
+{% import "components/table.html" as tbl %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+</div>
+{{ tbl.render(table, csrf) }}
+{% endblock %}

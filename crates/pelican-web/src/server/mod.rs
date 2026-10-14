@@ -1,9 +1,11 @@
 //! Server panel (`/server/{uuid_short}`, app/Filament/Server): tenant access,
 //! subuser permissions, navigation and the console.
 
+mod activity;
 mod console;
 mod databases;
 mod files;
+mod network;
 
 use std::collections::HashSet;
 
@@ -22,7 +24,12 @@ use crate::ctx::Authed;
 use crate::error::{WebError, WebResult};
 
 pub fn routes() -> Router<AppState> {
-    Router::new().merge(console::routes()).merge(files::routes()).merge(databases::routes())
+    Router::new()
+        .merge(activity::routes())
+        .merge(console::routes())
+        .merge(databases::routes())
+        .merge(files::routes())
+        .merge(network::routes())
 }
 
 /// A request inside a server's panel: the tenant, its node and what the user may do there.
@@ -50,9 +57,37 @@ impl FromRequestParts<AppState> for ServerPanel {
         let Path(params): Path<Vec<(String, String)>> =
             Path::from_request_parts(parts, st).await.map_err(|_| WebError::NotFound.into_response())?;
         let id = params.iter().find(|(k, _)| k == "server").map(|(_, v)| v.clone()).unwrap_or_default();
-        load(authed, &id).await.map_err(IntoResponse::into_response)
+        let panel = load(authed, &id).await.map_err(IntoResponse::into_response)?;
+        // BlockAccessInConflict::canAccess() on the page this request belongs to.
+        let section = parts.uri.path().split('/').nth(3).unwrap_or_default();
+        if CONFLICT_BLOCKED.contains(&section) && panel.conflict() {
+            return Err(WebError::Forbidden.into_response());
+        }
+        Ok(panel)
     }
 }
+
+/// The `{id}` segment of `/server/{server}/…/{id}` routes (`Path<i64>` would see both parameters).
+pub struct RecordId(pub i64);
+
+impl<S: Send + Sync> FromRequestParts<S> for RecordId {
+    type Rejection = Response;
+
+    async fn from_request_parts(parts: &mut Parts, st: &S) -> Result<Self, Self::Rejection> {
+        let Path(params): Path<Vec<(String, String)>> =
+            Path::from_request_parts(parts, st).await.map_err(|_| WebError::NotFound.into_response())?;
+        params
+            .iter()
+            .find(|(k, _)| k == "id")
+            .and_then(|(_, v)| v.parse().ok())
+            .map(RecordId)
+            .ok_or_else(|| WebError::NotFound.into_response())
+    }
+}
+
+/// Pages using `BlockAccessInConflict` (resources and every `ServerFormPage`).
+const CONFLICT_BLOCKED: &[&str] =
+    &["files", "backups", "schedules", "users", "databases", "network", "startup", "settings", "mounts"];
 
 async fn load(authed: Authed, id: &str) -> Result<ServerPanel, WebError> {
     let db = &authed.st.db;
@@ -127,8 +162,9 @@ impl ServerPanel {
     fn nav(&self, active: &str) -> Vec<NavGroup> {
         let base = self.base_url();
         let mut items = Vec::new();
+        let conflict = self.conflict();
         let mut add = |slug: &str, label: String, icon: &'static str, perm: Option<&str>| {
-            if perm.is_none_or(|p| self.can(p)) {
+            if perm.is_none_or(|p| self.can(p)) && !(conflict && CONFLICT_BLOCKED.contains(&slug)) {
                 items.push(NavItem {
                     label,
                     url: if slug.is_empty() { base.clone() } else { format!("{base}/{slug}") },
