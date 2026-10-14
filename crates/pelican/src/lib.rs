@@ -37,7 +37,22 @@ pub async fn serve(state: AppState, listener: tokio::net::TcpListener) -> Result
     if state.config.env.bool_or("PELICAN_SCHEDULER", true) {
         pelican_api::jobs::spawn_scheduler(state.clone());
     }
-    let app = pelican_api::router(state);
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
+    axum::serve(listener, app(state).into_make_service_with_connect_info::<SocketAddr>()).await?;
     Ok(())
+}
+
+/// `/api/*` goes to the API router (its own error negotiation), everything else to the web UI.
+pub fn app(state: AppState) -> axum::Router {
+    use axum::response::IntoResponse;
+    use tower::ServiceExt;
+    let api = pelican_api::router(state.clone());
+    let web = pelican_web::router(state);
+    axum::Router::new().fallback(move |req: axum::extract::Request| {
+        let (api, web) = (api.clone(), web.clone());
+        async move {
+            let path = req.uri().path();
+            let target = if path == "/api" || path.starts_with("/api/") { api } else { web };
+            target.oneshot(req).await.into_response()
+        }
+    })
 }

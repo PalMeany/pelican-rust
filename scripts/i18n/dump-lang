@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Regenerate crates/pelican-web/data/lang.json from a running original panel container.
+#   scripts/i18n/dump-lang <container>
+set -euo pipefail
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+limactl shell pelican -- docker exec -i "$1" php < "$REPO/scripts/i18n/dump-lang.php" > "$REPO/crates/pelican-web/data/lang.json"

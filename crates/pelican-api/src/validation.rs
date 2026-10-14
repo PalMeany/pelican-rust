@@ -181,6 +181,11 @@ impl<'a> Validator<'a> {
         !self.errors.is_empty()
     }
 
+    /// Failed `(attribute, message)` pairs in failure order (web forms).
+    pub fn error_messages(&self) -> Vec<(String, String)> {
+        self.errors.iter().map(|(a, _, m)| (a.clone(), m.clone())).collect()
+    }
+
     pub fn errors_for(&self, attribute: &str) -> bool {
         self.errors.iter().any(|e| e.0 == attribute)
     }

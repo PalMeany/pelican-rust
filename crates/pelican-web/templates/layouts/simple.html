@@ -1,0 +1,9 @@
+{% extends "layouts/base.html" %}
+{% block body %}
+<main class="simple">
+  <div class="simple-card">
+    <div class="logo"><img src="{{ asset('img/pelican.svg') }}" alt="{{ trans('filament-panels::layout.logo.alt', name=app_name) }}"></div>
+    {% block card %}{% endblock %}
+  </div>
+</main>
+{% endblock %}

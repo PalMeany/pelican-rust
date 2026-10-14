@@ -1,0 +1,18 @@
+{% extends "layouts/simple.html" %}
+{% import "components/forms.html" as f %}
+{% set title = trans('filament-panels::auth/pages/login.title') %}
+{% block card %}
+<h1>{{ trans('filament-panels::auth/pages/login.heading') }}</h1>
+{% if password_login %}
+<form method="post" action="/login" class="form">
+  {{ csrf_field() }}
+  {{ f.text('login', trans('filament-panels::auth/pages/login.title'), old.login, errors, required=true, autofocus=true, autocomplete='username') }}
+  {{ f.password('password', trans('filament-panels::auth/pages/login.form.password.label'), errors, required=true) }}
+  {{ f.checkbox('remember', trans('filament-panels::auth/pages/login.form.remember.label'), old.remember) }}
+  <button type="submit" class="btn btn-block">{{ trans('filament-panels::auth/pages/login.form.actions.authenticate.label') }}</button>
+</form>
+<p class="sub"><a href="/password-reset/request">{{ trans('filament-panels::auth/pages/login.actions.request_password_reset.label') }}</a></p>
+{% else %}
+<p class="sub">{{ trans('auth.password_login_disabled') }}</p>
+{% endif %}
+{% endblock %}

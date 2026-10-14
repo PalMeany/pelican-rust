@@ -55,7 +55,7 @@ Application API → UI → плагины → PHP-sidecar.
 - [ ] Валидация с сообщениями Laravel (`lang/en/validation.php`) + TrimStrings/ConvertEmptyStringsToNull
 - [x] Диф-тесты auth/*: 401 (неверный/просроченный/битый токен), 403 (app-ключ на client, IP), 404 маршрута
 - [ ] Application API ACL (биты ключа, root+account key) — с первыми маршрутами M5
-- [ ] Логин/2FA/сессии/CSRF — вместе с UI (M6)
+- [~] Логин/2FA/сессии/CSRF — вместе с UI (M6): сессии, CSRF, логин, TOTP/recovery/email-код готовы в pelican-web
 
 ### M3 — Remote API для Wings (`/api/remote/*`) и клиент Wings
 - [x] DaemonAuthenticate (порядок ошибок: binding 404 → 401 → 400 → 404 → 403), 405 до auth
@@ -65,7 +65,7 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] `POST /activity`
 - [x] backups: status, restore (wings-адаптер)
 - [ ] backups S3: presigned multipart (R11), complete/abort (R12) — нужен MinIO в диф-окружении
-- [ ] `Server::saved` → удаление сабюзера-владельца (SubuserDeletionService) — с M4
+- [x] `Server::saved` → удаление сабюзера-владельца (SubuserDeletionService)
 - [x] Клиент Wings (семантика throwIf/User-Agent) + JWT (побайтно = PHP lcobucci); остальные вызовы — по мере эндпоинтов M4/M5
 - [ ] Конфигурация ноды (JSON/YAML) — вместе с Application API nodes (M5)
 - [x] Диф-тесты Remote API на 4 СУБД (remote*.yaml, 9 сценариев)
@@ -75,30 +75,42 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] account, api-keys, ssh-keys, activity, permissions
 - [x] servers: index, view, websocket, resources, command, power
 - [x] databases (реальный DDL на хосте БД), files (+ upload/download URL), schedules + tasks (+ RunTaskJob, sync-очередь), allocations, subusers, backups, startup
-- [ ] settings (воркер)
+- [x] settings (воркер)
 - [x] Лимиты ресурсов (ResourceLimit), rate limiting (семантика CACHE_STORE=array), активити-лог
 - [x] Диф-тесты на каждый маршрут (успех + основные ошибки), 4 СУБД
-- [ ] Раннер расписаний (`p:schedule:process`, тикер в serve) — реализован, диф-теста нет (нужен шаг «artisan-команда» в харнессе)
+- [x] Раннер расписаний (`p:schedule:process`, тикер в serve), диф-тест через шаг `command` харнесса
 
 ### M5 — Application API (`/api/application/*`)
 - [x] Каркас: ACL (биты ключа, root+account), includes с allowsAdmin, пагинация (per_page/page как в PHP), привязки моделей
 - [x] users (+roles assign/remove, spatie-семантика), nodes (+configuration, deployable, порядок ключей Eloquent), allocations (CIDR)
 - [x] servers: list/view/external/details/build/startup/suspend/reinstall/transfer(+cancel)/delete(+force), создание (deploy, выбор аллокации), databases
 - [x] eggs: list/view/delete, экспорт JSON, импорт (legacy-форматы, зарезервированные переменные)
-- [ ] eggs: экспорт YAML (порт Symfony YAML Dumper — воркер, 528 эталонных векторов)
+- [x] eggs: экспорт YAML (порт Symfony YAML Dumper — воркер, 528 эталонных векторов)
 - [x] database-hosts, mounts, roles (воркеры + свои)
-- [ ] webhooks (воркер)
+- [x] webhooks (воркер)
 - [ ] plugins — привязать к собственной системе плагинов в M7 (оригинальные — PHP/Composer)
-- [ ] Вебхуки: доставка (ProcessWebhook), диспатч по активности (server scope, ActivityLogged); события моделей eloquent.* — отдельный этап
-- [ ] Фоновые задачи: prune activity/webhooks, prune/clean backups, prune images, egg check-updates/update-index, почта (уведомления)
+- [x] Вебхуки: доставка (ProcessWebhook), диспатч по активности (server scope, ActivityLogged)
+- [ ] Вебхуки на события моделей `eloquent.created/updated/deleted:*`
+- [x] Фоновые задачи: prune activity/webhooks, prune/clean backups, prune images, почта (уведомления)
+- [ ] egg check-updates/update-index (вместе с UI яиц)
 - [x] Диф-тесты на каждый маршрут (app/*), 4 СУБД
 
 ### M6 — UI (паритет функций)
-- [ ] Каркас (ADR-0013): крейт pelican-web, сессии в `sessions`, CSRF, шаблоны (build.rs), ассеты, переводы
-- [ ] Ресурсный фреймворк: таблица (колонки/фильтры/сортировка/пагинация/массовые действия), формы (поля+валидация), модалки
-- [ ] Auth: логин, 2FA, passkeys, OAuth, сброс пароля, профиль
+Ветка `m6` (`.worktrees/m6`). Объём оригинала — ~20 тыс. строк Filament (Admin/App/Server-панели).
+Порядок: каркас и эталонные страницы каждого вида пишу сам, остальные страницы — воркерам по одной.
+- [~] Каркас (ADR-0013): крейт pelican-web
+  - [x] сессии в `sessions` (base64(JSON), ротация id при входе, «запомнить меня», GC-лотерея 2%)
+  - [x] CSRF (`_token` / `X-CSRF-TOKEN`, 419), заголовки безопасности (SetSecurityHeaders)
+  - [x] шаблоны minijinja, встроенные build.rs, оверрайд `PELICAN_VIEWS_PATH`; фильтры bytes/datetime/ago
+  - [x] переводы: дамп всего `lang/*` + неймспейсов Filament (32 локали, `scripts/i18n/dump-lang`), trans/trans_choice (порт MessageSelector)
+  - [x] ассеты с хешем в URL: CSS (палитра Filament, тёмная тема), app.js (тосты, модалки, подтверждения, тема), htmx 2.0.4, иконки Tabler (используемые оригиналом)
+  - [ ] маршрутизация в бинаре: `/api/*` → API, остальное → web; сборка и первый запуск
+- [ ] Ресурсный фреймворк: таблица (колонки/фильтры/сортировка/пагинация/массовые действия, опрос), формы (поля+валидация), модалки
+- [~] Auth: логин (email/username, троттлинг 5/мин, auth:success/auth:fail), MFA-челлендж (TOTP google2fa окно 8 + защита от повтора, recovery-коды bcrypt, email-код 4 мин) — готово; сброс пароля, passkeys, OAuth, капча — нет
+- [ ] Профиль: аккаунт, 2FA (настройка/отключение, recovery), API-ключи, SSH-ключи, активити, OAuth, кастомизация, passkeys
+- [ ] RequireTwoFactorAuthentication (уровни none/admin/all)
 - [ ] Admin: dashboard, nodes, servers, eggs, users, roles, db hosts, mounts, webhooks, api keys, settings, health, plugins
-- [ ] App: список серверов
+- [ ] App: список серверов (вкладки my/other/all, таблица/сетка, ресурсы из Wings, power-действия, фильтры)
 - [ ] Server: консоль (xterm.js + websocket Wings), файлы (CodeMirror), БД, расписания, сабюзеры, бэкапы, сеть, startup, настройки, активити
 - [ ] Инсталлятор
 - [ ] E2E-проверки ключевых сценариев в браузере

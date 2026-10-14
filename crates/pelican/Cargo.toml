@@ -8,6 +8,7 @@ description = "pelican-rs panel binary"
 [dependencies]
 pelican-core = { path = "../pelican-core" }
 pelican-api = { path = "../pelican-api" }
+pelican-web = { path = "../pelican-web" }
 pelican-db = { path = "../pelican-db" }
 anyhow.workspace = true
 tokio.workspace = true
@@ -15,3 +16,4 @@ tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4", features = ["derive"] }
 axum = "0.8"
+tower = "0.5"

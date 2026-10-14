@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="{{ locale|replace('_', '-') }}" dir="{{ trans('filament-panels::layout.direction') }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf-token" content="{{ csrf }}">
+<title>{% block title %}{{ title }}{% endblock %} - {{ app_name }}</title>
+<link rel="icon" href="{{ asset('pelican.ico') }}">
+<link rel="stylesheet" href="{{ asset('css/app.css') }}">
+<script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+<script src="{{ asset('vendor/htmx/htmx.min.js') }}" defer></script>
+<script src="{{ asset('js/app.js') }}" defer></script>
+<script>window.PELICAN_STRINGS = {{ {
+  "confirm": trans('filament-actions::modal.actions.confirm.label'),
+  "confirm_body": trans('filament-actions::modal.confirmation'),
+  "copied": trans('filament::components/copyable.messages.copied'),
+  "page_expired": "Page Expired",
+  "too_many": "Too Many Requests",
+  "error": "Error",
+} | tojson }};</script>
+{% block head %}{% endblock %}
+</head>
+<body>
+{% block body %}{% endblock %}
+<div id="toasts" class="toasts" aria-live="polite"></div>
+{% if flash %}<script type="application/json" data-flash>{{ flash | tojson }}</script>{% endif %}
+<dialog id="confirm-dialog" class="modal confirm">
+  <div class="modal-icon danger">{{ icon('alert-triangle', 'icon-lg') }}</div>
+  <div class="modal-head"><h2 data-confirm-title></h2></div>
+  <div class="modal-body" data-confirm-body></div>
+  <div class="modal-foot">
+    <button type="button" class="btn btn-gray" data-confirm-cancel>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+    <button type="button" class="btn btn-danger" data-confirm-ok>{{ trans('filament-actions::modal.actions.confirm.label') }}</button>
+  </div>
+</dialog>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{% extends "layouts/simple.html" %}
+{% import "components/forms.html" as f %}
+{% set title = trans('filament-panels::auth/pages/login.title') %}
+{% block card %}
+<h1>{{ trans('filament-panels::auth/pages/login.multi_factor.heading') }}</h1>
+<p class="sub">{{ trans('filament-panels::auth/pages/login.multi_factor.subheading') }}</p>
+<form method="post" action="/login/challenge" class="form">
+  {{ csrf_field() }}
+  {% if provider == 'app' %}
+    {% if recovery %}
+      <input type="hidden" name="use_recovery" value="1">
+      {{ f.password('recovery_code', trans('filament-panels::auth/multi-factor/app/provider.login_form.recovery_code.label'), errors, autocomplete='one-time-code', autofocus=true) }}
+    {% else %}
+      {{ f.text('code', trans('filament-panels::auth/multi-factor/app/provider.login_form.code.label'), '', errors, required=true, autofocus=true, autocomplete='one-time-code', attrs='inputmode="numeric" maxlength="6" pattern="[0-9]*"') }}
+    {% endif %}
+  {% else %}
+    {{ f.text('code', trans('filament-panels::auth/multi-factor/email/provider.login_form.code.label'), '', errors, required=true, autofocus=true, autocomplete='one-time-code', attrs='inputmode="numeric" maxlength="6" pattern="[0-9]*"') }}
+  {% endif %}
+  <button type="submit" class="btn btn-block">{{ trans('filament-panels::auth/pages/login.multi_factor.form.actions.authenticate.label') }}</button>
+</form>
+<div class="row" style="justify-content:center">
+  {% if provider == 'app' and not recovery %}
+  <form method="post" action="/login/challenge">{{ csrf_field() }}
+    <button type="submit" class="btn-link" name="show_recovery" value="1">{{ trans('filament-panels::auth/multi-factor/app/provider.login_form.code.actions.use_recovery_code.label') }}</button>
+  </form>
+  {% elif provider == 'email_code' %}
+  <form method="post" action="/login/challenge/resend">{{ csrf_field() }}
+    <button type="submit" class="btn-link">{{ trans('filament-panels::auth/multi-factor/email/provider.login_form.code.actions.resend.label') }}</button>
+  </form>
+  {% endif %}
+  <form method="post" action="/login/cancel">{{ csrf_field() }}<button type="submit" class="btn-link">{{ trans('filament-actions::modal.actions.cancel.label') }}</button></form>
+</div>
+{% endblock %}

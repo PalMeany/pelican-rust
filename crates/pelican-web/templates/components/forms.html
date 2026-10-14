@@ -1,0 +1,81 @@
+{# Form field macros. `errors` is the per-field error map of the page. #}
+
+{% macro error(errors, name) %}{% if errors[name] %}<p class="error" id="{{ name }}-error">{{ errors[name] }}</p>{% endif %}{% endmacro %}
+
+{% macro text(name, label, value='', errors={}, type='text', required=false, autofocus=false, hint='', placeholder='', disabled=false, attrs='', prefix='', suffix='', autocomplete='') %}
+<div class="field{% if errors[name] %} has-error{% endif %}">
+  {% if label %}<label for="f-{{ name }}">{{ label }}{% if required %}<span class="req">*</span>{% endif %}</label>{% endif %}
+  {% if prefix or suffix %}<div class="input-group">{% if prefix %}<span class="addon">{{ prefix }}</span>{% endif %}{% endif %}
+  <input class="input" id="f-{{ name }}" name="{{ name }}" type="{{ type }}" value="{{ value if value is not none else '' }}"
+    {%- if required %} required{% endif %}{% if autofocus %} autofocus{% endif %}{% if disabled %} disabled{% endif %}
+    {%- if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}
+    {%- if errors[name] %} aria-invalid="true" aria-describedby="{{ name }}-error"{% endif %} {{ attrs | safe }}>
+  {% if prefix or suffix %}{% if suffix %}<span class="addon">{{ suffix }}</span>{% endif %}</div>{% endif %}
+  {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
+  {{ error(errors, name) }}
+</div>
+{% endmacro %}
+
+{% macro password(name, label, errors={}, required=false, autocomplete='current-password', hint='', autofocus=false) %}
+<div class="field{% if errors[name] %} has-error{% endif %}">
+  <label for="f-{{ name }}">{{ label }}{% if required %}<span class="req">*</span>{% endif %}</label>
+  <div class="input-group">
+    <input class="input" id="f-{{ name }}" name="{{ name }}" type="password" autocomplete="{{ autocomplete }}"{% if required %} required{% endif %}{% if autofocus %} autofocus{% endif %}>
+    <button type="button" class="addon icon-btn" style="width:auto;height:auto" data-reveal="f-{{ name }}" aria-label="Show password">{{ icon('eye', 'icon-sm') }}</button>
+  </div>
+  {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
+  {{ error(errors, name) }}
+</div>
+{% endmacro %}
+
+{% macro textarea(name, label, value='', errors={}, required=false, rows=4, hint='', code=false, disabled=false) %}
+<div class="field{% if errors[name] %} has-error{% endif %}">
+  {% if label %}<label for="f-{{ name }}">{{ label }}{% if required %}<span class="req">*</span>{% endif %}</label>{% endif %}
+  <textarea class="textarea{% if code %} code{% endif %}" id="f-{{ name }}" name="{{ name }}" rows="{{ rows }}"{% if required %} required{% endif %}{% if disabled %} disabled{% endif %}>{{ value if value is not none else '' }}</textarea>
+  {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
+  {{ error(errors, name) }}
+</div>
+{% endmacro %}
+
+{# options: list of [value, label] pairs #}
+{% macro select(name, label, options, value='', errors={}, required=false, hint='', placeholder=none, multiple=false, disabled=false, attrs='') %}
+<div class="field{% if errors[name] %} has-error{% endif %}">
+  {% if label %}<label for="f-{{ name }}">{{ label }}{% if required %}<span class="req">*</span>{% endif %}</label>{% endif %}
+  <select class="select" id="f-{{ name }}" name="{{ name }}{% if multiple %}[]{% endif %}"{% if multiple %} multiple{% endif %}{% if required %} required{% endif %}{% if disabled %} disabled{% endif %} {{ attrs | safe }}>
+    {% if placeholder is not none %}<option value="">{{ placeholder }}</option>{% endif %}
+    {% for opt in options %}
+    {% set v = opt[0] | string %}
+    <option value="{{ v }}"{% if (multiple and v in (value | map('string') | list)) or (not multiple and v == (value | string)) %} selected{% endif %}>{{ opt[1] }}</option>
+    {% endfor %}
+  </select>
+  {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
+  {{ error(errors, name) }}
+</div>
+{% endmacro %}
+
+{% macro toggle(name, label, checked=false, hint='', errors={}, disabled=false) %}
+<div class="field{% if errors[name] %} has-error{% endif %}">
+  <input type="hidden" name="{{ name }}" value="0">
+  <label class="toggle"><input type="checkbox" name="{{ name }}" value="1"{% if checked %} checked{% endif %}{% if disabled %} disabled{% endif %}><span class="track"></span><span>{{ label }}</span></label>
+  {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
+  {{ error(errors, name) }}
+</div>
+{% endmacro %}
+
+{% macro checkbox(name, label, checked=false, value='1') %}
+<label class="check"><input type="checkbox" name="{{ name }}" value="{{ value }}"{% if checked %} checked{% endif %}><span>{{ label }}</span></label>
+{% endmacro %}
+
+{# options: list of [value, label] pairs #}
+{% macro radios(name, label, options, value='', errors={}, inline=false, hint='') %}
+<div class="field{% if errors[name] %} has-error{% endif %}">
+  {% if label %}<span class="field-label">{{ label }}</span>{% endif %}
+  <div class="radio-group{% if inline %} inline{% endif %}">
+    {% for opt in options %}
+    <label class="check"><input type="radio" name="{{ name }}" value="{{ opt[0] }}"{% if (opt[0] | string) == (value | string) %} checked{% endif %}><span>{{ opt[1] }}</span></label>
+    {% endfor %}
+  </div>
+  {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
+  {{ error(errors, name) }}
+</div>
+{% endmacro %}

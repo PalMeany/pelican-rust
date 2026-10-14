@@ -1,0 +1,66 @@
+{% extends "layouts/base.html" %}
+{#
+  Panel chrome (Filament panel layout). Optional `nav`: list of groups
+  {label, items: [{label, url, icon, active, badge}]} rendered as a sidebar.
+#}
+{% block body %}
+<div class="shell">
+  {% if nav %}
+  <aside class="sidebar" aria-label="{{ trans('filament-panels::layout.navigation.label') }}">
+    <div class="sidebar-head">
+      <a class="row" href="{{ home_url or '/' }}" style="color:inherit;gap:0.5rem;font-weight:700;font-size:1.125rem">
+        <img src="{{ asset('img/pelican.svg') }}" alt="" style="height:2rem">{{ app_name }}
+      </a>
+    </div>
+    {% block sidebar_top %}{% endblock %}
+    <nav>
+      {% for group in nav %}
+      <div>
+        {% if group.label %}<div class="nav-group-label">{{ group.label }}</div>{% endif %}
+        {% for item in group['items'] %}
+        <a class="nav-item{% if item.active %} active{% endif %}" href="{{ item.url }}"{% if item.target %} target="{{ item.target }}"{% endif %}>
+          {{ icon(item.icon or 'point', 'icon') }}<span>{{ item.label }}</span>
+          {% if item.badge is not none and item.badge != '' %}<span class="badge">{{ item.badge }}</span>{% endif %}
+        </a>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </nav>
+  </aside>
+  {% endif %}
+  <div class="main">
+    <header class="topbar" aria-label="{{ trans('filament-panels::layout.topbar.label') }}">
+      {% if nav %}<button type="button" class="icon-btn menu-toggle" data-nav-toggle aria-label="{{ trans('filament-panels::layout.actions.sidebar.expand.label') }}">{{ icon('menu-2') }}</button>{% endif %}
+      {% if not nav %}<a class="brand" href="/"><img src="{{ asset('img/pelican.svg') }}" alt="">{{ app_name }}</a>{% endif %}
+      {% block topbar %}{% endblock %}
+      <div class="spacer"></div>
+      {% if user %}
+      <details class="dropdown">
+        <summary aria-label="{{ trans('filament-panels::layout.actions.open_user_menu.label') }}"><span class="avatar" title="{{ user.username }}">{{ user.avatar }}</span></summary>
+        <div class="dropdown-menu">
+          <div class="head"><div style="font-weight:600">{{ user.username }}</div><div class="muted small truncate">{{ user.email }}</div></div>
+          <a href="/profile">{{ icon('user', 'icon-sm') }}{{ trans('profile.title') }}</a>
+          {% for item in user_menu or [] %}
+          <a href="{{ item.url }}">{{ icon(item.icon, 'icon-sm') }}{{ item.label }}</a>
+          {% endfor %}
+          <hr>
+          <div class="row" style="justify-content:space-around;padding:0.25rem" role="group" aria-label="{{ trans('filament-panels::layout.actions.theme_switcher.label') }}">
+            <button type="button" class="icon-btn" style="width:2.25rem" onclick="setTheme('light')" title="{{ trans('filament-panels::layout.actions.theme_switcher.light.label') }}">{{ icon('sun', 'icon-sm') }}</button>
+            <button type="button" class="icon-btn" style="width:2.25rem" onclick="setTheme('dark')" title="{{ trans('filament-panels::layout.actions.theme_switcher.dark.label') }}">{{ icon('moon', 'icon-sm') }}</button>
+            <button type="button" class="icon-btn" style="width:2.25rem" onclick="setTheme('system')" title="{{ trans('filament-panels::layout.actions.theme_switcher.system.label') }}">{{ icon('device-desktop', 'icon-sm') }}</button>
+          </div>
+          <hr>
+          <form method="post" action="/logout">{{ csrf_field() }}<button type="submit">{{ icon('logout', 'icon-sm') }}{{ trans('filament-panels::layout.actions.logout.label') }}</button></form>
+        </div>
+      </details>
+      {% endif %}
+    </header>
+    <main class="content" id="content">
+      {% for b in banners or [] %}
+      <div class="banner {{ b.status }}">{{ icon('alert-triangle', 'icon') }}<div><strong>{{ b.title }}</strong>{% if b.body %}<div>{{ b.body }}</div>{% endif %}</div></div>
+      {% endfor %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% endblock %}

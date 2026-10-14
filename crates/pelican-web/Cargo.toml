@@ -1,0 +1,34 @@
+[package]
+name = "pelican-web"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Web UI of pelican-rs: SSR (minijinja) + htmx (ADR-0005, ADR-0013)"
+
+[dependencies]
+pelican-core = { path = "../pelican-core" }
+pelican-api = { path = "../pelican-api" }
+pelican-db = { path = "../pelican-db" }
+laravel-compat = { path = "../laravel-compat" }
+pelican-wings = { path = "../pelican-wings" }
+axum = { version = "0.8", features = ["macros", "form"] }
+tower = "0.5"
+minijinja = { version = "2", features = ["loader", "json", "urlencode"] }
+sea-orm.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+base64.workspace = true
+rand.workspace = true
+uuid.workspace = true
+sha2 = "0.10"
+hex = "0.4"
+hmac = "0.12"
+sha1 = "0.10"
+chrono-tz = "0.10"
+form_urlencoded = "1"
+indexmap = { version = "2", features = ["serde"] }
+serde_urlencoded = "0.7"
