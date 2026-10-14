@@ -15,6 +15,7 @@ egg-format = { path = "../egg-format" }
 chrono-tz = "0.10"
 base64.workspace = true
 sha2 = "0.10"
+hmac = "0.12"
 sha1 = "0.10"
 uuid.workspace = true
 sea-orm.workspace = true

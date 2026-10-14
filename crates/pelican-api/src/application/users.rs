@@ -205,13 +205,16 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         ..Default::default()
     };
     let user = pelican_db::write::insert(&txn, am).await?;
+    let mut reset_token = None;
     if reset {
         // Password broker: delete existing tokens for the email, insert a hashed random token.
         password_resets::Entity::delete_many()
             .filter(password_resets::Column::Email.eq(email.clone()))
             .exec(&txn)
             .await?;
-        let token = hash(&st, &pelican_wings::jwt::str_random(64))?;
+        let plain = pelican_wings::jwt::str_random(64);
+        let token = hash(&st, &plain)?;
+        reset_token = Some(plain);
         txn.execute_raw(raw::stmt(
             st.db.get_database_backend(),
             "insert into {password_resets} ({email}, {token}, {created_at}) values (?, ?, ?)",
@@ -220,8 +223,7 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         .await?;
     }
     txn.commit().await?;
-    // AccountCreated is a mail-only notification (queued); mail delivery arrives with M5 background jobs.
-    tracing::info!(user = user.id.0, "account created notification (mail) not sent: mailer not implemented");
+    crate::services::account_created(&st, &user, reset_token.as_deref()).await?;
     let body = with_meta(
         user_item(&st, &ctx, &user, &Includes::parse(&input)).await?,
         resource_meta(&st, &format!("users/{}", user.id.0)),

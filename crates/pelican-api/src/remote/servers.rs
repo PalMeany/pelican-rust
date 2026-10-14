@@ -228,6 +228,7 @@ pub async fn install_store(
     }
     crate::services::server_saved(&st, &ctx, &st.db, &server).await?;
     pelican_core::events::server_installed(&st.db, &server, successful, initial_install, &ctx.root).await?;
+    crate::services::server_installed_mail(&st, &server, initial_install).await?;
     Ok(no_content())
 }
 

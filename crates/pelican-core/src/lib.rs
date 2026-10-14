@@ -8,6 +8,7 @@ pub mod databases;
 pub mod env;
 pub mod events;
 pub mod i18n;
+pub mod mail;
 pub mod net;
 pub mod permissions;
 pub mod php;

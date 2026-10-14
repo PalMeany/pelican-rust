@@ -145,7 +145,7 @@ fn bound(ctx: &Ctx) -> ApiResult<(&subusers::Model, &users::Model)> {
 }
 
 /// `UserCreationService::handle(['email' => ..., 'root_admin' => false])`.
-async fn create_user<C: ConnectionTrait>(st: &AppState, db: &C, email: &str) -> ApiResult<users::Model> {
+async fn create_user<C: ConnectionTrait>(st: &AppState, db: &C, email: &str) -> ApiResult<(users::Model, String)> {
     let random_password = pelican_wings::jwt::str_random(30);
     let hash = laravel_compat::hashing::make(&random_password, st.config.bcrypt_rounds)
         .map_err(|_| ApiError::internal("RuntimeException"))?;
@@ -184,7 +184,7 @@ async fn create_user<C: ConnectionTrait>(st: &AppState, db: &C, email: &str) -> 
         created_at: Set(now),
     };
     pelican_db::write::insert_id(db, &reset).await?;
-    Ok(user)
+    Ok((user, token))
 }
 
 /// `POST /users`.
@@ -200,8 +200,13 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
     let perms = cleaned_permissions(&input);
     let txn = st.db.begin().await?;
     let existing = users::Entity::find().filter(users::Column::Email.eq(email.clone())).one(&txn).await?;
+    let mut created_token = None;
     let user = match existing {
-        None => create_user(&st, &txn, &email).await?,
+        None => {
+            let (u, token) = create_user(&st, &txn, &email).await?;
+            created_token = Some(token);
+            u
+        }
         Some(u) => {
             if server.owner_id == u.id {
                 return Err(ApiError::display(
@@ -249,6 +254,10 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
     }
     .send(&txn, user.id.0)
     .await?;
+    if let Some(token) = &created_token {
+        crate::services::account_created(&st, &user, Some(token)).await?;
+    }
+    crate::services::subuser_mail(&st, &user, &server, true).await?;
     txn.commit().await?;
     ctx.activity("server:subuser.create")
         .subject(morph::USER, user.id.0)
@@ -343,6 +352,7 @@ pub async fn delete_subuser_in<C: ConnectionTrait>(
     }
     .send(txn, user.id.0)
     .await?;
+    crate::services::subuser_mail(st, user, server, false).await?;
     revoke(st, txn, server, &user.uuid).await?;
     ctx.activity("server:subuser.delete")
         .subject(morph::USER, user.id.0)
