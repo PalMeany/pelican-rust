@@ -7,7 +7,7 @@ pub mod data;
 pub mod databases;
 mod files;
 pub mod network;
-mod schedules;
+pub mod schedules;
 mod servers;
 mod settings;
 mod startup;

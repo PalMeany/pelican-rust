@@ -1,0 +1,192 @@
+{# Server › Schedules create/edit/view (ScheduleResource::defaultForm over
+   CreateSchedule/EditSchedule/ViewSchedule): shared schema with the cron
+   section (presets + live next-run preview), the per-page header actions and
+   the Tasks relation manager below (view/edit). #}
+{% extends "layouts/panel.html" %}
+{% import "components/table.html" as tbl %}
+{% import "components/forms.html" as f %}
+{% block head %}<script src="{{ asset('js/schedules.js') }}" defer></script>{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if mode == 'edit' %}
+      {% if can_delete %}
+      <form method="post" action="{{ base }}/schedules/{{ s_id }}/delete"
+        data-confirm="{{ trans('filament-actions::modal.confirmation') }}"
+        data-confirm-title="{{ trans('filament-actions::delete.single.modal.heading', label=record.name) }}"
+        data-confirm-ok="{{ trans('filament-actions::delete.single.modal.actions.delete.label') }}">
+        {{ csrf_field() }}<input type="hidden" name="_back" value="{{ back }}">
+        <button class="btn btn-danger">{{ icon('trash', 'icon-sm') }}{{ trans('filament-actions::delete.single.label') }}</button>
+      </form>
+      {% endif %}
+    {% endif %}
+    {% if mode == 'edit' and can_update %}
+      {# run_now: disabled with a warning tooltip when there are no tasks or
+         the schedule is processing. #}
+      <form method="post" action="{{ base }}/schedules/{{ s_id }}/run">
+        {{ csrf_field() }}<input type="hidden" name="_back" value="{{ back }}">
+        <button type="submit" class="btn {% if run_now_blocked %}btn-gray{% endif %}" title="{{ run_tooltip }}"
+          aria-label="{{ run_tooltip }}"{% if run_now_blocked %} disabled{% endif %}>{{ icon('run', 'icon-sm') }}</button>
+      </form>
+      <a class="btn btn-gray" href="{{ base }}/schedules/{{ s_id }}/export" title="{{ trans('server/schedule.export') }}"
+        aria-label="{{ trans('server/schedule.export') }}">{{ icon('download', 'icon-sm') }}</a>
+      <button type="submit" form="sched-form" class="btn" title="{{ trans('server/schedule.save') }}"
+        aria-label="{{ trans('server/schedule.save') }}">{{ icon('device-floppy', 'icon-sm') }}</button>
+    {% elif mode == 'view' and can_update %}
+      <a class="btn" href="{{ base }}/schedules/{{ s_id }}/edit" title="{{ trans('server/schedule.edit') }}">
+        {{ icon('calendar-code', 'icon-sm') }}{{ trans('server/schedule.edit') }}</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if cron_invalid %}
+<div class="banner danger">{{ icon('alert-triangle') }}<div><strong>{{ trans('server/schedule.notification_invalid_cron') }}</strong></div></div>
+{% endif %}
+
+<form id="sched-form" method="post" action="{{ action }}" class="grid grid-2" data-cron-fields data-tz="{{ user_tz }}">
+  {{ csrf_field() }}
+  <fieldset class="card card-body stack"{% if readonly %} disabled{% endif %}>
+    <div>{{ f.text('name', trans('server/schedule.name'), v_name, v_errors, required=true, attrs='maxlength="255"', autocomplete='off', disabled=readonly) }}</div>
+    {{ f.toggle('only_when_online', trans('server/schedule.only_online'), v_only,
+      hint=trans('server/schedule.only_online_hint'), tooltip=trans('server/schedule.only_online_hint')) }}
+    {% if readonly %}
+      {# ToggleButtons `status` visibleOn view (single current option). #}
+      {{ f.radios('status', trans('server/schedule.status'), [[status_value, status_label]], status_value, {}, inline=true) }}
+    {% else %}
+      {{ f.toggle('is_active', trans('server/schedule.enabled'), v_is_active,
+        hint=trans('server/schedule.enabled_hint'), tooltip=trans('server/schedule.enabled_hint')) }}
+    {% endif %}
+  </fieldset>
+
+  {% if mode != 'view' %}
+  <fieldset class="card card-body stack span-2"{% if readonly %} disabled{% endif %} data-cron-root>
+    <h2>{{ trans('server/schedule.cron') }}</h2>
+    <p class="muted">
+      {{ trans('server/schedule.cron_body') }}<br>
+      {{ trans('server/schedule.cron_timezone', timezone=user_tz,
+        next_run='<b id="cron-next-run">' ~ cron_next ~ '</b>') | safe }}
+    </p>
+    {# CronPresetAction buttons; the "every x" presets carry their multiplier. #}
+    <div class="row" style="flex-wrap:wrap;gap:.5rem" data-cron-presets>
+      <button type="button" class="btn" data-preset="hourly" data-minute="0" data-hour="*" data-dom="*" data-month="*" data-dow="*">{{ trans('server/schedule.time.hourly') }}</button>
+      <button type="button" class="btn" data-preset="daily" data-minute="0" data-hour="0" data-dom="*" data-month="*" data-dow="*">{{ trans('server/schedule.time.daily') }}</button>
+      <button type="button" class="btn" data-preset="weekly_mon" data-minute="0" data-hour="0" data-dom="*" data-month="*" data-dow="1">{{ trans('server/schedule.time.weekly_mon') }}</button>
+      <button type="button" class="btn" data-preset="weekly_sun" data-minute="0" data-hour="0" data-dom="*" data-month="*" data-dow="0">{{ trans('server/schedule.time.weekly_sun') }}</button>
+      <button type="button" class="btn" data-preset="monthly" data-minute="0" data-hour="0" data-dom="1" data-month="*" data-dow="*">{{ trans('server/schedule.time.monthly') }}</button>
+      <span class="row" style="gap:.25rem">
+        <input class="input" type="number" name="_x_minutes" min="1" max="60" style="width:6rem">
+        <button type="button" class="btn" data-preset-every="minutes">{{ trans('server/schedule.time.every_min') }}</button>
+      </span>
+      <span class="row" style="gap:.25rem">
+        <input class="input" type="number" name="_x_hours" min="1" max="24" style="width:6rem">
+        <button type="button" class="btn" data-preset-every="hours">{{ trans('server/schedule.time.every_hour') }}</button>
+      </span>
+      <span class="row" style="gap:.25rem">
+        <input class="input" type="number" name="_x_days" min="1" max="24" style="width:6rem">
+        <button type="button" class="btn" data-preset-every="days">{{ trans('server/schedule.time.every_day') }}</button>
+      </span>
+      <span class="row" style="gap:.25rem">
+        <input class="input" type="number" name="_x_months" min="1" max="24" style="width:6rem">
+        <button type="button" class="btn" data-preset-every="months">{{ trans('server/schedule.time.every_month') }}</button>
+      </span>
+      <span class="row" style="gap:.25rem">
+        <select class="select" name="_x_dow" style="width:auto">
+          <option value="1">{{ trans('server/schedule.time.monday') }}</option>
+          <option value="2">{{ trans('server/schedule.time.tuesday') }}</option>
+          <option value="3">{{ trans('server/schedule.time.wednesday') }}</option>
+          <option value="4">{{ trans('server/schedule.time.thursday') }}</option>
+          <option value="5">{{ trans('server/schedule.time.friday') }}</option>
+          <option value="6">{{ trans('server/schedule.time.saturday') }}</option>
+          <option value="0">{{ trans('server/schedule.time.sunday') }}</option>
+        </select>
+        <button type="button" class="btn" data-preset-every="day_of_week">{{ trans('server/schedule.time.every_day_of_week') }}</button>
+      </span>
+    </div>
+    <div class="grid grid-4">
+      {{ f.text('cron_minute', trans('server/schedule.time.minute'), v_minute, v_errors, required=true, attrs='data-cron-field', disabled=readonly) }}
+      {{ f.text('cron_hour', trans('server/schedule.time.hour'), v_hour, v_errors, required=true, attrs='data-cron-field', disabled=readonly) }}
+      {{ f.text('cron_day_of_month', trans('server/schedule.time.day_of_month'), v_dom, v_errors, required=true, attrs='data-cron-field', disabled=readonly) }}
+      {{ f.text('cron_month', trans('server/schedule.time.month'), v_month, v_errors, required=true, attrs='data-cron-field', disabled=readonly) }}
+      {{ f.text('cron_day_of_week', trans('server/schedule.time.day_of_week'), v_dow, v_errors, required=true, attrs='data-cron-field', disabled=readonly) }}
+    </div>
+  </fieldset>
+  {% endif %}
+</form>
+
+{# TasksRelationManager on the view/edit pages (own table element — nested
+   forms inside the record form are not valid HTML). #}
+{% if mode != 'create' %}
+<fieldset class="card card-body stack" style="margin-top:1rem">
+  <div class="row">
+    <h2>{{ trans('server/schedule.tasks.title') }}</h2>
+    {% if can_update %}
+      {% if task_limit_reached %}
+        <button type="button" class="btn btn-gray" disabled>{{ trans('server/schedule.tasks.limit') }}</button>
+      {% else %}
+        <button type="button" class="btn" data-modal-open="create-task">{{ icon('plus', 'icon-sm') }}{{ trans('server/schedule.tasks.create') }}</button>
+      {% endif %}
+    {% endif %}
+  </div>
+  {% if tasks_count == 0 %}
+  <p class="muted">{{ trans('server/schedule.no_tasks') }}</p>
+  {% else %}
+  {{ tbl.render(tasks_table, csrf) }}
+  {% endif %}
+</fieldset>
+{% endif %}
+
+{# CreateAction + EditAction dialogs of the relation manager. Each carries
+   one live payload control per schema kind; schedules.js keeps exactly one
+   enabled so a single `payload` value is posted. #}
+{% for d in dialogs %}
+<dialog id="{{ d.dom_id }}" class="modal"{% if d.open %} data-dialog-open{% endif %}>
+  <form method="post" action="{{ base }}/schedules/{{ s_id }}/tasks/{% if d.edit %}{{ d.id }}/update{% else %}create{% endif %}">
+    {{ csrf_field() }}
+    <input type="hidden" name="_back" value="{{ back }}">
+    <div class="modal-head"><h2>{% if d.edit %}{{ trans('server/schedule.edit') }}{% else %}{{ trans('server/schedule.tasks.create') }}{% endif %}</h2></div>
+    <div class="modal-body stack" data-task-dialog>
+      {% set act_err = {'action': d.errors['action']} if d.errors['action'] else {} %}
+      <div class="field{% if act_err['action'] %} has-error{% endif %}">
+        <label for="t-action-{{ d.id }}">{{ trans('server/schedule.tasks.actions.title') }}<span class="req">*</span></label>
+        <select class="select" id="t-action-{{ d.id }}" name="action" data-task-action>
+          {% for o in d.options %}
+          <option value="{{ o[0] }}"{% if o[0] == d.action %} selected{% endif %}{% if o[0] == 'backup' and not d.backup_allowed %} disabled{% endif %}>{{ o[1] }}</option>
+          {% endfor %}
+        </select>
+        {{ f.error(act_err, 'action') }}
+      </div>
+      {# default payloads: command '' / power restart / textareas ''. #}
+      <div data-payload-kind="command"{% if d.action != 'command' %} hidden{% endif %}>
+        {{ f.text('payload', trans('server/schedule.tasks.actions.command.command'), d.payload_command, d.errors, required=true, disabled=(d.action != 'command')) }}
+      </div>
+      <div data-payload-kind="power"{% if d.action != 'power' %} hidden{% endif %}>
+        {{ f.select('payload', trans('server/schedule.tasks.actions.power.action'),
+            [['start', trans('server/schedule.tasks.actions.power.start')],
+             ['restart', trans('server/schedule.tasks.actions.power.restart')],
+             ['stop', trans('server/schedule.tasks.actions.power.stop')],
+             ['kill', trans('server/schedule.tasks.actions.power.kill')]],
+            d.payload_power, {}, required=true, disabled=(d.action != 'power')) }}
+      </div>
+      <div data-payload-kind="backup"{% if d.action != 'backup' %} hidden{% endif %}>
+        {{ f.textarea('payload', trans('server/schedule.tasks.actions.backup.files_to_ignore'), d.payload_area, {}, rows=4, disabled=(d.action != 'backup')) }}
+      </div>
+      <div data-payload-kind="delete_files"{% if d.action != 'delete_files' %} hidden{% endif %}>
+        {{ f.textarea('payload', trans('server/schedule.tasks.actions.delete_files.files_to_delete'), d.payload_area, {}, rows=4, disabled=(d.action != 'delete_files')) }}
+      </div>
+      <div class="field{% if d.errors['time_offset'] %} has-error{% endif %}">
+        <label for="t-off-{{ d.id }}">{{ trans('server/schedule.tasks.time_offset') }}</label>
+        <div class="input-group">
+          <input class="input" type="number" id="t-off-{{ d.id }}" name="time_offset" min="0" max="900" step="1" value="{{ d.offset }}">
+          <span class="addon">{{ trans_choice('server/schedule.tasks.seconds', 2) }}</span>
+        </div>
+        {% if d.errors['time_offset'] %}<p class="error">{{ d.errors['time_offset'] }}</p>{% endif %}
+      </div>
+      {{ f.toggle('continue_on_failure', trans('server/schedule.tasks.continue_on_failure'), d.cont) }}
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+      <button type="submit" class="btn">{% if d.edit %}{{ trans('filament-actions::edit.single.modal.actions.save.label') }}{% else %}{{ icon('plus', 'icon-sm') }}{{ trans('server/schedule.tasks.create') }}{% endif %}</button></div>
+  </form>
+</dialog>
+{% endfor %}
+{% endblock %}

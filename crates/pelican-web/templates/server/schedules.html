@@ -1,0 +1,56 @@
+{# Server › Schedules list (app/Filament/Server/Resources/Schedules::
+   SchedulesResource::defaultTable): toolbar Create/Import actions and the
+   per-row view/edit/delete actions. #}
+{% extends "layouts/panel.html" %}
+{% import "components/table.html" as tbl %}
+{% block head %}<script src="{{ asset('js/schedules.js') }}" defer></script>{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if can_import %}
+    <a class="btn" href="{{ base }}/schedules/create" title="{{ trans('server/schedule.new') }}"
+      aria-label="{{ trans('server/schedule.new') }}">{{ icon('calendar-plus', 'icon-sm') }}</a>
+    <button type="button" class="btn btn-success" data-modal-open="import-schedule"
+      title="{{ trans('server/schedule.import') }}" aria-label="{{ trans('server/schedule.import') }}">
+      {{ icon('file-import', 'icon-sm') }}</button>
+    {% endif %}
+  </div>
+</div>
+{{ tbl.render(table, csrf) }}
+
+{# ImportScheduleAction: tab «file» uploads raw schedule JSON files, tab
+   «url» repeats direct-to-.json URLs; sent as multipart with the CSRF token
+   header by schedules.js. #}
+{% if can_import %}
+<dialog id="import-schedule" class="modal">
+  <form method="post" action="{{ base }}/schedules/import" enctype="multipart/form-data"
+    data-import-fetch data-csrf="{{ csrf }}">
+    <div class="modal-head"><h2>{{ trans('server/schedule.import') }}</h2></div>
+    <div class="modal-body stack" data-tabs-root>
+      <nav class="tabs">
+        <button type="button" class="active" data-tab="file">{{ icon('file-upload', 'icon-sm') }}{{ trans('server/schedule.import_action.file') }}</button>
+        <button type="button" data-tab="url">{{ icon('world-upload', 'icon-sm') }}{{ trans('server/schedule.import_action.url') }}</button>
+      </nav>
+      <div data-tab-panel="file">
+        <input class="input" type="file" name="files[]" accept="application/json,.json" multiple>
+        <p class="hint">{{ trans('server/schedule.import_action.schedule_help') }}</p>
+      </div>
+      <div data-tab-panel="url" hidden>
+        <div id="import-urls" class="stack">
+          <div class="row" data-url-row>
+            <div style="flex:1"><input class="input" type="url" name="urls[0][url]"
+              placeholder="https://…/schedule-daily-restart.json" pattern=".*\.json"></div>
+            <button type="button" class="btn btn-gray" data-url-remove hidden>{{ icon('trash', 'icon-sm') }}</button>
+          </div>
+        </div>
+        <p class="hint">{{ trans('server/schedule.import_action.url_help') }}</p>
+        <button type="button" class="btn btn-gray" data-url-add>{{ icon('plus', 'icon-sm') }}{{ trans('server/schedule.import_action.add_url') }}</button>
+      </div>
+    </div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>
+      <button type="submit" class="btn btn-success">{{ icon('file-import', 'icon-sm') }}{{ trans('filament-actions::import.modal.actions.import.label') }}</button></div>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}
