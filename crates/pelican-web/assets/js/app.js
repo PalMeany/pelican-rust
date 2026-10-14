@@ -147,6 +147,25 @@
     if (e.key === 'Escape') document.querySelectorAll('details.dropdown[open]').forEach((d) => d.removeAttribute('open'));
   });
 
+  // In-page tabs: buttons [data-tab=id] and panels [data-tab-panel=id] inside [data-tabs-root].
+  function showTab(b) {
+    const root = b.closest('[data-tabs-root]') || document;
+    root.querySelectorAll('[data-tab]').forEach((x) => x.classList.toggle('active', x === b));
+    root.querySelectorAll('[data-tab-panel]').forEach((p) => { p.hidden = p.dataset.tabPanel !== b.dataset.tab; });
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-tab]');
+    if (b) { e.preventDefault(); showTab(b); }
+  });
+  // Open the first tab that holds a validation error.
+  document.addEventListener('DOMContentLoaded', () => {
+    const err = document.querySelector('[data-tab-panel] .has-error');
+    const panel = err?.closest('[data-tab-panel]');
+    const root = panel?.closest('[data-tabs-root]');
+    const btn = root?.querySelector('[data-tab="' + panel.dataset.tabPanel + '"]');
+    if (btn) showTab(btn);
+  });
+
   // Reveal / hide password inputs.
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-reveal]');
