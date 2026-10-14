@@ -22,6 +22,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/admin/servers/{id}/allocations/create", post(allocation_create))
         .route("/admin/servers/{id}/allocations/associate", post(allocation_associate))
+        .route("/admin/servers/{id}/allocations/bulk-dissociate", post(allocation_bulk_dissociate))
         .route("/admin/servers/{id}/allocations/{aid}/{op}", post(allocation_op))
         .route("/admin/servers/{id}/databases/create", post(database_create))
         .route("/admin/servers/{id}/databases/{did}/{op}", post(database_op))
@@ -198,6 +199,31 @@ async fn release(admin: &Admin, s: &servers::Model, ids: &[i64]) -> Result<(), W
     }
     txn.commit().await?;
     Ok(())
+}
+
+/// `DissociateBulkAction` of AllocationsRelationManager: releases every
+/// selected allocation assigned to this server (same `release()` as single).
+async fn allocation_bulk_dissociate(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
+    admin.authorize("update server")?;
+    let (s, _) = find(&admin, id).await?;
+    let selected = form.list("ids").iter().filter_map(|v| v.parse::<i64>().ok()).collect::<Vec<_>>();
+    if !selected.is_empty() {
+        // Only allocations actually bound to this server count.
+        let st = &admin.st;
+        let owned: Vec<i64> = allocations::Entity::find()
+            .filter(allocations::Column::Id.is_in(selected))
+            .filter(allocations::Column::ServerId.eq(s.id.0))
+            .all(&st.db)
+            .await?
+            .iter()
+            .map(|a| a.id.0)
+            .collect();
+        if !owned.is_empty() {
+            release(&admin, &s, &owned).await?;
+            admin.flash_success(admin.t("filament-actions::dissociate.multiple.notifications.dissociated.title"));
+        }
+    }
+    Ok(admin.redirect(&back(id)))
 }
 
 /// CreateAction: `AssignmentService::handle($node, $data, $server)` with `is_locked`.

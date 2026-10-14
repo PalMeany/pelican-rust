@@ -483,6 +483,33 @@ pub fn threshold_color(current: f64, max: f64) -> &'static str {
     }
 }
 
+/// Selected row keys of a bulk action (`ids[]`).
+pub fn bulk_ids(form: &crate::forms::Form) -> Vec<i64> {
+    form.list("ids").iter().filter_map(|v| v.parse().ok()).collect()
+}
+
+/// `DeleteBulkAction` notifications: deleted / deleted_partial / deleted_none.
+pub fn bulk_delete_notify(admin: &crate::ctx::Web, total: usize, failed: usize) {
+    let n = "filament-actions::delete.multiple.notifications";
+    let body = || {
+        admin.t_with(
+            &format!("{n}.deleted_partial.missing_processing_failure_message"),
+            &[("count", &failed.to_string())],
+        )
+    };
+    if failed == 0 {
+        admin.flash_success(admin.t(&format!("{n}.deleted.title")));
+    } else if failed < total {
+        let title = admin.t_with(
+            &format!("{n}.deleted_partial.title"),
+            &[("count", &(total - failed).to_string()), ("total", &total.to_string())],
+        );
+        admin.session.flash("warning", title, Some(body()));
+    } else {
+        admin.flash_danger(admin.t(&format!("{n}.deleted_none.title")), Some(body()));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

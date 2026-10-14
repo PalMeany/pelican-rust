@@ -29,6 +29,8 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/logs/{date}/download", get(download))
         .route("/admin/logs/{date}/delete", post(delete))
         .route("/admin/logs/{date}/upload", post(upload))
+        .route("/admin/logs/bulk-download", post(bulk_download))
+        .route("/admin/logs/bulk-delete", post(bulk_delete))
 }
 
 fn logs_dir(admin: &Admin) -> PathBuf {
@@ -267,6 +269,20 @@ async fn index(admin: Admin) -> WebResult {
         table.rows.push(row);
     }
     table.searchable = true;
+    table.bulk.push(
+        Action::post(
+            t("filament-log-viewer::log.table.actions.download.bulk.label"),
+            "file-zip",
+            "/admin/logs/bulk-download",
+        )
+        .color("success")
+        .confirm(t("filament-log-viewer::log.table.actions.download.bulk.label")),
+    );
+    table.bulk.push(
+        Action::post(t("filament-log-viewer::log.table.actions.delete.bulk.label"), "trash", "/admin/logs/bulk-delete")
+            .color("danger")
+            .confirm(t("filament-log-viewer::log.table.actions.delete.bulk.label")),
+    );
     table.empty_icon = "check".into();
     table.empty_heading = t("admin/log.empty_table");
     table.finish(&p, total, &PER_PAGE, &admin.locale());
@@ -471,6 +487,69 @@ async fn upload(admin: Admin, Path(date): Path<String>, form: Form) -> WebResult
         Err(e) => admin.flash_danger(admin.t("admin/log.actions.failed_to_upload"), Some(e.to_string())),
     }
     Ok(admin.redirect(&back))
+}
+
+/// `BulkAction exclude_download` → `DownloadZipUseCase`: zip of the selected
+/// `laravel-<date>.log` files (entry names = basename), `logs.zip` download.
+/// A selected log that cannot be located fails the whole action.
+async fn bulk_download(admin: Admin, form: Form) -> WebResult {
+    admin.authorize("view panelLog")?;
+    let back = form.back("/admin/logs");
+    let mut paths: Vec<PathBuf> = Vec::new();
+    for id in &form.list("ids") {
+        match log_path(&admin, id) {
+            Some(p) if p.exists() => paths.push(p),
+            _ => {
+                // ExtractLogPathUseCase throws on a missing path → action failure.
+                admin.flash_danger(admin.t("filament-log-viewer::log.table.actions.download.bulk.error"), None);
+                return Ok(admin.redirect(&back));
+            }
+        }
+    }
+    if paths.is_empty() {
+        admin.flash_danger(admin.t("filament-log-viewer::log.table.actions.download.bulk.error"), None);
+        return Ok(admin.redirect(&back));
+    }
+    let buf = {
+        use std::io::Write;
+        use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
+        let mut w = ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        for p in &paths {
+            let raw = std::fs::read(p).map_err(|e| WebError::internal(e.to_string()))?;
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("log.log").to_string();
+            w.start_file(name, SimpleFileOptions::default().compression_method(CompressionMethod::Deflated))
+                .map_err(|err| WebError::internal(err.to_string()))?;
+            w.write_all(&raw).map_err(|err| WebError::internal(err.to_string()))?;
+        }
+        w.finish().map_err(|err| WebError::internal(err.to_string()))?.into_inner()
+    };
+    let mut resp = buf.into_response();
+    let h = resp.headers_mut();
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_static("application/zip"));
+    if let Ok(v) = HeaderValue::from_str("attachment; filename=logs.zip") {
+        h.insert(header::CONTENT_DISPOSITION, v);
+    }
+    Ok(resp)
+}
+
+/// `DeleteBulkAction('exclude_delete')`: removes each selected log file
+/// (`FilamentLogViewerPlugin::deleteLog`), standard delete-bulk notifications.
+async fn bulk_delete(admin: Admin, form: Form) -> WebResult {
+    admin.authorize("view panelLog")?;
+    let ids = form.list("ids");
+    let mut failed = 0;
+    for date in &ids {
+        match log_path(&admin, date) {
+            Some(p) => {
+                if std::fs::remove_file(&p).is_err() {
+                    failed += 1;
+                }
+            }
+            None => failed += 1,
+        }
+    }
+    super::bulk_delete_notify(&admin, ids.len(), failed);
+    Ok(admin.redirect("/admin/logs"))
 }
 
 #[cfg(test)]

@@ -1,0 +1,24 @@
+{# Server › Webhooks list (app/Filament/Server/Resources/Webhooks::
+   WebhookResource::defaultTable): type icon column, type filter, row
+   view/edit/replicate actions. CreateAction lives in the header once at
+   least one webhook exists, else in the table's empty state. #}
+{% extends "layouts/panel.html" %}
+{% import "components/table.html" as tbl %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if can_create %}
+    <a class="btn" href="{{ base }}/webhook/create" title="{{ create_label }}" aria-label="{{ create_label }}">
+      {{ icon('plus', 'icon-sm') }}</a>
+    {% endif %}
+  </div>
+</div>
+{{ tbl.render(table, csrf) }}
+{# emptyStateActions: a create action under the empty-state heading #}
+{% if can_create_empty %}
+<div class="stack" style="align-items:center;margin-top:0.5rem">
+  <a class="btn" href="{{ base }}/webhook/create">{{ icon('plus', 'icon-sm') }}{{ create_label }}</a>
+</div>
+{% endif %}
+{% endblock %}

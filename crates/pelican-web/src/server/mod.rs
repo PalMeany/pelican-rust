@@ -12,6 +12,7 @@ mod schedules;
 mod settings;
 mod startup;
 mod users;
+mod webhooks;
 
 use std::collections::HashSet;
 
@@ -42,6 +43,7 @@ pub fn routes() -> Router<AppState> {
         .merge(settings::routes())
         .merge(startup::routes())
         .merge(users::routes())
+        .merge(webhooks::routes())
 }
 
 /// A request inside a server's panel: the tenant, its node and what the user may do there.
@@ -200,7 +202,7 @@ impl ServerPanel {
         add("startup", self.t("server/startup.title"), "player-play", Some("startup.read"));
         add("settings", self.t("server/setting.title"), "settings", None);
         if self.user.gate_before("viewList webhook") {
-            add("webhooks", self.t("admin/webhook.nav_title"), "webhook", None);
+            add("webhook", self.t("admin/webhook.nav_title"), "webhook", None);
         }
         if self.user.is_admin() && self.user.can_view_server(self.node.id.0) {
             items.push(NavItem {

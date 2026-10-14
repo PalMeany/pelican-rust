@@ -1,0 +1,21 @@
+{# Configuration section built by the selected schema's `getConfigurationForm()`
+   (BackupAdapterSchema): wings shows the static hint, s3 the five required
+   inputs + toggle. Rendered inline on the record form and as the htmx
+   fragment (`block configuration`) refreshed by the Schema select. #}
+<div id="bh-configuration">
+  {% if bhs %}
+  <fieldset class="card card-body stack" style="margin:0"{% if readonly %} disabled{% endif %}>
+    <h2 class="muted">{{ trans('admin/backuphost.configuration') }}</h2>
+    {% if bhs == 's3' %}
+    {{ f.text('configuration.region', trans('admin/setting.backup.s3.default_region'), cfg.region, errors, required=not readonly, attrs='autocomplete="off"') }}
+    {{ f.text('configuration.key', trans('admin/setting.backup.s3.access_key'), cfg.key, errors, required=not readonly, attrs='autocomplete="off"') }}
+    {{ f.text('configuration.secret', trans('admin/setting.backup.s3.secret_key'), cfg.secret, errors, required=not readonly, attrs='autocomplete="off"') }}
+    {{ f.text('configuration.bucket', trans('admin/setting.backup.s3.bucket'), cfg.bucket, errors, required=not readonly, attrs='autocomplete="off"') }}
+    {{ f.text('configuration.endpoint', trans('admin/setting.backup.s3.endpoint'), cfg.endpoint, errors, required=not readonly, attrs='autocomplete="url"') }}
+    {{ f.toggle('configuration.use_path_style_endpoint', trans('admin/setting.backup.s3.use_path_style_endpoint'), cfg.path_style) }}
+    {% else %}
+    <p class="hint">{{ trans('admin/backuphost.no_configuration') }}</p>
+    {% endif %}
+  </fieldset>
+  {% endif %}
+</div>

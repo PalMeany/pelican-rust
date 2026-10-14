@@ -36,6 +36,32 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/eggs/{id}/export/{format}", get(export))
         .route("/admin/eggs/{id}/copy-data", get(copy_data))
         .route("/admin/eggs/{id}/action", post(action))
+        .route("/admin/eggs/bulk-delete", post(bulk_delete))
+        .route("/admin/eggs/bulk-update", post(bulk_update))
+}
+
+/// Server counts per egg id (`servers_count`).
+async fn server_counts(st: &AppState, egg_ids: &[i64]) -> Result<HashMap<i64, i64>, WebError> {
+    if egg_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let b = st.db.get_database_backend();
+    #[derive(sea_orm::FromQueryResult)]
+    struct C {
+        egg_id: Int,
+        c: Int,
+    }
+    let marks = vec!["?"; egg_ids.len()].join(", ");
+    let vals: Vec<sea_orm::Value> = egg_ids.iter().map(|i| sea_orm::Value::from(*i)).collect();
+    let sql = format!(
+        "select {{egg_id}}, count(*) as {{c}} from {{servers}} where {{egg_id}} in ({marks}) group by {{egg_id}}"
+    );
+    Ok(<C as sea_orm::FromQueryResult>::find_by_statement(raw::stmt(b, &sql, vals))
+        .all(&st.db)
+        .await?
+        .into_iter()
+        .map(|c| (c.egg_id.0, c.c.0))
+        .collect())
 }
 
 fn list_of(v: Option<&Json>) -> Vec<String> {
@@ -78,22 +104,8 @@ async fn index(admin: Admin) -> WebResult {
         _ => {}
     }
     let counts: HashMap<i64, i64> = {
-        #[derive(sea_orm::FromQueryResult)]
-        struct C {
-            egg_id: Int,
-            c: Int,
-        }
-        let b = st.db.get_database_backend();
-        <C as sea_orm::FromQueryResult>::find_by_statement(raw::stmt(
-            b,
-            "select {egg_id}, count(*) as {c} from {servers} group by {egg_id}",
-            vec![],
-        ))
-        .all(&st.db)
-        .await?
-        .into_iter()
-        .map(|c| (c.egg_id.0, c.c.0))
-        .collect()
+        let ids: Vec<i64> = all.iter().map(|e| e.id.0).collect();
+        server_counts(st, &ids).await?
     };
     let total = all.len() as u64;
     let page: Vec<&eggs::Model> = match p.limit_offset() {
@@ -169,6 +181,25 @@ async fn index(admin: Admin) -> WebResult {
             );
         }
         table.rows.push(row);
+    }
+    if admin.can("delete egg") {
+        table.bulk.push(
+            Action::post(admin.t("filament-actions::delete.multiple.label"), "trash", "/admin/eggs/bulk-delete")
+                .color("danger")
+                .confirm(admin.t("filament-actions::modal.confirmation")),
+        );
+    }
+    if admin.can("import egg") {
+        // UpdateEggBulkAction.
+        table.bulk.push(
+            Action::post(
+                crate::i18n::trans_choice(&admin.locale(), "admin/egg.update", 2.0, &[]),
+                "cloud-download",
+                "/admin/eggs/bulk-update",
+            )
+            .color("success")
+            .confirm(crate::i18n::trans_choice(&admin.locale(), "admin/egg.update_question", 2.0, &[])),
+        );
     }
     let mut tags: Vec<String> = all.iter().flat_map(|e| list_of(e.tags.as_ref())).collect();
     tags.sort();
@@ -914,18 +945,8 @@ async fn action(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
         "update" => {
             admin.authorize("import egg")?;
             // UpdateEggAction: EggImporterService::fromUrl($egg->update_url, $egg).
-            let url = e.update_url.clone().unwrap_or_default();
-            let result = match fetch_url(&admin, &url).await {
-                Ok(content) => pelican_api::application::eggs::import_egg_into(st, &content, Some(id))
-                    .await
-                    .map_err(|err| err.errors.first().map(|o| o.detail.clone()).unwrap_or_default()),
-                Err(msg) => Err(msg),
-            };
-            match result {
-                Ok(_) => {
-                    if let Some(uuid) = &e.uuid {
-                        pelican_api::egg_index::forget_update(uuid);
-                    }
+            match update_from_url(&admin, &e).await {
+                Ok(url) => {
                     let body = admin.t_with("admin/egg.updated_from", &[("url", &url)]);
                     admin.session.flash(
                         "success",
@@ -956,4 +977,114 @@ async fn action(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
         }
         _ => Err(WebError::Unprocessable),
     }
+}
+
+/// `EggImporterService::fromUrl($egg->update_url, $egg)` — shared by the
+/// single `update` action and `UpdateEggBulkAction`; returns the update URL on
+/// success or the human-readable failure message.
+async fn update_from_url(admin: &Admin, e: &eggs::Model) -> Result<String, String> {
+    let url = e.update_url.clone().unwrap_or_default();
+    match fetch_url(admin, &url).await {
+        Ok(content) => match pelican_api::application::eggs::import_egg_into(&admin.st, &content, Some(e.id.0)).await {
+            Ok(_) => {
+                if let Some(uuid) = &e.uuid {
+                    pelican_api::egg_index::forget_update(uuid);
+                }
+                Ok(url)
+            }
+            Err(err) => Err(err.errors.first().map(|o| o.detail.clone()).unwrap_or_default()),
+        },
+        Err(msg) => Err(msg),
+    }
+}
+
+/// `DeleteBulkAction('exclude_bulk_delete')`: the `before()` hook pulls eggs
+/// with servers (danger notification), the rest is deleted.
+async fn bulk_delete(admin: Admin, form: Form) -> WebResult {
+    admin.authorize("delete egg")?;
+    let st = &admin.st;
+    let ids = super::bulk_ids(&form);
+    let eggs = if ids.is_empty() {
+        Vec::new()
+    } else {
+        eggs::Entity::find().filter(eggs::Column::Id.is_in(ids)).all(&st.db).await?
+    };
+    let counts = server_counts(st, &eggs.iter().map(|e| e.id.0).collect::<Vec<_>>()).await?;
+    let mut blocked: Vec<String> = Vec::new();
+    let mut failed = 0usize;
+    for e in &eggs {
+        // The `sprintf('%s (%d server%s)', …)` shape of the notification body.
+        let n = counts.get(&e.id.0).copied().unwrap_or(0);
+        if n > 0 {
+            blocked.push(format!("{} ({} server{})", e.name, n, if n > 1 { "s" } else { "" }));
+            continue;
+        }
+        if pelican_api::application::eggs::delete_egg(st, e).await.is_err() {
+            failed += 1;
+        }
+    }
+    if !blocked.is_empty() {
+        admin.flash_danger(
+            admin.t_with("admin/egg.cannot_delete", &[("count", &blocked.len().to_string())]),
+            Some(admin.t_with("admin/egg.eggs_have_servers", &[("eggs", &blocked.join(", "))])),
+        );
+    }
+    if blocked.len() < eggs.len() {
+        super::bulk_delete_notify(&admin, eggs.len() - blocked.len(), failed);
+    }
+    Ok(admin.redirect(&form.back("/admin/eggs")))
+}
+
+/// `UpdateEggBulkAction('exclude_bulk_update')`: eggs without `update_url` are
+/// skipped with a warning (`before()`), then each egg is updated like the
+/// single `UpdateEggAction`.
+async fn bulk_update(admin: Admin, form: Form) -> WebResult {
+    admin.authorize("import egg")?;
+    let st = &admin.st;
+    let ids = super::bulk_ids(&form);
+    let mut records = if ids.is_empty() {
+        Vec::new()
+    } else {
+        eggs::Entity::find().filter(eggs::Column::Id.is_in(ids)).order_by_asc(eggs::Column::Id).all(&st.db).await?
+    };
+    // `before()`: pull eggs without update URL and warn about them.
+    let no_url: Vec<String> = records.iter().filter(|e| e.update_url.is_none()).map(|e| e.name.clone()).collect();
+    if !no_url.is_empty() {
+        admin.session.flash(
+            "warning",
+            admin.t_with("admin/egg.cannot_update", &[("count", &no_url.len().to_string())]),
+            Some(admin.t_with("admin/egg.no_update_url", &[("eggs", &no_url.join(", "))])),
+        );
+    }
+    records.retain(|e| e.update_url.is_some());
+    if records.is_empty() {
+        return Ok(admin.redirect(&form.back("/admin/eggs")));
+    }
+    let total = records.len();
+    let (mut ok, mut failed): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
+    for e in &records {
+        match update_from_url(&admin, e).await {
+            Ok(_) => ok.push(e.name.clone()),
+            Err(msg) => {
+                // `report($exception)` of the original action.
+                tracing::warn!(egg = %e.name, error = %msg, "bulk egg update failed");
+                failed.push(e.name.clone());
+            }
+        }
+    }
+    let mut body = Vec::new();
+    if !ok.is_empty() {
+        body.push(admin.t_with("admin/egg.updated_eggs", &[("eggs", &ok.join(", "))]));
+    }
+    if !failed.is_empty() {
+        body.push(admin.t_with("admin/egg.failed_eggs", &[("eggs", &failed.join(", "))]));
+    }
+    let title = crate::i18n::trans_choice(
+        &admin.locale(),
+        "admin/egg.updated",
+        2.0,
+        &[("count".into(), ok.len().to_string()), ("total".into(), total.to_string())],
+    );
+    admin.session.flash(if failed.is_empty() { "success" } else { "warning" }, title, Some(body.join(" | ")));
+    Ok(admin.redirect(&form.back("/admin/eggs")))
 }

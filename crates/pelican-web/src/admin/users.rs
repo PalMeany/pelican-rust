@@ -46,6 +46,7 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/users/{id}", get(view))
         .route("/admin/users/{id}/edit", get(edit_form).post(update))
         .route("/admin/users/{id}/delete", post(delete))
+        .route("/admin/users/bulk-delete", post(bulk_delete))
         .route("/admin/users/{id}/avatar/delete", post(avatar_delete))
         .route("/admin/users/{uid}/api-keys/{key_id}/delete", post(api_key_delete))
         .route("/admin/users/{uid}/ssh-keys/{key_id}/delete", post(ssh_key_delete))
@@ -344,7 +345,19 @@ async fn index(admin: Admin) -> WebResult {
                 Action::link(admin.t("filament-actions::view.single.label"), "eye", url)
             });
         }
+        // `checkIfRecordIsSelectableUsing`: not the current user, no servers.
+        let owned = servers_count.get(&u.id.0).copied().unwrap_or(0);
+        if admin.can("delete user") && (owned > 0 || admin.user.id() == u.id.0) {
+            row.unselectable = true;
+        }
         table.rows.push(row);
+    }
+    if admin.can("delete user") {
+        table.bulk.push(
+            Action::post(admin.t("filament-actions::delete.multiple.label"), "trash", "/admin/users/bulk-delete")
+                .color("danger")
+                .confirm(admin.t("filament-actions::modal.confirmation")),
+        );
     }
     table.empty_icon = "users".into();
     table.empty_heading = t("model_label_plural");
@@ -1032,21 +1045,53 @@ async fn update(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
 async fn delete(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
     let u = find(&admin, id).await?;
     authorize_for(&admin, "delete user", &u).await?;
+    match delete_one(&admin, &u).await? {
+        Ok(()) => {
+            admin.flash_success(admin.t("filament-actions::delete.single.notifications.deleted.title"));
+            Ok(admin.redirect("/admin/users"))
+        }
+        Err(msg) => {
+            admin.flash_danger(msg, None);
+            Ok(admin.redirect(&form.back("/admin/users")))
+        }
+    }
+}
+
+/// `DeleteBulkAction('exclude_bulk_delete')`.
+async fn bulk_delete(admin: Admin, form: Form) -> WebResult {
+    let ids = super::bulk_ids(&form);
+    let mut failed = 0;
+    for id in &ids {
+        // Records failing the row policy are skipped with a failure counted.
+        let deleted = match find(&admin, *id).await {
+            Ok(u) if authorize_for(&admin, "delete user", &u).await.is_ok() => {
+                matches!(delete_one(&admin, &u).await, Ok(Ok(())))
+            }
+            _ => false,
+        };
+        if !deleted {
+            failed += 1;
+        }
+    }
+    super::bulk_delete_notify(&admin, ids.len(), failed);
+    Ok(admin.redirect(&form.back("/admin/users")))
+}
+
+/// User deletion (`User::booted` deleting hook + `Deleting` →
+/// RevocationListener): refused while the user still owns servers or is the
+/// acting admin themself.
+async fn delete_one(admin: &Admin, u: &users::Model) -> Result<Result<(), String>, WebError> {
     let st = &admin.st;
-    let back = form.back("/admin/users");
     let owned = count_owned_servers(st, u.id.0).await?;
     if owned > 0 {
-        admin.flash_danger(admin.t("exceptions.users.has_servers"), None);
-        return Ok(admin.redirect(&back));
+        return Ok(Err(admin.t("exceptions.users.has_servers")));
     }
     if admin.user.id() == u.id.0 {
-        admin.flash_danger(admin.t("exceptions.users.is_self"), None);
-        return Ok(admin.redirect(&back));
+        return Ok(Err(admin.t("exceptions.users.is_self")));
     }
-    pelican_api::jobs::revoke_sftp_access(st, &u).await.map_err(|e| WebError::internal(format!("{e:?}")))?;
+    pelican_api::jobs::revoke_sftp_access(st, u).await.map_err(|e| WebError::internal(format!("{e:?}")))?;
     users::Entity::delete_by_id(u.id).exec(&st.db).await?;
-    admin.flash_success(admin.t("filament-actions::delete.single.notifications.deleted.title"));
-    Ok(admin.redirect("/admin/users"))
+    Ok(Ok(()))
 }
 
 // ----- record-level extras ----------------------------------------------------

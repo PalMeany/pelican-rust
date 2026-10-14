@@ -129,10 +129,17 @@ document.querySelector('[data-modal-open="auto-deploy"]')?.addEventListener('cli
     {% if not readonly %}<div class="table-toolbar"><div class="spacer"></div>
       <form method="post" action="/admin/nodes/{{ node.id }}/action">{{ csrf_field() }}<input type="hidden" name="op" value="refresh-ips"><button class="btn btn-sm btn-gray" title="{{ trans(N ~ '.refresh') }}">{{ icon('refresh', 'icon-sm') }}</button></form>
       <button type="button" class="btn btn-sm" data-modal-open="node-alloc-create">{{ icon('world-plus', 'icon-sm') }}{{ trans(N ~ '.create_allocation') }}</button></div>{% endif %}
-    {% if allocations %}<div class="table-wrap"><table class="table">
-      <thead><tr><th>{{ trans(N ~ '.table.ip') }}</th><th>{{ trans(N ~ '.port') }}</th><th>{{ trans(N ~ '.table.alias') }}</th><th>{{ trans(N ~ '.table.allocation_notes') }}</th><th class="wide-only">{{ trans(N ~ '.table.servers') }}</th><th class="sr-only"></th></tr></thead>
+    {% if allocations %}{% if not readonly %}
+    <form id="node-alloc-bulk" method="post" hx-boost="false" action="/admin/nodes/{{ node.id }}/allocations/bulk-delete" class="bulk-bar" data-bulk-bar hidden>
+      {{ csrf_field() }}<input type="hidden" name="_back" value="/admin/nodes/{{ node.id }}/edit#relations">
+      <span class="muted small" data-bulk-count data-one="{{ trans_choice('filament-tables::table.selection_indicator.selected_count', 1) }}" data-many="{{ trans_choice('filament-tables::table.selection_indicator.selected_count', 2, count=':count') }}"></span>
+      <div class="spacer"></div>
+      <button type="submit" class="btn btn-sm btn-danger" data-confirm="{{ trans('filament-actions::modal.confirmation') }}" data-confirm-title="{{ trans('filament-actions::delete.multiple.label') }}" data-confirm-ok="{{ trans('filament-actions::delete.multiple.label') }}" data-confirm-color="danger">{{ icon('trash', 'icon-sm') }}{{ trans('filament-actions::delete.multiple.label') }}</button>
+    </form>{% endif %}<div class="table-wrap"><table class="table">
+      <thead><tr>{% if not readonly %}<th class="bulk-cell"><input type="checkbox" class="checkbox" data-bulk-all="node-alloc" aria-label="{{ trans('filament-tables::table.fields.bulk_select_page.label') }}"></th>{% endif %}<th>{{ trans(N ~ '.table.ip') }}</th><th>{{ trans(N ~ '.port') }}</th><th>{{ trans(N ~ '.table.alias') }}</th><th>{{ trans(N ~ '.table.allocation_notes') }}</th><th class="wide-only">{{ trans(N ~ '.table.servers') }}</th><th class="sr-only"></th></tr></thead>
       <tbody>{% for a in allocations %}{% set base = '/admin/nodes/' ~ node.id ~ '/allocations/' ~ a.id %}
       <tr>
+        {% if not readonly %}<td class="bulk-cell">{% if not a.server %}<input type="checkbox" class="checkbox" name="ids[]" value="{{ a.id }}" form="node-alloc-bulk" data-bulk-item="node-alloc">{% endif %}</td>{% endif %}
         <td><form method="post" action="{{ base }}/ip">{{ csrf_field() }}<select class="select" name="ip" style="width:auto" onchange="this.form.requestSubmit()"{% if readonly %} disabled{% endif %}><option>{{ a.ip }}</option>{% for ip in node_ips %}{% if ip[0] != a.ip %}<option>{{ ip[0] }}</option>{% endif %}{% endfor %}</select></form></td>
         <td class="mono">{{ a.port }}</td>
         <td><form method="post" action="{{ base }}/alias">{{ csrf_field() }}<input class="input" style="min-width:9rem" name="ip_alias" value="{{ a.alias }}" placeholder="{{ trans(N ~ '.table.no_alias') }}" onchange="this.form.requestSubmit()"{% if readonly %} disabled{% endif %}></form></td>

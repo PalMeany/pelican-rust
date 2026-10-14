@@ -37,6 +37,7 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/nodes/{id}/action", post(action))
         .route("/admin/nodes/{id}/deploy-command", get(deploy_command))
         .route("/admin/nodes/{id}/allocations/create", post(allocation_create))
+        .route("/admin/nodes/{id}/allocations/bulk-delete", post(allocation_bulk_delete))
         .route("/admin/nodes/{id}/allocations/{aid}/{op}", post(allocation_op))
 }
 
@@ -911,6 +912,26 @@ async fn allocation_op(admin: Admin, Path((id, aid, op)): Path<(i64, i64, String
         }
         _ => return Err(WebError::Unprocessable),
     }
+    Ok(admin.redirect(&format!("/admin/nodes/{id}/edit#relations")))
+}
+
+/// `DeleteBulkAction` of the node AllocationsRelationManager: removes selected
+/// unassigned allocations of this node (same guard as single delete).
+async fn allocation_bulk_delete(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
+    admin.authorize("update node")?;
+    let n = find(&admin, id).await?;
+    let ids = super::bulk_ids(&form);
+    let st = &admin.st;
+    let mut failed = 0;
+    for aid in &ids {
+        match allocations::Entity::find_by_id(*aid).one(&st.db).await? {
+            Some(a) if a.node_id == n.id && a.server_id.is_none() => {
+                allocations::Entity::delete_by_id(a.id).exec(&st.db).await?;
+            }
+            _ => failed += 1,
+        }
+    }
+    super::bulk_delete_notify(&admin, ids.len(), failed);
     Ok(admin.redirect(&format!("/admin/nodes/{id}/edit#relations")))
 }
 

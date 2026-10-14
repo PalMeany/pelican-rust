@@ -111,6 +111,7 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/webhooks/{id}", get(view))
         .route("/admin/webhooks/{id}/edit", get(edit_form).post(update))
         .route("/admin/webhooks/{id}/delete", post(delete))
+        .route("/admin/webhooks/bulk-delete", post(bulk_delete))
         .route("/admin/webhooks/{id}/replicate", post(replicate))
         .route("/admin/webhooks/{id}/test", post(test))
 }
@@ -296,6 +297,13 @@ async fn index(admin: Admin) -> WebResult {
             ));
         }
         table.rows.push(row);
+    }
+    if admin.can("delete webhook") {
+        table.bulk.push(
+            Action::post(admin.t("filament-actions::delete.multiple.label"), "trash", "/admin/webhooks/bulk-delete")
+                .color("danger")
+                .confirm(admin.t("filament-actions::modal.confirmation")),
+        );
     }
 
     table.tabs = tabs;
@@ -632,7 +640,28 @@ async fn update(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
 /// POST /admin/webhooks/{id}/delete — DeleteAction + SoftDeletes.
 async fn delete(admin: Admin, Path(id): Path<i64>) -> WebResult {
     admin.authorize("delete webhook")?;
-    let wh = find(&admin, id).await?;
+    delete_one(&admin, id).await?;
+    admin.flash_success(admin.t("filament-actions::delete.single.notifications.deleted.title"));
+    Ok(admin.redirect("/admin/webhooks"))
+}
+
+/// `DeleteBulkAction('exclude_bulk_delete')` — soft deletes.
+async fn bulk_delete(admin: Admin, form: Form) -> WebResult {
+    admin.authorize("delete webhook")?;
+    let ids = super::bulk_ids(&form);
+    let mut failed = 0;
+    for id in &ids {
+        if delete_one(&admin, *id).await.is_err() {
+            failed += 1;
+        }
+    }
+    super::bulk_delete_notify(&admin, ids.len(), failed);
+    Ok(admin.redirect(&form.back("/admin/webhooks")))
+}
+
+/// Webhook deletion (SoftDeletes): `deleted_at` stamp only.
+async fn delete_one(admin: &Admin, id: i64) -> Result<(), WebError> {
+    let wh = find(admin, id).await?;
     let now = Timestamp(pelican_core::time::now());
     pelican_db::write::update(
         &admin.st.db,
@@ -644,8 +673,7 @@ async fn delete(admin: Admin, Path(id): Path<i64>) -> WebResult {
         },
     )
     .await?;
-    admin.flash_success(admin.t("filament-actions::delete.single.notifications.deleted.title"));
-    Ok(admin.redirect("/admin/webhooks"))
+    Ok(())
 }
 
 /// POST /admin/webhooks/{id}/replicate — ReplicateAction (no modal): copies

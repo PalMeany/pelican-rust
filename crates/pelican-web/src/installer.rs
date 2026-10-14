@@ -25,7 +25,8 @@ use serde_json::Value;
 use crate::forms::{Errors, Form};
 
 pub const STEPS: [&str; 7] = ["requirements", "environment", "database", "egg", "cache", "queue", "session"];
-const DRIVERS: [(&str, &str); 4] = [("sqlite", "SQLite"), ("mariadb", "MariaDB"), ("mysql", "MySQL"), ("pgsql", "PostgreSQL")];
+const DRIVERS: [(&str, &str); 4] =
+    [("sqlite", "SQLite"), ("mariadb", "MariaDB"), ("mysql", "MySQL"), ("pgsql", "PostgreSQL")];
 
 /// Called once with the booted state when installation finishes. It must switch the
 /// listener to the panel before returning: the browser follows the redirect at once.
@@ -149,11 +150,16 @@ async fn render(p: Page<'_>) -> Response {
         let url = env.string_or("PANEL_EGG_INDEX_URL", pelican_api::egg_index::DEFAULT_INDEX_URL);
         match pelican_api::egg_index::fetch_index(&url).await {
             Ok(i) => {
-                index = i.into_iter().map(|(nest, eggs)| (nest, {
-                    let mut e: Vec<(String, String)> = eggs.into_iter().collect();
-                    e.sort_by(|a, b| a.1.cmp(&b.1));
-                    e
-                })).collect()
+                index = i
+                    .into_iter()
+                    .map(|(nest, eggs)| {
+                        (nest, {
+                            let mut e: Vec<(String, String)> = eggs.into_iter().collect();
+                            e.sort_by(|a, b| a.1.cmp(&b.1));
+                            e
+                        })
+                    })
+                    .collect()
             }
             Err(e) => index_error = Some(e),
         }
@@ -205,7 +211,8 @@ async fn render(p: Page<'_>) -> Response {
         Err(e) => return crate::error::WebError::internal(e.to_string()).into_response(),
     };
     let mut resp = axum::response::Html(html).into_response();
-    if let Ok(v) = HeaderValue::from_str(&format!("pelican_installer={}; Path=/; HttpOnly; SameSite=Lax", p.inst.token)) {
+    if let Ok(v) = HeaderValue::from_str(&format!("pelican_installer={}; Path=/; HttpOnly; SameSite=Lax", p.inst.token))
+    {
         resp.headers_mut().insert(header::SET_COOKIE, v);
     }
     resp
@@ -248,7 +255,8 @@ async fn show(State(inst): State<Installer>, axum::extract::RawQuery(q): axum::e
         .unwrap_or_else(|| "requirements".into());
     // Only the first step can be opened directly (earlier steps' values travel in the form).
     let _ = step;
-    render(Page { inst: &inst, step: "requirements", data: IndexMap::new(), errors: Errors::default(), notice: None }).await
+    render(Page { inst: &inst, step: "requirements", data: IndexMap::new(), errors: Errors::default(), notice: None })
+        .await
 }
 
 fn cookie_token(headers: &HeaderMap) -> Option<String> {
@@ -288,8 +296,14 @@ async fn submit(State(inst): State<Installer>, headers: HeaderMap, form: Form) -
     match finish(&inst, &data, &locale).await {
         Ok(token) => Redirect::to(&format!("/installer/complete?token={token}")).into_response(),
         Err((title, body)) => {
-            render(Page { inst: &inst, step, data, errors: Errors::default(), notice: Some(("danger".into(), title, Some(body))) })
-                .await
+            render(Page {
+                inst: &inst,
+                step,
+                data,
+                errors: Errors::default(),
+                notice: Some(("danger".into(), title, Some(body))),
+            })
+            .await
         }
     }
 }
@@ -314,12 +328,18 @@ fn write_env(inst: &Installer, values: &[(&str, Option<&String>)]) -> Result<(),
 
 type Notice = Option<(String, String, Option<String>)>;
 
-async fn validate_step(inst: &Installer, step: &str, data: &IndexMap<String, String>, locale: &str) -> (Errors, Notice) {
+async fn validate_step(
+    inst: &Installer,
+    step: &str,
+    data: &IndexMap<String, String>,
+    locale: &str,
+) -> (Errors, Notice) {
     let mut errors = Errors::default();
     let fail_env = |e: String| Some(("danger".to_string(), t(locale, "installer.exceptions.write_env"), Some(e)));
     match step {
         "requirements" => {
-            let ok = requirement_checks(&inst.base).iter().all(|c| c.get_attr("ok").map(|v| v.is_true()).unwrap_or(false));
+            let ok =
+                requirement_checks(&inst.base).iter().all(|c| c.get_attr("ok").map(|v| v.is_true()).unwrap_or(false));
             if !ok {
                 return (errors, Some(("danger".into(), t(locale, "installer.requirements.exception"), None)));
             }
@@ -342,7 +362,8 @@ async fn validate_step(inst: &Installer, step: &str, data: &IndexMap<String, Str
             required(&mut errors, locale, data, "user_username", &format!("{p}.account.username"));
             required(&mut errors, locale, data, "user_password", &format!("{p}.account.password"));
             if errors.is_empty() {
-                if let Err(e) = write_env(inst, &[("APP_NAME", data.get("APP_NAME")), ("APP_URL", data.get("APP_URL"))]) {
+                if let Err(e) = write_env(inst, &[("APP_NAME", data.get("APP_NAME")), ("APP_URL", data.get("APP_URL"))])
+                {
                     return (errors, fail_env(e));
                 }
             }
@@ -350,16 +371,43 @@ async fn validate_step(inst: &Installer, step: &str, data: &IndexMap<String, Str
         "database" => {
             let driver = data.get("DB_CONNECTION").cloned().unwrap_or_default();
             if !DRIVERS.iter().any(|(k, _)| *k == driver) {
-                errors.add("DB_CONNECTION", crate::i18n::trans(locale, "validation.required", &[("attribute".into(), t(locale, "installer.database.driver").to_lowercase())]));
+                errors.add(
+                    "DB_CONNECTION",
+                    crate::i18n::trans(
+                        locale,
+                        "validation.required",
+                        &[("attribute".into(), t(locale, "installer.database.driver").to_lowercase())],
+                    ),
+                );
             }
             let f = "installer.database.fields";
-            required(&mut errors, locale, data, "DB_DATABASE", &format!("{f}.{}", if driver == "sqlite" { "path" } else { "name" }));
+            required(
+                &mut errors,
+                locale,
+                data,
+                "DB_DATABASE",
+                &format!("{f}.{}", if driver == "sqlite" { "path" } else { "name" }),
+            );
             if driver != "sqlite" {
                 required(&mut errors, locale, data, "DB_HOST", &format!("{f}.host"));
                 if required(&mut errors, locale, data, "DB_PORT", &format!("{f}.port")) {
-                    let ok = data.get("DB_PORT").and_then(|p| p.parse::<u32>().ok()).is_some_and(|p| (1..=65535).contains(&p));
+                    let ok = data
+                        .get("DB_PORT")
+                        .and_then(|p| p.parse::<u32>().ok())
+                        .is_some_and(|p| (1..=65535).contains(&p));
                     if !ok {
-                        errors.add("DB_PORT", crate::i18n::trans(locale, "validation.between.numeric", &[("attribute".into(), t(locale, &format!("{f}.port")).to_lowercase()), ("min".into(), "1".into()), ("max".into(), "65535".into())]));
+                        errors.add(
+                            "DB_PORT",
+                            crate::i18n::trans(
+                                locale,
+                                "validation.between.numeric",
+                                &[
+                                    ("attribute".into(), t(locale, &format!("{f}.port")).to_lowercase()),
+                                    ("min".into(), "1".into()),
+                                    ("max".into(), "65535".into()),
+                                ],
+                            ),
+                        );
                     }
                 }
                 required(&mut errors, locale, data, "DB_USERNAME", &format!("{f}.username"));
@@ -369,7 +417,9 @@ async fn validate_step(inst: &Installer, step: &str, data: &IndexMap<String, Str
             }
             if driver != "sqlite" {
                 let lookup = |k: &str| match k {
-                    "DB_CONNECTION" | "DB_HOST" | "DB_PORT" | "DB_DATABASE" | "DB_USERNAME" | "DB_PASSWORD" => data.get(k).cloned(),
+                    "DB_CONNECTION" | "DB_HOST" | "DB_PORT" | "DB_DATABASE" | "DB_USERNAME" | "DB_PASSWORD" => {
+                        data.get(k).cloned()
+                    }
                     _ => None,
                 };
                 let tested = match pelican_db::connect::DbConfig::from_lookup(lookup, &inst.base) {
@@ -377,7 +427,10 @@ async fn validate_step(inst: &Installer, step: &str, data: &IndexMap<String, Str
                     Err(e) => Err(e),
                 };
                 if let Err(e) = tested {
-                    return (errors, Some(("danger".into(), t(locale, "installer.database.exceptions.connection"), Some(e))));
+                    return (
+                        errors,
+                        Some(("danger".into(), t(locale, "installer.database.exceptions.connection"), Some(e))),
+                    );
                 }
             }
             let keys = ["DB_CONNECTION", "DB_DATABASE", "DB_HOST", "DB_PORT", "DB_USERNAME", "DB_PASSWORD"];
@@ -400,8 +453,10 @@ async fn validate_step(inst: &Installer, step: &str, data: &IndexMap<String, Str
                 }
             }
             let keys = ["CACHE_STORE", "REDIS_HOST", "REDIS_PORT", "REDIS_USERNAME", "REDIS_PASSWORD"];
-            let vals: Vec<(&str, Option<&String>)> =
-                keys.iter().map(|k| (*k, if store == "redis" || *k == "CACHE_STORE" { data.get(*k) } else { None })).collect();
+            let vals: Vec<(&str, Option<&String>)> = keys
+                .iter()
+                .map(|k| (*k, if store == "redis" || *k == "CACHE_STORE" { data.get(*k) } else { None }))
+                .collect();
             if let Err(e) = write_env(inst, &vals) {
                 return (errors, fail_env(e));
             }
@@ -423,10 +478,13 @@ async fn redis_ping(data: &IndexMap<String, String>) -> Result<(), String> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let host = data.get("REDIS_HOST").cloned().unwrap_or_default();
     let port = data.get("REDIS_PORT").cloned().unwrap_or_default();
-    let mut s = tokio::time::timeout(std::time::Duration::from_secs(5), tokio::net::TcpStream::connect(format!("{host}:{port}")))
-        .await
-        .map_err(|_| "Connection timed out".to_string())?
-        .map_err(|e| e.to_string())?;
+    let mut s = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        tokio::net::TcpStream::connect(format!("{host}:{port}")),
+    )
+    .await
+    .map_err(|_| "Connection timed out".to_string())?
+    .map_err(|e| e.to_string())?;
     let cmd = |parts: &[&str]| {
         let mut out = format!("*{}\r\n", parts.len());
         for p in parts {
@@ -454,18 +512,23 @@ async fn redis_ping(data: &IndexMap<String, String>) -> Result<(), String> {
 /// `PanelInstaller::submit()`.
 async fn finish(inst: &Installer, data: &IndexMap<String, String>, locale: &str) -> Result<String, (String, String)> {
     let env = env_of(inst);
-    let (config, enc) = Config::from_env(env, &inst.base).map_err(|e| (t(locale, "installer.exceptions.migration"), e.to_string()))?;
+    let (config, enc) =
+        Config::from_env(env, &inst.base).map_err(|e| (t(locale, "installer.exceptions.migration"), e.to_string()))?;
     let migration = |e: String| (t(locale, "installer.database.exceptions.migration"), e);
     // runMigrations(): our schema comes from the reference dump (ADR-0003).
     let db = pelican_db::connect(&config.db).await.map_err(|e| migration(e.to_string()))?;
     match pelican_db::install::schema_state(&db).await.map_err(|e| migration(e.to_string()))? {
-        SchemaState::Empty => pelican_db::install::install_fresh(&db, config.db.driver).await.map_err(|e| migration(e.to_string()))?,
+        SchemaState::Empty => {
+            pelican_db::install::install_fresh(&db, config.db.driver).await.map_err(|e| migration(e.to_string()))?
+        }
         SchemaState::Ready { .. } => {}
         SchemaState::Outdated { missing } => return Err(migration(format!("{} migrations missing", missing.len()))),
     }
     let st = AppState::new(config, enc, db);
     // DatabaseSeeder: Role::firstOrCreate(['name' => 'Root Admin']).
-    pelican_api::application::users::ensure_root_admin_role(&st).await.map_err(|e| migration(format!("{:?}", e.errors.first())))?;
+    pelican_api::application::users::ensure_root_admin_role(&st)
+        .await
+        .map_err(|e| migration(format!("{:?}", e.errors.first())))?;
     let user = pelican_api::application::users::create_admin(
         &st,
         data.get("user_username").map(String::as_str).unwrap_or_default(),
@@ -473,13 +536,19 @@ async fn finish(inst: &Installer, data: &IndexMap<String, String>, locale: &str)
         data.get("user_password").map(String::as_str).unwrap_or_default(),
     )
     .await
-    .map_err(|e| (t(locale, "installer.exceptions.create_user"), e.errors.first().map(|o| o.detail.clone()).unwrap_or_default()))?;
+    .map_err(|e| {
+        (t(locale, "installer.exceptions.create_user"), e.errors.first().map(|o| o.detail.clone()).unwrap_or_default())
+    })?;
     let secure = st.config.app_url.starts_with("https://");
     let session = vec![
-        ("SESSION_DRIVER".to_string(), EnvWrite::Str(data.get("SESSION_DRIVER").cloned().unwrap_or_else(|| "file".into()))),
+        (
+            "SESSION_DRIVER".to_string(),
+            EnvWrite::Str(data.get("SESSION_DRIVER").cloned().unwrap_or_else(|| "file".into())),
+        ),
         ("SESSION_SECURE_COOKIE".to_string(), EnvWrite::Str(if secure { "true".into() } else { "false".into() })),
     ];
-    write_variables(&inst.base.join(".env"), &session, true).map_err(|e| (t(locale, "installer.exceptions.write_env"), e.to_string()))?;
+    write_variables(&inst.base.join(".env"), &session, true)
+        .map_err(|e| (t(locale, "installer.exceptions.write_env"), e.to_string()))?;
     for url in list_of(data, "eggs") {
         let st = st.clone();
         tokio::spawn(async move { pelican_api::egg_index::install_from_url(&st, &url).await });

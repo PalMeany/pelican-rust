@@ -167,17 +167,24 @@
 
   <section class="card table-card" data-tab-panel="rel-allocations">
     {% if not readonly %}
+    <form id="srv-alloc-bulk" method="post" hx-boost="false" action="/admin/servers/{{ s.id }}/allocations/bulk-dissociate" class="bulk-bar" data-bulk-bar hidden>
+      {{ csrf_field() }}<input type="hidden" name="_back" value="/admin/servers/{{ s.id }}/edit#relations">
+      <span class="muted small" data-bulk-count data-one="{{ trans_choice('filament-tables::table.selection_indicator.selected_count', 1) }}" data-many="{{ trans_choice('filament-tables::table.selection_indicator.selected_count', 2, count=':count') }}"></span>
+      <div class="spacer"></div>
+      <button type="submit" class="btn btn-sm btn-danger" data-confirm="{{ trans('filament-actions::modal.confirmation') }}" data-confirm-title="{{ trans('filament-actions::dissociate.multiple.label') }}" data-confirm-ok="{{ trans('filament-actions::dissociate.multiple.label') }}">{{ icon('unlink', 'icon-sm') }}{{ trans('filament-actions::dissociate.multiple.label') }}</button>
+    </form>
     <div class="table-toolbar"><div class="spacer"></div>
       <button type="button" class="btn btn-sm" data-modal-open="alloc-create" title="{{ trans('admin/server.create_allocation') }}">{{ icon('world-plus', 'icon-sm') }}</button>
       <button type="button" class="btn btn-sm btn-gray" data-modal-open="alloc-associate">{{ trans('admin/server.add_allocation') }}</button></div>
     {% endif %}
     {% if rel.allocations %}
     <div class="table-wrap"><table class="table">
-      <thead><tr><th>{{ trans('admin/server.ip_address') }}</th><th>{{ trans('admin/server.port') }}</th><th>{{ trans('admin/server.show_port') }}</th><th>{{ trans('admin/server.alias') }}</th><th>{{ trans('admin/server.notes') }}</th><th>{{ trans('admin/server.primary') }}</th><th>{{ trans('admin/server.locked') }}</th><th class="sr-only">{{ trans('admin/server.actions') }}</th></tr></thead>
+      <thead><tr>{% if not readonly %}<th class="bulk-cell"><input type="checkbox" class="checkbox" data-bulk-all="srv-alloc" aria-label="{{ trans('filament-tables::table.fields.bulk_select_page.label') }}"></th>{% endif %}<th>{{ trans('admin/server.ip_address') }}</th><th>{{ trans('admin/server.port') }}</th><th>{{ trans('admin/server.show_port') }}</th><th>{{ trans('admin/server.alias') }}</th><th>{{ trans('admin/server.notes') }}</th><th>{{ trans('admin/server.primary') }}</th><th>{{ trans('admin/server.locked') }}</th><th class="sr-only">{{ trans('admin/server.actions') }}</th></tr></thead>
       <tbody>
       {% for a in rel.allocations %}
       {% set base = '/admin/servers/' ~ s.id ~ '/allocations/' ~ a.id %}
       <tr>
+        {% if not readonly %}<td class="bulk-cell"><input type="checkbox" class="checkbox" name="ids[]" value="{{ a.id }}" form="srv-alloc-bulk" data-bulk-item="srv-alloc"></td>{% endif %}
         <td class="mono">{{ a.ip }}</td><td class="mono">{{ a.port }}</td>
         <td><form method="post" action="{{ base }}/show-port">{{ csrf_field() }}<input type="hidden" name="show_port" value="0">
           <label class="toggle"><input type="checkbox" name="show_port" value="1"{% if a.show_port %} checked{% endif %}{% if readonly %} disabled{% endif %} onchange="this.form.requestSubmit()"><span class="track"></span></label></form></td>

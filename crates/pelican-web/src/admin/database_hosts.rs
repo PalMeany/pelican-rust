@@ -40,6 +40,7 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/database-hosts/{id}", get(view))
         .route("/admin/database-hosts/{id}/edit", get(edit_form).post(update))
         .route("/admin/database-hosts/{id}/delete", post(delete_host))
+        .route("/admin/database-hosts/bulk-delete", post(bulk_delete))
         .route("/admin/database-hosts/{id}/databases/{db}/rotate", post(rotate_database))
         .route("/admin/database-hosts/{id}/databases/{db}/delete", post(delete_database))
 }
@@ -159,7 +160,18 @@ async fn index(admin: Admin) -> WebResult {
                 Action::link(admin.t("filament-actions::view.single.label"), "eye", url)
             });
         }
+        // `checkIfRecordIsSelectableUsing`: hosts holding databases.
+        if admin.can("delete databaseHost") && counts.get(&h.id.0).copied().unwrap_or(0) > 0 {
+            row.unselectable = true;
+        }
         table.rows.push(row);
+    }
+    if admin.can("delete databaseHost") {
+        table.bulk.push(
+            Action::post(admin.t("filament-actions::delete.multiple.label"), "trash", format!("{BASE}/bulk-delete"))
+                .color("danger")
+                .confirm(admin.t("filament-actions::modal.confirmation")),
+        );
     }
     table.searchable = true;
     table.empty_icon = "database".into();
@@ -793,15 +805,40 @@ fn api_err(e: pelican_api::error::ApiError) -> WebError {
 /// the guard mirrors that).
 async fn delete_host(admin: Admin, Path(id): Path<i64>) -> WebResult {
     admin.authorize("delete databaseHost")?;
-    let t = |k: &str| admin.t(&format!("admin/databasehost.{k}"));
-    let (h, _) = find_host(&admin, id).await?;
+    match delete_one(&admin, id).await? {
+        Ok(()) => {
+            admin.flash_success(admin.t("filament-actions::delete.single.notifications.deleted.title"));
+            Ok(admin.redirect(BASE))
+        }
+        Err(msg) => {
+            admin.flash_danger(msg, None);
+            Ok(admin.redirect(&format!("{BASE}/{id}/edit")))
+        }
+    }
+}
+
+/// `DeleteBulkAction('exclude_bulk_delete')`.
+async fn bulk_delete(admin: Admin, form: Form) -> WebResult {
+    admin.authorize("delete databaseHost")?;
+    let ids = super::bulk_ids(&form);
+    let mut failed = 0;
+    for id in &ids {
+        if !matches!(delete_one(&admin, *id).await, Ok(Ok(()))) {
+            failed += 1;
+        }
+    }
+    super::bulk_delete_notify(&admin, ids.len(), failed);
+    Ok(admin.redirect(&form.back(BASE)))
+}
+
+/// Host deletion: refused while databases still live on it.
+async fn delete_one(admin: &Admin, id: i64) -> Result<Result<(), String>, WebError> {
+    let (h, _) = find_host(admin, id).await?;
     if dbs_count(&admin.st, id).await? > 0 {
-        admin.flash_danger(t("delete_help"), None);
-        return Ok(admin.redirect(&format!("{BASE}/{id}/edit")));
+        return Ok(Err(admin.t("admin/databasehost.delete_help")));
     }
     database_hosts::Entity::delete_by_id(h.id).exec(&admin.st.db).await?;
-    admin.flash_success(admin.t("filament-actions::delete.single.notifications.deleted.title"));
-    Ok(admin.redirect(BASE))
+    Ok(Ok(()))
 }
 
 // ---------------------------------------------------------------------------

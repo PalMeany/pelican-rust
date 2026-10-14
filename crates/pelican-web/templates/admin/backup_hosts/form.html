@@ -1,0 +1,103 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if can_delete %}
+    <button class="btn btn-danger" type="submit" form="delete-form" title="{{ delete_label }}"{% if delete_disabled %} disabled{% endif %}>{{ icon('trash', 'icon-sm') }}{{ delete_label }}</button>
+    {% endif %}
+    {% if edit_url %}
+    <a class="btn" href="{{ edit_url }}">{{ icon('pencil', 'icon-sm') }}{{ trans('filament-actions::edit.single.label') }}</a>
+    {% endif %}
+    {% if not readonly %}
+    <button class="btn" type="submit" form="record-form" title="{{ save_label }}">{{ icon('device-floppy' if is_record else 'file-plus', 'icon-sm') }}{{ save_label }}</button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="stack" data-tabs-root id="bh-tabs">
+  {% if is_record and show_backups %}
+  {# Edit/View pages: record panel + the Backups relation manager as a tab #}
+  <nav class="tabs" aria-label="{{ trans('filament::components/tabs.label') }}">
+    <a href="{{ record_tab_url }}" data-tab="record" class="{{ 'active' if active_record }}">{{ trans_choice('admin/backuphost.model_label', 1) }}</a>
+    <a href="{{ backups_tab_url }}" data-tab="backups" class="{{ 'active' if not active_record }}">{{ trans('server/backup.title') }}</a>
+  </nav>
+  {% endif %}
+
+  <section data-tab-panel="record"{% if is_record and show_backups and not active_record %} hidden{% endif %}>
+  <form id="record-form" method="post" action="{{ action }}" class="stack">
+    {{ csrf_field() }}
+    <fieldset class="card card-body grid grid-2" style="margin:0;align-content:start"{% if readonly %} disabled{% endif %}>
+      {{ f.text('name', trans('admin/backuphost.name'), v.name, errors, required=true, attrs='maxlength="255"') }}
+      {{ f.select('schema', trans('admin/backuphost.schema'), schema_options, v.schema, errors, required=true, attrs=hx_attrs | default('', true) | trim | safe) }}
+      <div class="span-full">{{ f.select('node_ids', trans('admin/backuphost.linked_nodes'), node_options, v.node_ids, errors, multiple=true) }}</div>
+    </fieldset>
+    {% include "admin/backup_hosts/_configuration.html" %}
+  </form>
+  </section>
+
+  {% if show_backups %}
+  {# Relation manager: backups stored on this host (read-only) #}
+  <section data-tab-panel="backups"{% if active_record or not is_record %} hidden{% endif %}>
+  <div class="card table-card stack">
+    <form method="get" action="" class="row" style="gap:0.5rem;padding:0.75rem">
+      <input type="hidden" name="tab" value="backups">
+      <input class="input" style="flex:1;min-width:0" type="search" name="rm_search" value="{{ rm_search }}" placeholder="{{ trans('filament-tables::table.search.placeholder') }}">
+      <button class="btn btn-gray btn-sm" type="submit">{{ trans('filament-tables::table.search.label') }}</button>
+    </form>
+    {% if rm_rows | length %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr>
+          <th>{{ server_col_label }}</th>
+          <th>{{ trans('server/backup.actions.create.name') }}</th>
+          <th>{{ trans('server/backup.size') }}</th>
+          <th><a href="{{ created_at_sort_url }}">{% if rm_dir == 'desc' %}{% set sort_icon = 'arrow-down' %}{% elif rm_dir == 'asc' %}{% set sort_icon = 'arrow-up' %}{% else %}{% set sort_icon = 'arrows-sort' %}{% endif %}{{ icon(sort_icon, 'icon-sm') }}{{ rm_created_label }}</a></th>
+          <th>{{ trans('server/backup.status') }}</th>
+          <th class="wide-only">{{ trans('server/backup.is_locked') }}</th>
+        </tr></thead>
+        <tbody>
+          {% for r in rm_rows %}
+          <tr>
+            <td>{% if r.server_url %}<a href="{{ r.server_url }}" hx-boost="false">{{ r.server_name }}</a>{% else %}{{ r.server_name }}{% endif %}</td>
+            <td>{{ r.name }}</td>
+            <td>{{ r.bytes | bytes }}</td>
+            <td>{{ r.created_at }}</td>
+            <td><span class="badge badge-{{ r.status_color }}">{{ r.status }}</span></td>
+            <td class="wide-only">{{ icon('lock' if r.locked else 'lock-open', 'gray') }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if rm_prev or rm_next %}
+    <nav class="pagination" aria-label="{{ trans('filament::components/pagination.label') }}">
+      {% if rm_prev %}<a href="{{ rm_prev }}" hx-boost="false" aria-label="{{ trans('filament::components/pagination.actions.previous.label') }}">{{ icon('chevron-left', 'icon-sm') }}</a>{% else %}<span class="disabled">{{ icon('chevron-left', 'icon-sm') }}</span>{% endif %}
+      {% if rm_next %}<a href="{{ rm_next }}" hx-boost="false" aria-label="{{ trans('filament::components/pagination.actions.next.label') }}">{{ icon('chevron-right', 'icon-sm') }}</a>{% else %}<span class="disabled">{{ icon('chevron-right', 'icon-sm') }}</span>{% endif %}
+    </nav>
+    {% endif %}
+    {% else %}
+    <div class="empty">
+      <div class="icon-wrap">{{ icon(empty_icon, 'icon-lg') }}</div>
+      <h3>{{ empty_heading }}</h3>
+      <p class="muted small">{{ empty_description }}</p>
+    </div>
+    {% endif %}
+  </div>
+  </section>
+  {% endif %}
+</div>
+
+{% if can_delete %}
+<form id="delete-form" method="post" action="{{ delete_action }}"
+  data-confirm="{{ trans('filament-actions::modal.confirmation') }}"
+  data-confirm-title="{{ trans('filament-actions::delete.single.modal.heading', label=record_name) }}"
+  data-confirm-ok="{{ trans('filament-actions::delete.single.modal.actions.delete.label') }}"></form>
+{% endif %}
+{% endblock %}
+
+{# htmx fragment target of POST /admin/backup-hosts/configuration. #}
+{% block configuration %}
+{% include "admin/backup_hosts/_configuration.html" %}
+{% endblock %}

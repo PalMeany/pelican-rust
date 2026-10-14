@@ -65,6 +65,7 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/roles/{id}", get(view))
         .route("/admin/roles/{id}/edit", get(edit_form).post(update))
         .route("/admin/roles/{id}/delete", post(delete))
+        .route("/admin/roles/bulk-delete", post(bulk_delete))
 }
 
 /// `(model, form field)` pairs of every permission section, in
@@ -243,7 +244,19 @@ async fn index(admin: Admin) -> WebResult {
         } else if can_view {
             row.actions.push(Action::link(admin.t("filament-actions::view.single.label"), "eye", url));
         }
+        // `checkIfRecordIsSelectableUsing`: Root Admin and roles held by users.
+        let users = c.users.get(&r.id.0).copied().unwrap_or(0);
+        if admin.can("delete role") && (users >= 1 || r.name == ROOT_ADMIN) {
+            row.unselectable = true;
+        }
         table.rows.push(row);
+    }
+    if admin.can("delete role") {
+        table.bulk.push(
+            Action::post(admin.t("filament-actions::delete.multiple.label"), "trash", "/admin/roles/bulk-delete")
+                .color("danger")
+                .confirm(admin.t("filament-actions::modal.confirmation")),
+        );
     }
     table.empty_icon = "users-group".into();
     table.empty_heading = t("no_roles");
@@ -637,20 +650,47 @@ async fn update(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
     Ok(admin.redirect(&format!("/admin/roles/{id}/edit")))
 }
 
-/// `DELETE` (header DeleteAction): blocked for Root Admin or roles in use,
-/// pivots detached like spatie's deleting hook before removing the row.
+/// Header DeleteAction: blocked for Root Admin or roles in use, pivots
+/// detached like spatie's deleting hook before removing the row.
 async fn delete(admin: Admin, Path(id): Path<i64>) -> WebResult {
     admin.authorize("delete role")?;
-    let role = find_role(&admin, id).await?;
+    match delete_one(&admin, id).await? {
+        Ok(()) => {
+            admin.flash_success(admin.t("filament-actions::delete.single.notifications.deleted.title"));
+            Ok(admin.redirect("/admin/roles"))
+        }
+        Err(msg) => {
+            admin.flash_danger(msg, None);
+            Ok(admin.redirect(&format!("/admin/roles/{id}/edit")))
+        }
+    }
+}
+
+/// `DeleteBulkAction('exclude_bulk_delete')`.
+async fn bulk_delete(admin: Admin, form: Form) -> WebResult {
+    admin.authorize("delete role")?;
+    let ids = super::bulk_ids(&form);
+    let mut failed = 0;
+    for id in &ids {
+        if !matches!(delete_one(&admin, *id).await, Ok(Ok(()))) {
+            failed += 1;
+        }
+    }
+    super::bulk_delete_notify(&admin, ids.len(), failed);
+    Ok(admin.redirect(&form.back("/admin/roles")))
+}
+
+/// Role deletion (spatie `deleting` hooks): refused for Root Admin or while
+/// users hold the role.
+async fn delete_one(admin: &Admin, id: i64) -> Result<Result<(), String>, WebError> {
+    let role = find_role(admin, id).await?;
     let users =
         model_has_roles::Entity::find().filter(model_has_roles::Column::RoleId.eq(Int(id))).count(&admin.st.db).await?;
     if role.name == ROOT_ADMIN {
-        admin.flash_danger(admin.t("admin/role.root_admin_delete"), None);
-        return Ok(admin.redirect(&format!("/admin/roles/{id}/edit")));
+        return Ok(Err(admin.t("admin/role.root_admin_delete")));
     }
     if users >= 1 {
-        admin.flash_danger(admin.t("admin/role.in_use"), None);
-        return Ok(admin.redirect(&format!("/admin/roles/{id}/edit")));
+        return Ok(Err(admin.t("admin/role.in_use")));
     }
     let txn = admin.st.db.begin().await?;
     let b = txn.get_database_backend();
@@ -659,8 +699,7 @@ async fn delete(admin: Admin, Path(id): Path<i64>) -> WebResult {
     txn.execute_raw(raw::stmt(b, "delete from {node_role} where {role_id} = ?", vec![id.into()])).await?;
     roles::Entity::delete_by_id(role.id).exec(&txn).await?;
     txn.commit().await?;
-    admin.flash_success(admin.t("filament-actions::delete.single.notifications.deleted.title"));
-    Ok(admin.redirect("/admin/roles"))
+    Ok(Ok(()))
 }
 
 #[cfg(test)]
