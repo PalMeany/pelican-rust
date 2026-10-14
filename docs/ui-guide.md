@@ -30,6 +30,17 @@
   строки: `form.back("/admin/x")` (таблица кладёт `_back`).
 - Ошибки: `WebError::{NotFound, Forbidden, Unprocessable, Internal}`, `?` для `DbErr`. Без `unwrap()`.
 
+## Панель сервера (`src/server/mod.rs`)
+- Экстрактор `ServerPanel` (путь `/server/{server}/…`, `{server}` = `uuid_short`): `p.server`, `p.node`,
+  `p.user`, `p.can("file.read")` / `p.authorize("backup.create")?` — права сабюзера (`SubuserPermission` оригинала;
+  владелец и админы с `update server` имеют все), `p.conflict()` (`isInConflictState()`), `p.allocation().await?`.
+- Рендер: `p.page("<slug>", "server/<x>.html", context!{...})` — сайдбар панели сервера (slug пункта навигации:
+  `files`, `backups`, `schedules`, `users`, `databases`, `network`, `activity`, `mounts`, `startup`, `settings`, `webhooks`),
+  баннер конфликтного состояния, меню пользователя. Ссылки внутри панели — от `p.base_url()`.
+- Логика уже реализована для Client API в `crates/pelican-api/src/client/*.rs` (+ клиент Wings `pelican_wings`):
+  вызывай её функции (сделай `pub`, если нужно, сохранив поведение API — по ним идут диф-тесты), а не HTTP.
+  Активити — как в Client API (`server:*` события, субъект — сервер).
+
 ## Списки (`src/table.rs`, `templates/components/table.html`)
 1. `let p = ListParams::parse(admin.query.as_deref(), &[10, 25, 50, 0], 10);` (0 = «All»).
 2. Свой SQL (sea-orm или `pelican_db::raw::stmt(b, "select … from {t} where {col} = ?", vals)` — `{ident}` квотируется
