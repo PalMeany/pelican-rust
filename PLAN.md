@@ -179,7 +179,7 @@ Application API → UI → плагины → PHP-sidecar.
    - [ ] Полный диф-тест m8 на 4 СУБД → слияние m8 в main, push
    - [ ] Включить пропущенные smoke-сценарии (`smoke/client-unauthenticated`, `smoke/application-unauthenticated`)
 2. Функциональный паритет
-   - [~] CLI как `php artisan p:*` (каркас + p:user:* готовы; node/server/info, environment, egg/maintenance/plugin — воркеры): user (make/delete/disable2fa), node (make/list/configuration), environment
+   - [~] CLI как `php artisan p:*` (готовы: каркас, p:user:*, p:environment:*, p:redis:setup; воркеры: node/server/info, egg/maintenance/plugin): user (make/delete/disable2fa), node (make/list/configuration), environment
          (setup/database/mail/cache/session/queue/queue-service), redis:setup, info, server:bulk-power,
          egg (check-updates/update-index/normalize), maintenance (clean-service-backups/prune-backups/prune-images),
          plugin (list/install/update/uninstall/disable/composer/make), schedule:process; имена и опции как в оригинале
