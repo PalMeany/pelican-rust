@@ -165,7 +165,7 @@ Application API → UI → плагины → PHP-sidecar.
 - [~] Server features: listeners плагинов в конфиг Wings — готово; модалки на консоли (встроенные eula/java/gsl/pid/steam + плагинные) — воркер B5
 - [x] Возможность `api`: собственный application-ключ плагина (виден в админке), обычный конвейер Application API
 - [ ] События моделей `eloquent.*` (общая шина с вебхуками — хвост M5)
-- [ ] Документация для авторов плагинов (docs/plugins.md), `p:plugin:make`-аналог
+- [x] Документация для авторов плагинов (docs/plugins.md); шаблон — examples/plugins/hello
 
 ### M8 (после MVP) — PHP-sidecar для оригинальных плагинов
 - [ ] Дизайн (ADR): процесс PHP с урезанным Laravel, мост событий/рендеринга
