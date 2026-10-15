@@ -12,7 +12,7 @@ static STORE: LazyLock<Mutex<HashMap<String, (Instant, Value)>>> = LazyLock::new
 /// Keys [`remember_swr`] is refreshing in the background.
 static REFRESHING: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
 /// How long past its TTL [`remember_swr`] still shows a value while fetching a new one.
-const STALE_GRACE: Duration = Duration::from_secs(300);
+const STALE_GRACE: Duration = Duration::from_secs(3600);
 
 /// The value under `key` and whether it is past its TTL (but within [`STALE_GRACE`]).
 fn lookup(key: &str) -> Option<(Value, bool)> {
