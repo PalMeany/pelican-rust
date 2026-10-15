@@ -34,3 +34,21 @@ next to the share of successful responses, so a panel answering errors fast does
 
 Results depend on the host; compare runs made on the same machine. Optimizations are checked by re-running
 the stand and the differential tests (`scripts/difftest --backend all`).
+
+## On a shared Linux server
+
+The scripts run against the local Docker when `limactl` is absent. On a machine that also runs other
+workloads (e.g. Wings with game servers), pin everything of the stand to a few whole cores and lower its CPU
+weight, so the rest of the machine is not disturbed and the measurements are not either:
+
+```bash
+PELICAN_CPUSET=12-15,28-31 \
+BENCH_CPUSET_DB=12,28 BENCH_CPUSET_PANEL=13,29 BENCH_CPUSET_LOAD=14,15,30,31 \
+  bench/run.sh
+```
+
+`PELICAN_CPUSET` applies to the release build and the seeding (`scripts/cargo`, also used by
+`scripts/difftest`); the other three pin the database, the measured panel and the load generator (here each
+gets its own physical core(s): CPU `n` and `n+16` are the two threads of one core on that machine, see
+`lscpu -e`). The stand publishes no ports; everything is in the `pelican-bench` compose project and its
+network, and `docker compose -p pelican-bench down -v` removes it.

@@ -72,10 +72,12 @@ pub async fn list(
         q = q.limit(p.per_page as u64).offset(((p.current_page - 1) * p.per_page) as u64);
     }
     let rows = if total > 0 { q.all(&st.db).await? } else { Vec::new() };
-    let mut data = Vec::with_capacity(rows.len());
-    for s in rows {
-        let uuid = s.uuid.clone();
-        let (settings, pc) = server_config::render(&st.db, s, st.config.use_binary_prefix).await.map_err(config_err)?;
+    // `with(['allocations', 'egg', 'mounts'])` (ServerDetailsController::list).
+    let bundles = server_config::ServerBundle::load_many(&st.db, rows).await.map_err(config_err)?;
+    let mut data = Vec::with_capacity(bundles.len());
+    for b in bundles {
+        let uuid = b.server.uuid.clone();
+        let (settings, pc) = server_config::render_bundle(&b, st.config.use_binary_prefix).map_err(config_err)?;
         // JsonResource::filter() re-indexes PHP arrays with all-numeric keys (§3.9);
         // `configs` entries contain stdClass values that are left alone.
         let mut pc = pc;

@@ -4,7 +4,9 @@
 
 use pelican_db::entities::{allocations, egg_variables, eggs, mounts, servers};
 use pelican_db::raw;
-use sea_orm::{ConnectionTrait, DbErr, EntityTrait, FromQueryResult};
+use std::collections::HashMap;
+
+use sea_orm::{ColumnTrait, ConnectionTrait, DbErr, EntityTrait, FromQueryResult, QueryFilter};
 use serde_json::{Map, Value, json};
 
 /// A PHP error that the original turns into a 500 (`code` = class basename).
@@ -69,22 +71,7 @@ impl ServerBundle {
             None => None,
         };
         let backend = db.get_database_backend();
-        // Server::variables(): HasMany + leftJoin, no ORDER BY (natural DB order).
-        let rows = db
-            .query_all_raw(raw::stmt(
-                backend,
-                "select {egg_variables}.*, {server_variables.variable_value} as {server_value} from {egg_variables} \
-                 left join {server_variables} on {server_variables.variable_id} = {egg_variables.id} \
-                 and {server_variables.server_id} = ? where {egg_variables.egg_id} = ? and {egg_variables.egg_id} is not null",
-                vec![server.id.into(), server.egg_id.into()],
-            ))
-            .await?;
-        let mut variables = Vec::with_capacity(rows.len());
-        for r in rows {
-            let v = egg_variables::Model::from_query_result(&r, "")?;
-            let sv: Option<String> = r.try_get("", "server_value")?;
-            variables.push((v, sv));
-        }
+        let variables = variables(db, &server).await?;
         let allocation = match server.allocation_id {
             Some(id) => allocations::Entity::find_by_id(id).one(db).await?,
             None => None,
@@ -108,6 +95,107 @@ impl ServerBundle {
         Ok(ServerBundle { server, egg, config_from, variables, allocation, allocations, mounts })
     }
 
+    /// The bundles of a page of servers (Remote API server list), loaded the way the
+    /// original's `with(['allocations', 'egg', 'mounts'])` does: one `whereIn` query per
+    /// relation; `variables` stay per server (`ServerDetailsController::list`: its join
+    /// needs the server's id). Fails like [`ServerBundle::load`] at the first server
+    /// without an egg.
+    pub async fn load_many<C: ConnectionTrait>(
+        db: &C,
+        servers: Vec<servers::Model>,
+    ) -> Result<Vec<ServerBundle>, ConfigError> {
+        if servers.is_empty() {
+            return Ok(Vec::new());
+        }
+        let backend = db.get_database_backend();
+        let ids: Vec<i64> = servers.iter().map(|s| s.id.0).collect();
+        let distinct = |it: &mut dyn Iterator<Item = i64>| {
+            let mut v: Vec<i64> = it.collect();
+            v.sort_unstable();
+            v.dedup();
+            v
+        };
+
+        let egg_ids = distinct(&mut servers.iter().map(|s| s.egg_id.0));
+        let eggs_by_id: HashMap<i64, eggs::Model> = eggs::Entity::find()
+            .filter(eggs::Column::Id.is_in(egg_ids))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|e| (e.id.0, e))
+            .collect();
+        let parent_ids = distinct(
+            &mut eggs_by_id
+                .values()
+                .filter_map(|e| e.config_from.map(|c| c.0))
+                .filter(|id| !eggs_by_id.contains_key(id)),
+        );
+        let parents: HashMap<i64, eggs::Model> = if parent_ids.is_empty() {
+            HashMap::new()
+        } else {
+            eggs::Entity::find()
+                .filter(eggs::Column::Id.is_in(parent_ids))
+                .all(db)
+                .await?
+                .into_iter()
+                .map(|e| (e.id.0, e))
+                .collect()
+        };
+
+        let primary_ids = distinct(&mut servers.iter().filter_map(|s| s.allocation_id.map(|a| a.0)));
+        let primary: HashMap<i64, allocations::Model> = if primary_ids.is_empty() {
+            HashMap::new()
+        } else {
+            allocations::Entity::find()
+                .filter(allocations::Column::Id.is_in(primary_ids))
+                .all(db)
+                .await?
+                .into_iter()
+                .map(|a| (a.id.0, a))
+                .collect()
+        };
+
+        let mut allocations_of: HashMap<i64, Vec<allocations::Model>> = HashMap::new();
+        for a in allocations::Entity::find().filter(allocations::Column::ServerId.is_in(ids.clone())).all(db).await? {
+            if let Some(sid) = a.server_id {
+                allocations_of.entry(sid.0).or_default().push(a);
+            }
+        }
+
+        let marks = vec!["?"; ids.len()].join(", ");
+        let mut values: Vec<sea_orm::Value> = ids.iter().map(|id| pelican_db::Int(*id).into()).collect();
+        values.push("server".into());
+        let rows = db
+            .query_all_raw(raw::stmt(
+                backend,
+                &format!(
+                    "select {{mounts}}.*, {{mountables.mountable_id}} as {{pivot_mountable_id}} from {{mounts}} \
+                     inner join {{mountables}} on {{mounts.id}} = {{mountables.mount_id}} \
+                     where {{mountables.mountable_id}} in ({marks}) and {{mountables.mountable_type}} = ?"
+                ),
+                values,
+            ))
+            .await?;
+        let mut mounts_of: HashMap<i64, Vec<mounts::Model>> = HashMap::new();
+        for r in rows {
+            let owner: pelican_db::Int = r.try_get("", "pivot_mountable_id")?;
+            mounts_of.entry(owner.0).or_default().push(mounts::Model::from_query_result(&r, "")?);
+        }
+
+        let mut out = Vec::with_capacity(servers.len());
+        for server in servers {
+            let egg = eggs_by_id.get(&server.egg_id.0).cloned().ok_or(ConfigError::Php("ErrorException"))?;
+            let config_from =
+                egg.config_from.and_then(|id| eggs_by_id.get(&id.0).or_else(|| parents.get(&id.0)).cloned());
+            let variables = variables(db, &server).await?;
+            let allocation = server.allocation_id.and_then(|id| primary.get(&id.0).cloned());
+            let allocations = allocations_of.remove(&server.id.0).unwrap_or_default();
+            let mounts = mounts_of.remove(&server.id.0).unwrap_or_default();
+            out.push(ServerBundle { server, egg, config_from, variables, allocation, allocations, mounts });
+        }
+        Ok(out)
+    }
+
     /// `Egg::inherit_config_*`: own value unless NULL and a parent exists.
     fn inherit(&self, f: impl Fn(&eggs::Model) -> Option<String>) -> Option<String> {
         match (&f(&self.egg), &self.egg.config_from, &self.config_from) {
@@ -117,6 +205,30 @@ impl ServerBundle {
             (None, Some(_), None) => None,
         }
     }
+}
+
+/// `Server::variables()`: egg variables with the server's value (HasMany + leftJoin, no
+/// ORDER BY: natural DB order).
+async fn variables<C: ConnectionTrait>(
+    db: &C,
+    server: &servers::Model,
+) -> Result<Vec<(egg_variables::Model, Option<String>)>, ConfigError> {
+    let rows = db
+        .query_all_raw(raw::stmt(
+            db.get_database_backend(),
+            "select {egg_variables}.*, {server_variables.variable_value} as {server_value} from {egg_variables} \
+             left join {server_variables} on {server_variables.variable_id} = {egg_variables.id} \
+             and {server_variables.server_id} = ? where {egg_variables.egg_id} = ? and {egg_variables.egg_id} is not null",
+            vec![server.id.into(), server.egg_id.into()],
+        ))
+        .await?;
+    let mut out = Vec::with_capacity(rows.len());
+    for r in rows {
+        let v = egg_variables::Model::from_query_result(&r, "")?;
+        let sv: Option<String> = r.try_get("", "server_value")?;
+        out.push((v, sv));
+    }
+    Ok(out)
 }
 
 /// `json_decode($v, true)` + later `json_encode`: objects whose keys are
@@ -449,8 +561,12 @@ pub async fn render<C: ConnectionTrait>(
     server: servers::Model,
     use_binary_prefix: bool,
 ) -> Result<(Value, Value), ConfigError> {
-    let b = ServerBundle::load(db, server).await?;
-    let settings = structure(&b, use_binary_prefix);
-    let pc = process_configuration(&b, &settings)?;
+    render_bundle(&ServerBundle::load(db, server).await?, use_binary_prefix)
+}
+
+/// `settings` and `process_configuration` of a loaded bundle.
+pub fn render_bundle(b: &ServerBundle, use_binary_prefix: bool) -> Result<(Value, Value), ConfigError> {
+    let settings = structure(b, use_binary_prefix);
+    let pc = process_configuration(b, &settings)?;
     Ok((settings, pc))
 }
