@@ -45,6 +45,23 @@ const BRIDGE_FILES: &[(&str, &str)] = &[
 /// Paths of the Filament/Livewire front end the sidecar's pages load.
 const ASSET_PREFIXES: &[&str] = &["/build/", "/css/", "/js/", "/fonts/", "/vendor/"];
 
+/// After a failed call events are not forwarded for a while: an unreachable sidecar must
+/// not hold up every write by a connect timeout. User actions still try.
+static DOWN_UNTIL: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+const DOWN_FOR: i64 = 30;
+
+fn unix_now() -> i64 {
+    pelican_core::time::now().and_utc().timestamp()
+}
+
+fn mark_down() {
+    DOWN_UNTIL.store(unix_now() + DOWN_FOR, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn is_down() -> bool {
+    DOWN_UNTIL.load(std::sync::atomic::Ordering::Relaxed) > unix_now()
+}
+
 /// Sidecar connection settings (`PANEL_PHP_SIDECAR=<base url>`).
 #[derive(Clone)]
 pub struct Sidecar {
@@ -118,7 +135,13 @@ impl Sidecar {
         for (k, v) in self.signature(method.as_str(), path, None, &bytes) {
             req = req.header(k, v);
         }
-        let resp = req.body(bytes).send().await.map_err(|e| fail(format!("sidecar: {e}")))?;
+        let resp = match req.body(bytes).send().await {
+            Ok(r) => r,
+            Err(e) => {
+                mark_down();
+                return Err(fail(format!("sidecar: {e}")));
+            }
+        };
         let status = resp.status().as_u16();
         let value = resp.json::<Value>().await.unwrap_or(Value::Null);
         Ok((status, value))
@@ -340,6 +363,10 @@ pub fn listens(event: &str) -> bool {
 pub async fn event(st: &AppState, event: &str, body: Value) {
     let Some(sc) = get(st) else { return };
     if !listens(event) {
+        return;
+    }
+    if is_down() {
+        tracing::debug!(event, "sidecar unavailable: event not forwarded");
         return;
     }
     match sc.call(reqwest::Method::POST, "/_bridge/event", Some(&body)).await {
