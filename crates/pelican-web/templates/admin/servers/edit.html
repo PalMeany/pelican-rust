@@ -92,14 +92,7 @@
         </select></div>
       {{ f.text('image', trans(S ~ '.image'), s.image, errors, required=true, placeholder=trans(S ~ '.image_placeholder')) }}
     </div>
-    <div class="field"><span class="field-label">{{ trans(S ~ '.container_labels') }}</span>
-      <div class="stack" data-kv>
-        {% for l in labels + [['', '']] %}
-        <div class="grid grid-2" data-kv-row><input class="input" name="label_key[]" value="{{ l[0] }}" placeholder="{{ trans(S ~ '.title') }}"><input class="input" name="label_value[]" value="{{ l[1] }}" placeholder="{{ trans(S ~ '.description') }}"></div>
-        {% endfor %}
-      </div>
-      <div><button type="button" class="btn btn-sm btn-gray" data-kv-add>{{ icon('plus', 'icon-sm') }}</button></div>
-    </div>
+    {{ f.kv('label_key[]', 'label_value[]', trans(S ~ '.container_labels'), labels, errors, key_label=trans(S ~ '.title'), value_label=trans(S ~ '.description')) }}
   </fieldset>
 </section>
 

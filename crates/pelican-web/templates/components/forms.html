@@ -151,13 +151,16 @@
     {% if label %}<label>{{ label }}{% if required %}<span class="req">*</span>{% endif %}</label>{% endif %}
     {% if reset is not none and not disabled %}<button type="button" class="btn-link danger" data-kv-reset='{{ reset | tojson }}'>{{ icon('trash', 'icon-sm') }}{{ reset_label }}</button>{% endif %}
   </div>{% endif %}
-  <div class="kv-grid muted small"><span>{{ key_label or trans('filament-forms::components.key_value.fields.key.label') }}</span><span>{{ value_label or trans('filament-forms::components.key_value.fields.value.label') }}</span><span></span></div>
-  <div class="stack" data-kv>{% for r in (rows or [['', '']]) %}<div class="kv-grid" data-kv-row>
+  {# Filament KeyValue: a framed table, the add action centred under it. #}
+  <div class="kv-table">
+  <div class="kv-grid kv-head"><span>{{ key_label or trans('filament-forms::components.key_value.fields.key.label') }}</span><span>{{ value_label or trans('filament-forms::components.key_value.fields.value.label') }}</span><span></span></div>
+  <div data-kv>{% for r in (rows or [['', '']]) %}<div class="kv-grid" data-kv-row>
     <input class="input" name="{{ key_name }}" value="{{ r[0] }}"{% if disabled %} disabled{% endif %}>
     <input class="input{% if mono_value %} mono{% endif %}" name="{{ value_name }}" value="{{ r[1] }}"{% if disabled %} disabled{% endif %}>
     {% if not disabled %}<button type="button" class="icon-btn danger" data-kv-remove title="{{ trans('filament-forms::components.key_value.actions.delete.label') }}">{{ icon('trash', 'icon-sm') }}</button>{% else %}<span></span>{% endif %}
   </div>{% endfor %}</div>
-  {% if not disabled %}<div><button type="button" class="btn btn-sm btn-gray" data-kv-add>{{ icon('plus', 'icon-sm') }}{{ add_label or trans('filament-forms::components.key_value.actions.add.label') }}</button></div>{% endif %}
+  {% if not disabled %}<div class="kv-foot"><button type="button" class="btn-link" data-kv-add>{{ add_label or trans('filament-forms::components.key_value.actions.add.label') }}</button></div>{% endif %}
+  </div>
   {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
   {{ error(errors, error_name) }}
 </div>
