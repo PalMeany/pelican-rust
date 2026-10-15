@@ -7,7 +7,10 @@ use axum::Router;
 use axum::extract::Path;
 use axum::routing::{get, post};
 use minijinja::{Value as Mj, context};
-use pelican_api::validation::{CustomRule, Validator};
+use pelican_api::{
+    model_events,
+    validation::{CustomRule, Validator},
+};
 use pelican_core::state::AppState;
 use pelican_db::entities::{eggs, mountables, mounts, nodes};
 use pelican_db::{Int, SmallBool, raw};
@@ -401,6 +404,8 @@ async fn create(admin: Admin, form: Form) -> WebResult {
     let nodes: Vec<i64> = parse_ids(&data.nodes).into_iter().filter(|n| admin.user.can_target_node(*n)).collect();
     sync(&txn, id, "node", &nodes).await?;
     txn.commit().await?;
+    // CreateRecord → `Mount::create($data)`.
+    model_events::fire_id::<mounts::Entity>(&admin.st, model_events::Action::Created, id).await;
     admin.flash_success(admin.t("filament-panels::resources/pages/create-record.notifications.created.title"));
     Ok(admin.redirect(&format!("/admin/mounts/{id}/edit")))
 }
@@ -424,11 +429,22 @@ async fn update(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
         user_mountable: Set(SmallBool(data.user_mountable)),
         ..Default::default()
     };
+    // EditRecord → `$record->update($data)`; the event fires only when a
+    // column actually changed (Eloquent isDirty — no updated_at bump here).
+    let changed = data.name != m.name
+        || (!data.description.is_empty()).then(|| data.description.clone()) != m.description
+        || data.source != m.source
+        || data.target != m.target
+        || SmallBool(data.read_only) != m.read_only
+        || SmallBool(data.user_mountable) != m.user_mountable;
     pelican_db::write::update(&txn, &am).await?;
     sync(&txn, id, "egg", &parse_ids(&data.eggs)).await?;
     let nodes: Vec<i64> = parse_ids(&data.nodes).into_iter().filter(|n| admin.user.can_target_node(*n)).collect();
     sync(&txn, id, "node", &nodes).await?;
     txn.commit().await?;
+    if changed {
+        model_events::fire_id::<mounts::Entity>(&admin.st, model_events::Action::Updated, id).await;
+    }
     admin.flash_success(admin.t("filament-panels::resources/pages/edit-record.notifications.saved.title"));
     Ok(admin.redirect(&format!("/admin/mounts/{id}/edit")))
 }
@@ -482,5 +498,7 @@ async fn delete_one(admin: &Admin, id: i64) -> Result<Result<(), String>, WebErr
     .await?;
     mounts::Entity::delete_by_id(m.id).exec(&txn).await?;
     txn.commit().await?;
+    // DeleteAction / DeleteBulkAction → `$record->delete()` per mount.
+    model_events::deleted(&admin.st, &m).await;
     Ok(Ok(()))
 }

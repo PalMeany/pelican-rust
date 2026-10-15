@@ -24,6 +24,7 @@ use pelican_api::client::schedules as api;
 use pelican_api::error::{ApiError, Kind as ApiKind};
 use pelican_api::input::{In, Input};
 use pelican_api::jobs::next_run_date;
+use pelican_api::model_events;
 use pelican_api::pipeline::Ctx;
 use pelican_api::services::LogActivity;
 use pelican_api::validation::Validator;
@@ -617,6 +618,7 @@ async fn import_one(p: &ServerPanel, src: ImportSource) -> Result<(), String> {
     .await
     .map_err(|e| e.to_string())?;
 
+    let mut created_tasks: Vec<tasks::Model> = Vec::new();
     for task in v("tasks").and_then(|x| x.as_array().cloned()).unwrap_or_default() {
         let num = |k: &str, default: i64| -> i64 {
             match task.get(k) {
@@ -625,7 +627,7 @@ async fn import_one(p: &ServerPanel, src: ImportSource) -> Result<(), String> {
                 _ => default,
             }
         };
-        pelican_db::write::insert(
+        let t = pelican_db::write::insert(
             &txn,
             tasks::ActiveModel {
                 schedule_id: Set(created.id),
@@ -643,11 +645,19 @@ async fn import_one(p: &ServerPanel, src: ImportSource) -> Result<(), String> {
         )
         .await
         .map_err(|e| e.to_string())?;
+        created_tasks.push(t);
     }
     pelican_api::jobs::touch_schedule(&txn, created.id.0)
         .await
         .map_err(|e| e.errors.first().map(|o| o.detail.clone()).unwrap_or_else(|| e.status.to_string()))?;
-    txn.commit().await.map_err(|e| e.to_string())
+    txn.commit().await.map_err(|e| e.to_string())?;
+    // After the transaction: ScheduleImporterService → `Schedule::create` and
+    // `Task::create` per task (created events).
+    model_events::created(&p.st, &created).await;
+    for t in &created_tasks {
+        model_events::created(&p.st, t).await;
+    }
+    Ok(())
 }
 
 fn s_via(v: &serde_json::Value, k: &str) -> String {
@@ -1233,6 +1243,8 @@ async fn create_submit(p: ServerPanel, form: Form) -> WebResult<Response> {
         ..Default::default()
     };
     let created = pelican_db::write::insert(&p.st.db, am).await?;
+    // CreateRecord → `Schedule::create($data)` (created event; no transaction).
+    model_events::created(&p.st, &created).await;
     log_act(
         &p,
         "server:schedule.create",
@@ -1328,6 +1340,9 @@ async fn edit_submit(p: ServerPanel, RecordId(id): RecordId, form: Form) -> WebR
     if dirty {
         am.updated_at = Set(Some(Timestamp(pelican_core::time::now())));
         pelican_db::write::update(&p.st.db, &am).await?;
+        // Dirty-update semantics (Client API `$schedule->update(...)` / EditRecord):
+        // the `dirty` guard matches Eloquent isDirty.
+        model_events::fire_id::<schedules::Entity>(&p.st, model_events::Action::Updated, id).await;
     }
     log_act(
         &p,
@@ -1654,6 +1669,9 @@ async fn task_move(
         let a = &rows[pos];
         let now = Timestamp(pelican_core::time::now());
         let txn = p.st.db.begin().await?;
+        // Filament reorderable table → `$record->save()` per moved row (updated
+        // event when the sequence actually changes).
+        let mut seq_changed = Vec::new();
         for pair in [(a.id.0, other.sequence_id), (other.id.0, a.sequence_id)] {
             tasks::Entity::update_many()
                 .col_expr(tasks::Column::SequenceId, sea_orm::sea_query::Expr::value(pair.1))
@@ -1661,11 +1679,17 @@ async fn task_move(
                 .filter(tasks::Column::Id.eq(pair.0))
                 .exec(&txn)
                 .await?;
+            if Some(pair.1) != rows.iter().find(|t| t.id.0 == pair.0).map(|t| t.sequence_id) {
+                seq_changed.push(pair.0);
+            }
         }
         pelican_api::jobs::touch_schedule(&txn, s.id.0)
             .await
             .map_err(|e| WebError::internal(e.errors.first().map(|o| o.detail.as_str()).unwrap_or("QueryException")))?;
         txn.commit().await?;
+        for tid in &seq_changed {
+            model_events::fire_id::<tasks::Entity>(&p.st, model_events::Action::Updated, *tid).await;
+        }
         log_act(
             &p,
             "server:task.update",

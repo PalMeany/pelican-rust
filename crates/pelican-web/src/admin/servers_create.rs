@@ -9,8 +9,11 @@ use axum::http::{HeaderValue, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use minijinja::{Value as Mj, context};
-use pelican_api::binding::Bound;
-use pelican_api::validation::{CustomRule, Validator};
+use pelican_api::{
+    binding::Bound,
+    model_events,
+    validation::{CustomRule, Validator},
+};
 use pelican_core::state::AppState;
 use pelican_db::entities::{allocations, eggs, nodes, server_variables, servers, users};
 use pelican_db::{Bool, Int, Json, SmallBool, Timestamp, raw};
@@ -372,8 +375,11 @@ async fn store(admin: Admin, form: Form) -> WebResult {
     pelican_api::services::server_saved(st, &ctx, &txn, &created)
         .await
         .map_err(|e| WebError::internal(format!("{e:?}")))?;
+    let mut alloc_updated: Vec<i64> = Vec::new();
     for a in &usable {
-        pelican_db::write::update(
+        // ServerCreationService: `Allocation::query()->…->get()->each(fn ($a) =>
+        // $a->save())` — per-instance saves (updated events).
+        if pelican_db::write::update(
             &txn,
             &allocations::ActiveModel {
                 id: sea_orm::ActiveValue::Unchanged(a.id),
@@ -383,12 +389,17 @@ async fn store(admin: Admin, form: Form) -> WebResult {
                 ..Default::default()
             },
         )
-        .await?;
+        .await?
+        {
+            alloc_updated.push(a.id.0);
+        }
     }
     let values: HashMap<i64, String> =
         vars.iter().map(|f| (f.id, form.get(&format!("var_{}", f.id)).to_string())).collect();
+    let mut var_created: Vec<i64> = Vec::new();
     for f in &vars {
-        pelican_db::write::insert_id(
+        // `storeEggVariables`: `$server->serverVariables()->forceCreate([...])`.
+        if let Some(new_id) = pelican_db::write::insert_id(
             &txn,
             &server_variables::ActiveModel {
                 server_id: Set(created.id),
@@ -399,7 +410,10 @@ async fn store(admin: Admin, form: Form) -> WebResult {
                 ..Default::default()
             },
         )
-        .await?;
+        .await?
+        {
+            var_created.push(new_id);
+        }
     }
     let allowed: Vec<i64> = mount_options(&admin, node.id.0, egg.id.0).await?.into_iter().map(|m| m.id.0).collect();
     let b = txn.get_database_backend();
@@ -412,6 +426,15 @@ async fn store(admin: Admin, form: Form) -> WebResult {
         .await?;
     }
     txn.commit().await?;
+    // ServerCreationService events (order: `Server::create`, allocation saves,
+    // variable forceCreates; the mounts pivot fires nothing).
+    model_events::fire_id::<servers::Entity>(st, model_events::Action::Created, id).await;
+    for aid in alloc_updated {
+        model_events::fire_id::<allocations::Entity>(st, model_events::Action::Updated, aid).await;
+    }
+    for vid in var_created {
+        model_events::fire_id::<server_variables::Entity>(st, model_events::Action::Created, vid).await;
+    }
 
     // Create on Wings; a connection failure rolls the server back (force delete).
     let start = form.get("start_on_completion") == "1";

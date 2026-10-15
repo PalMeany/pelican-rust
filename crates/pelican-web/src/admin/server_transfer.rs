@@ -5,6 +5,7 @@ use axum::Router;
 use axum::extract::Path;
 use axum::routing::get;
 use minijinja::{Value as Mj, context};
+use pelican_api::model_events;
 use pelican_core::state::AppState;
 use pelican_db::entities::{allocations, backup_hosts, backups, nodes, servers};
 use pelican_db::raw;
@@ -166,18 +167,22 @@ async fn transfer(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
     .await;
     match result {
         Ok(()) => {
-            // Wings backups that are not transferred are only removed from the panel.
-            let drop: Vec<i64> =
-                c.wings_backups.iter().filter(|b| !selected.contains(&b.uuid)).map(|b| b.id.0).collect();
-            if !drop.is_empty() {
-                let marks = vec!["?"; drop.len()].join(", ");
+            // Wings backups that are not transferred are only removed from the
+            // panel (`$backup->delete()` per instance in the original).
+            let dropped: Vec<backups::Model> =
+                c.wings_backups.iter().filter(|b| !selected.contains(&b.uuid)).cloned().collect();
+            if !dropped.is_empty() {
+                let marks = vec!["?"; dropped.len()].join(", ");
                 st.db
                     .execute_raw(raw::stmt(
                         st.db.get_database_backend(),
                         &format!("delete from {{backups}} where {{id}} in ({marks})"),
-                        drop.iter().map(|i| sea_orm::Value::from(*i)).collect(),
+                        dropped.iter().map(|b| sea_orm::Value::from(b.id.0)).collect(),
                     ))
                     .await?;
+                for b in &dropped {
+                    model_events::deleted(st, b).await;
+                }
             }
             admin.flash_success(admin.t("admin/server.notifications.transfer_started"));
         }

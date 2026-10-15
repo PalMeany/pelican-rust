@@ -10,7 +10,7 @@ use axum::extract::Path;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use minijinja::{Value as Mj, context};
-use pelican_api::validation::Validator;
+use pelican_api::{model_events, validation::Validator};
 use pelican_core::state::AppState;
 use pelican_db::entities::{allocations, api_keys, mountables, mounts, nodes, servers};
 use pelican_db::{Bool, Int, Json, SmallBool, Timestamp, raw};
@@ -588,6 +588,8 @@ async fn create(admin: Admin, form: Form) -> WebResult {
         ..Default::default()
     };
     let id = pelican_db::write::insert_id(&st.db, &am).await?.ok_or_else(|| WebError::internal("no id"))?;
+    // CreateNode → `Node::create` (created event).
+    model_events::fire_id::<nodes::Entity>(st, model_events::Action::Created, id).await;
     admin.flash_success(admin.t("filament-panels::resources/pages/create-record.notifications.created.title"));
     Ok(admin.redirect(&format!("/admin/nodes/{id}/edit?tab=config_file")))
 }
@@ -636,8 +638,17 @@ async fn save(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
         updated_at: Set(Some(Timestamp(pelican_core::time::now()))),
         ..Default::default()
     };
-    pelican_db::write::update(&st.db, &am).await?;
-    let fresh = nodes::Entity::find_by_id(id).one(&st.db).await?.ok_or(WebError::NotFound)?;
+    // NodeUpdateService::handle → `$updated->forceFill($data)->save()` with
+    // `'updated_at' => now()` merged in, so the model is always dirty and
+    // eloquent.updated fires on every save.
+    let fresh = if pelican_db::write::update(&st.db, &am).await? {
+        let fresh = nodes::Entity::find_by_id(id).one(&st.db).await?.ok_or(WebError::NotFound)?;
+        model_events::updated(st, &fresh).await;
+        fresh
+    } else {
+        n.clone()
+    };
+
     // afterSave(): only Wings-relevant changes are pushed.
     let changed = fresh.fqdn != n.fqdn
         || fresh.scheme != n.scheme
@@ -709,7 +720,10 @@ async fn deploy_command(admin: Admin, Path(id): Path<i64>) -> Result<Response, W
                 updated_at: Set(Some(now)),
                 ..Default::default()
             };
-            pelican_db::write::insert_id(&st.db, &am).await?;
+            // NodeAutoDeployService → KeyCreationService → `ApiKey::forceCreate($data)`.
+            if let Some(kid) = pelican_db::write::insert_id(&st.db, &am).await? {
+                model_events::fire_id::<api_keys::Entity>(st, model_events::Action::Created, kid).await;
+            }
             (identifier, secret)
         }
     };
@@ -742,7 +756,9 @@ async fn action(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
                 admin.flash_danger(admin.t("admin/node.node_has_servers"), None);
                 return Ok(admin.redirect(&format!("/admin/nodes/{id}/edit")));
             }
+            // NodeDeletionService::handle → `$node->delete()`.
             nodes::Entity::delete_by_id(n.id).exec(&st.db).await?;
+            model_events::deleted(st, &n).await;
             admin.flash_success(admin.t("filament-actions::delete.single.notifications.deleted.title"));
             return Ok(admin.redirect("/admin/nodes"));
         }
@@ -775,10 +791,13 @@ async fn action(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
             match st.wings.send(&old_conn, call).await {
                 Ok(_) => {
                     txn.commit().await?;
+                    // `$updated->forceFill(...)->save()` inside the service → updated event.
+                    model_events::fire_id::<nodes::Entity>(st, model_events::Action::Updated, id).await;
                     admin.flash_success(admin.t("admin/node.token_reset"));
                 }
                 Err(pelican_wings::WingsError::Connection(_)) => {
                     txn.commit().await?;
+                    model_events::fire_id::<nodes::Entity>(st, model_events::Action::Updated, id).await;
                     warn();
                 }
                 Err(_) => {
@@ -879,34 +898,45 @@ async fn allocation_op(admin: Admin, Path((id, aid, op)): Path<(i64, i64, String
         updated_at: Set(Some(Timestamp(pelican_core::time::now()))),
         ..Default::default()
     };
+    // SelectColumn / TextInputColumn save only when the value differs from the
+    // stored one (`$record->update([...])` — updated event, otherwise untouched).
+    let st2 = &admin.st;
     match op.as_str() {
         "ip" => {
             let ip = form.get("ip").trim().to_string();
-            if ip.parse::<std::net::IpAddr>().is_ok() {
-                pelican_db::write::update(&st.db, &allocations::ActiveModel { ip: Set(ip), ..base }).await?;
+            if ip.parse::<std::net::IpAddr>().is_ok()
+                && pelican_db::write::update(&st.db, &allocations::ActiveModel { ip: Set(ip.clone()), ..base }).await?
+                && ip != a.ip
+            {
+                model_events::fire_id::<allocations::Entity>(st2, model_events::Action::Updated, aid).await;
             }
         }
         "alias" => {
             let v = form.get("ip_alias").trim().to_string();
-            pelican_db::write::update(
-                &st.db,
-                &allocations::ActiveModel { ip_alias: Set((!v.is_empty()).then_some(v)), ..base },
-            )
-            .await?;
+            let val = (!v.is_empty()).then_some(v);
+            if pelican_db::write::update(&st.db, &allocations::ActiveModel { ip_alias: Set(val.clone()), ..base })
+                .await?
+                && val != a.ip_alias
+            {
+                model_events::fire_id::<allocations::Entity>(st2, model_events::Action::Updated, aid).await;
+            }
         }
         "notes" => {
             let v = form.get("notes").trim().to_string();
-            pelican_db::write::update(
-                &st.db,
-                &allocations::ActiveModel { notes: Set((!v.is_empty()).then_some(v)), ..base },
-            )
-            .await?;
+            let val = (!v.is_empty()).then_some(v);
+            if pelican_db::write::update(&st.db, &allocations::ActiveModel { notes: Set(val.clone()), ..base }).await?
+                && val != a.notes
+            {
+                model_events::fire_id::<allocations::Entity>(st2, model_events::Action::Updated, aid).await;
+            }
         }
         "delete" => {
             if a.server_id.is_some() {
                 admin.flash_danger(admin.t("exceptions.allocations.server_using"), None);
             } else {
                 allocations::Entity::delete_by_id(a.id).exec(&st.db).await?;
+                // DeleteAction → `$record->delete()` (the row was read above).
+                model_events::deleted(st2, &a).await;
                 admin.flash_success(admin.t("filament-actions::delete.single.notifications.deleted.title"));
             }
         }
@@ -927,6 +957,8 @@ async fn allocation_bulk_delete(admin: Admin, Path(id): Path<i64>, form: Form) -
         match allocations::Entity::find_by_id(*aid).one(&st.db).await? {
             Some(a) if a.node_id == n.id && a.server_id.is_none() => {
                 allocations::Entity::delete_by_id(a.id).exec(&st.db).await?;
+                // Per-record delete (each row read before deletion).
+                model_events::deleted(st, &a).await;
             }
             _ => failed += 1,
         }

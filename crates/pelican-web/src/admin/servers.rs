@@ -8,8 +8,11 @@ use axum::Router;
 use axum::extract::Path;
 use axum::routing::{get, post};
 use minijinja::{Value as Mj, context};
-use pelican_api::binding::Bound;
-use pelican_api::validation::{CustomRule, Validator};
+use pelican_api::{
+    binding::Bound,
+    model_events,
+    validation::{CustomRule, Validator},
+};
 use pelican_core::state::AppState;
 use pelican_db::entities::{
     allocations, egg_variables, eggs, mountables, mounts, nodes, server_variables, servers, users,
@@ -272,6 +275,8 @@ async fn set_primary(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult
         allocations::Entity::find_by_id(alloc).one(&admin.st.db).await?.is_some_and(|a| a.server_id == Some(s.id));
     if owned && s.allocation_id.map(|a| a.0) != Some(alloc) {
         update_columns(&admin, id, &["allocation_id"], vec![alloc.into()]).await?;
+        // SelectColumn save → `$server->update(['allocation_id' => …])`.
+        model_events::fire_id::<servers::Entity>(&admin.st, model_events::Action::Updated, id).await;
     }
     Ok(admin.redirect(&form.back("/admin/servers")))
 }
@@ -668,8 +673,29 @@ async fn save(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
         updated_at: Set(Some(Timestamp(pelican_core::time::now()))),
         ..Default::default()
     };
+    // EditRecord → `$record->update($data)`; the event fires only when a
+    // column actually changed (Eloquent isDirty).
+    let server_changed = new.name != s.name
+        || new.owner_id != s.owner_id
+        || new.description != s.description
+        || new.external_id != s.external_id
+        || new.cpu != s.cpu
+        || new.memory != s.memory
+        || new.disk != s.disk
+        || new.swap != s.swap
+        || new.threads != s.threads
+        || new.oom_killer != s.oom_killer
+        || new.allocation_limit != s.allocation_limit
+        || new.database_limit != s.database_limit
+        || new.backup_limit != s.backup_limit
+        || new.image != s.image
+        || new.startup != s.startup
+        || new.skip_scripts != s.skip_scripts
+        || new.docker_labels != s.docker_labels;
     pelican_db::write::update(&txn, &am).await?;
     let mut vars_changed = false;
+    let mut var_created: Vec<i64> = Vec::new();
+    let mut var_updated: Vec<i64> = Vec::new();
     for f in &vars {
         let value = form.get(&format!("var_{}", f.id)).to_string();
         if value != f.value {
@@ -694,7 +720,23 @@ async fn save(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
                 updated_at: Set(Some(Timestamp(now))),
                 ..Default::default()
             };
-            pelican_db::write::insert_id(&txn, &am).await?;
+            // Repeater relationship save → `ServerVariable::create` per row.
+            if let Some(new_id) = pelican_db::write::insert_id(&txn, &am).await? {
+                var_created.push(new_id);
+            }
+        } else if value != f.value {
+            // The event needs the ServerVariable's own id, not the egg
+            // variable's (`$sv->update([...])` per repeater row).
+            match server_variables::Entity::find()
+                .filter(server_variables::Column::ServerId.eq(Int(id)))
+                .filter(server_variables::Column::VariableId.eq(Int(f.id)))
+                .one(&txn)
+                .await?
+                .map(|m| m.id.0)
+            {
+                Some(sv_id) => var_updated.push(sv_id),
+                None => continue,
+            }
         }
     }
     // Mounts (CheckboxList relationship sync).
@@ -723,6 +765,16 @@ async fn save(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
             .map_err(|e| WebError::internal(format!("{e:?}")))?;
     }
     txn.commit().await?;
+    // eloquent events (order: server, then the variable rows).
+    if server_changed {
+        model_events::fire_id::<servers::Entity>(st, model_events::Action::Updated, id).await;
+    }
+    for vid in var_updated {
+        model_events::fire_id::<server_variables::Entity>(st, model_events::Action::Updated, vid).await;
+    }
+    for vid in var_created {
+        model_events::fire_id::<server_variables::Entity>(st, model_events::Action::Created, vid).await;
+    }
     if wings_changed || vars_changed {
         if sync_wings(&admin, &new).await {
             admin.flash_success(admin.t("filament-panels::resources/pages/edit-record.notifications.saved.title"));
@@ -758,9 +810,11 @@ async fn action(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
             } else if state == Some(ServerState::Suspended) {
                 admin.flash_danger(admin.t("admin/server.notifications.install_toggle_failed"), None);
             } else {
-                // ToggleInstallService: installed → installing, otherwise → installed (null).
+                // ToggleInstallService: installed → installing, otherwise →
+                // installed (null); `$server->save()` → updated event.
                 let status: Option<String> = server_info::is_installed(&s).then(|| "installing".into());
                 update_columns(&admin, id, &["status"], vec![status.into()]).await?;
+                model_events::fire_id::<servers::Entity>(st, model_events::Action::Updated, id).await;
                 admin.flash_success(admin.t("admin/server.notifications.install_toggled"));
             }
         }
@@ -857,6 +911,7 @@ async fn change_egg(admin: &Admin, s: &servers::Model, egg_id: i64, keep: bool) 
     .await?;
     txn.execute_raw(raw::stmt(b, "delete from {server_variables} where {server_id} = ?", vec![s.id.0.into()])).await?;
     let now = Timestamp(pelican_core::time::now());
+    let mut created_vars: Vec<i64> = Vec::new();
     for v in egg_variables::Entity::find().filter(egg_variables::Column::EggId.eq(egg_id)).all(&txn).await? {
         let am = server_variables::ActiveModel {
             server_id: Set(s.id),
@@ -866,8 +921,17 @@ async fn change_egg(admin: &Admin, s: &servers::Model, egg_id: i64, keep: bool) 
             updated_at: Set(Some(now)),
             ..Default::default()
         };
-        pelican_db::write::insert_id(&txn, &am).await?;
+        if let Some(new_id) = pelican_db::write::insert_id(&txn, &am).await? {
+            created_vars.push(new_id);
+        }
     }
     txn.commit().await?;
+    // EggChangerService: `$server->forceFill([...])->saveOrFail()` (updated) and
+    // `ServerVariable::create([...])` per egg variable (created; the mass
+    // `ServerVariable::where(...)->delete()` fires nothing).
+    model_events::fire_id::<servers::Entity>(st, model_events::Action::Updated, s.id.0).await;
+    for vid in created_vars {
+        model_events::fire_id::<server_variables::Entity>(st, model_events::Action::Created, vid).await;
+    }
     Ok(())
 }

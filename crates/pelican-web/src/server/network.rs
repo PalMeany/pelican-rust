@@ -13,11 +13,10 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use minijinja::{Value as Mj, context};
-use pelican_api::binding::Bound;
-use pelican_api::client::network as api;
 use pelican_api::error::ApiError;
 use pelican_api::pipeline::Ctx;
 use pelican_api::services::{LogActivity, server_saved};
+use pelican_api::{binding::Bound, client::network as api, model_events};
 use pelican_core::activity::morph;
 use pelican_core::state::AppState;
 use pelican_db::Timestamp;
@@ -323,6 +322,19 @@ async fn add(p: ServerPanel, form: crate::forms::Form) -> WebResult<Response> {
             .await
             .map_err(|e| WebError::internal(format!("activity log: {e:?}")))?;
         txn.commit().await?;
+        // After the transaction: webhook delivery is a synchronous HTTP call.
+        // FindAssignableAllocationService → `$allocation->update(['server_id' => …])`
+        // (the candidate row has `server_id is null`, so always dirty).
+        model_events::fire_id::<allocations::Entity>(&p.st, model_events::Action::Updated, fresh.id.0).await;
+        if p.server.allocation_id.is_none() {
+            // `if (!$server->allocation_id) $server->update([...])`.
+            model_events::fire_id::<pelican_db::entities::servers::Entity>(
+                &p.st,
+                model_events::Action::Updated,
+                server.id.0,
+            )
+            .await;
+        }
         Ok(Out::Done)
     }
     .await;
@@ -377,6 +389,13 @@ async fn set_primary(p: ServerPanel, RecordId(id): RecordId, form: crate::forms:
             },
         )
         .await?;
+        // IconColumn action → `$server->update(['allocation_id' => …])` (updated).
+        model_events::fire_id::<pelican_db::entities::servers::Entity>(
+            &p.st,
+            model_events::Action::Updated,
+            p.server.id.0,
+        )
+        .await;
         // Server::saved hook; failures surface as an internal error like an
         // uncaught exception in the original.
         if let Err(e) = server_saved(&p.st, &ctx, &p.st.db, &p.server).await {
@@ -414,6 +433,8 @@ async fn notes(p: ServerPanel, RecordId(id): RecordId, form: crate::forms::Form)
         _ => None,
     };
     if new_notes != original {
+        // Client API `update` → `$allocation->forceFill(['notes' => …])->save()`
+        // (updated; the change check above matches Eloquent isDirty).
         pelican_db::write::update(
             &p.st.db,
             &allocations::ActiveModel {
@@ -424,6 +445,7 @@ async fn notes(p: ServerPanel, RecordId(id): RecordId, form: crate::forms::Form)
             },
         )
         .await?;
+        model_events::fire_id::<allocations::Entity>(&p.st, model_events::Action::Updated, id).await;
     }
     Ok(StatusCode::NO_CONTENT.into_response())
 }
@@ -475,6 +497,7 @@ async fn delete(p: ServerPanel, RecordId(id): RecordId, form: crate::forms::Form
         .await?;
 
         // Re-associate the primary when it was just released.
+        let mut primary_saved = false;
         if current.is_none() || current == Some(alloc.id.0) {
             let next = api::other_node_allocations(&txn, server.id.0, server.node_id.0, alloc.id.0)
                 .await?
@@ -492,6 +515,7 @@ async fn delete(p: ServerPanel, RecordId(id): RecordId, form: crate::forms::Form
                     },
                 )
                 .await?;
+                primary_saved = true;
                 server_saved(&p.st, &ctx, &txn, &server)
                     .await
                     .map_err(|_| ApiError::internal("Server save hook failed"))?;
@@ -505,6 +529,16 @@ async fn delete(p: ServerPanel, RecordId(id): RecordId, form: crate::forms::Form
             }
         }
         txn.commit().await?;
+        // `releaseAllocations`: the RELEASE_ATTRIBUTES reset is a mass relation
+        // update (no events); the re-picked primary is `$this->save()` (updated).
+        if primary_saved {
+            model_events::fire_id::<pelican_db::entities::servers::Entity>(
+                &p.st,
+                model_events::Action::Updated,
+                server.id.0,
+            )
+            .await;
+        }
         Ok(())
     }
     .await;

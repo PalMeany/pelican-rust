@@ -11,11 +11,10 @@ use axum::Router;
 use axum::response::Response;
 use axum::routing::{get, post};
 use minijinja::{Value as Mj, context};
-use pelican_api::binding::Bound;
-use pelican_api::client::subusers as api;
 use pelican_api::error::ApiError;
 use pelican_api::pipeline::Ctx;
 use pelican_api::services::{LogActivity, account_created, subuser_mail};
+use pelican_api::{binding::Bound, client::subusers as api, model_events};
 use pelican_core::activity::morph;
 use pelican_core::events::{FilamentNotification, filament_button};
 use pelican_core::i18n::trans;
@@ -500,7 +499,9 @@ async fn invite(p: ServerPanel, form: Form) -> WebResult<Response> {
             updated_at: Set(Some(now)),
             ..Default::default()
         };
-        let _sub = pelican_db::write::insert(&txn, am).await?;
+        // SubuserCreationService → `Subuser::…updateOrCreate`: the Rust path only
+        // reaches the insert (an existing subuser errors above) → created event.
+        let new_sub = pelican_db::write::insert(&txn, am).await?;
         FilamentNotification {
             title: trans(&user.language, "notifications.user_added.title", &[]),
             body: Some(trans(&user.language, "notifications.user_added.body", &[("server", &server.name)])),
@@ -518,6 +519,12 @@ async fn invite(p: ServerPanel, form: Form) -> WebResult<Response> {
         }
         subuser_mail(&st, &user, &server, true).await?;
         txn.commit().await?;
+        // After the transaction: webhook delivery is a synchronous HTTP call.
+        // UserCreationService (new account) before Subuser::updateOrCreate.
+        if created_token.is_some() {
+            model_events::created(&st, &user).await;
+        }
+        model_events::created(&st, &new_sub).await;
         Ok(user)
     }
     .await;
@@ -579,6 +586,8 @@ async fn update(p: ServerPanel, RecordId(id): RecordId, form: Form) -> WebResult
                 .log_in(&st, &txn)
                 .await?;
             txn.commit().await?;
+            // `$subuser->update(['permissions' => …])` in the service (updated).
+            model_events::fire_id::<subusers::Entity>(&st, model_events::Action::Updated, sub.id.0).await;
         }
         Ok(())
     }

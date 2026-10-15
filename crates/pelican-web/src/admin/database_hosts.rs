@@ -10,8 +10,8 @@ use axum::extract::Path;
 use axum::routing::{get, post};
 use minijinja::{Value as Mj, context};
 use pelican_api::application::database_hosts::sync_nodes;
-use pelican_api::services::LogActivity;
 use pelican_api::validation::{CustomRule, Validator, expand_wildcard};
+use pelican_api::{model_events, services::LogActivity};
 use pelican_core::activity::morph;
 use pelican_core::databases::{HostConnection, HostError};
 use pelican_core::state::AppState;
@@ -507,6 +507,8 @@ async fn create(admin: Admin, form: Form) -> WebResult {
         return render_create_form(&admin, &data, &t, &errors).await;
     }
     txn.commit().await?;
+    // HostCreationService::handle → `DatabaseHost::query()->create([...])`.
+    model_events::fire_id::<database_hosts::Entity>(&admin.st, model_events::Action::Created, id).await;
     admin.flash_success(admin.t("filament-panels::resources/pages/create-record.notifications.created.title"));
     Ok(admin.redirect(BASE))
 }
@@ -790,6 +792,8 @@ async fn update(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
         return render_record_page(&admin, &h, &node_ids, &data, &errors, false, "record", 1, &back).await;
     }
     txn.commit().await?;
+    // HostUpdateService::handle → `$host->update($data)` (updated event).
+    model_events::fire_id::<database_hosts::Entity>(&admin.st, model_events::Action::Updated, h.id.0).await;
     sync_nodes(&admin.st.db, b, Int(h.id.0), &requested_node_ids(&admin, &form)).await.map_err(api_err)?;
     admin.flash_success(admin.t("filament-panels::resources/pages/edit-record.notifications.saved.title"));
     Ok(admin.redirect(&back))
@@ -838,6 +842,8 @@ async fn delete_one(admin: &Admin, id: i64) -> Result<Result<(), String>, WebErr
         return Ok(Err(admin.t("admin/databasehost.delete_help")));
     }
     database_hosts::Entity::delete_by_id(h.id).exec(&admin.st.db).await?;
+    // DeleteAction / DeleteBulkAction → `$record->delete()` per host.
+    model_events::deleted(&admin.st, &h).await;
     Ok(Ok(()))
 }
 
@@ -872,6 +878,7 @@ async fn rotate_database(admin: Admin, Path((id, db_id)): Path<(i64, i64)>, form
         .await?
         .ok_or_else(|| WebError::internal("no host"))?;
     // Service body: new password saved, MySQL user recreated with grants.
+    let mut db_updated = false;
     let txn_result: Result<(), WebError> = async {
         let txn = admin.st.db.begin().await?;
         let password = pelican_core::databases::random_password(24);
@@ -881,7 +888,9 @@ async fn rotate_database(admin: Admin, Path((id, db_id)): Path<(i64, i64)>, form
             updated_at: Set(Some(Timestamp(pelican_core::time::now()))),
             ..Default::default()
         };
-        pelican_db::write::update(&txn, &am).await?;
+        // DatabaseManagementService::rotatePassword → `$database->update([...])`.
+        db_updated = pelican_db::write::update(&txn, &am).await?;
+
         let conn = HostConnection::open(&h, &admin.st.enc).await.map_err(|e| WebError::internal(conn_err(e)))?;
         let ddl = async {
             conn.drop_user(&d).await?;
@@ -898,6 +907,9 @@ async fn rotate_database(admin: Admin, Path((id, db_id)): Path<(i64, i64)>, form
     .await;
     match txn_result {
         Ok(()) => {
+            if db_updated {
+                model_events::fire_id::<databases::Entity>(&admin.st, model_events::Action::Updated, d.id.0).await;
+            }
             admin
                 .activity("server:database.rotate-password")
                 .subject(morph::DATABASE, d.id.0)
@@ -923,7 +935,9 @@ async fn delete_database(admin: Admin, Path((id, db_id)): Path<(i64, i64)>, form
     }
     let (_, _) = find_host(&admin, id).await?;
     let d = find_db(&admin.st, id, db_id).await?;
+    // DeleteAction on the Databases table → `$record->delete()`.
     databases::Entity::delete_by_id(d.id).exec(&admin.st.db).await?;
+    model_events::deleted(&admin.st, &d).await;
     admin.flash_success(admin.t("filament-actions::delete.single.notifications.deleted.title"));
     Ok(admin.redirect(&form.back(&format!("{BASE}/{id}/edit?tab=databases"))))
 }

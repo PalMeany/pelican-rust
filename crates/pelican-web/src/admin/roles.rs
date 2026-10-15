@@ -8,7 +8,10 @@ use axum::Router;
 use axum::extract::Path;
 use axum::routing::{get, post};
 use minijinja::{Value as Mj, context};
-use pelican_api::validation::{CustomRule, Validator};
+use pelican_api::{
+    model_events,
+    validation::{CustomRule, Validator},
+};
 use pelican_core::auth::ROOT_ADMIN_ROLE as ROOT_ADMIN;
 use pelican_core::state::AppState;
 use pelican_db::entities::{model_has_roles, node_role, nodes, permissions, role_has_permissions, roles};
@@ -626,6 +629,9 @@ async fn create(admin: Admin, form: Form) -> WebResult {
     sync_permissions(&txn, id, &collected(&data)).await?;
     sync_nodes(&txn, id, &parse_ids(&data.nodes)).await?;
     txn.commit().await?;
+    // CreateRole → `Role::create` (the permission/node pivots are spatie syncs —
+    // no events).
+    model_events::fire_id::<roles::Entity>(&admin.st, model_events::Action::Created, role.id.0).await;
     admin.flash_success(admin.t("filament-panels::resources/pages/create-record.notifications.created.title"));
     Ok(admin.redirect(&post_create_target(&admin, id)))
 }
@@ -669,6 +675,11 @@ async fn update(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
         sync_nodes(&txn, id, &parse_ids(&data.nodes)).await?;
     }
     txn.commit().await?;
+    // EditRole → `$record->save()`: for Root Admin every field is disabled, so
+    // the original record is clean and fires nothing.
+    if !is_root && (data.name != role.name || data.guard_name != role.guard_name) {
+        model_events::fire_id::<roles::Entity>(&admin.st, model_events::Action::Updated, id).await;
+    }
     admin.flash_success(admin.t("filament-panels::resources/pages/edit-record.notifications.saved.title"));
     Ok(admin.redirect(&format!("/admin/roles/{id}/edit")))
 }
@@ -722,6 +733,9 @@ async fn delete_one(admin: &Admin, id: i64) -> Result<Result<(), String>, WebErr
     txn.execute_raw(raw::stmt(b, "delete from {node_role} where {role_id} = ?", vec![id.into()])).await?;
     roles::Entity::delete_by_id(role.id).exec(&txn).await?;
     txn.commit().await?;
+    // DeleteAction / DeleteBulkAction → `$record->delete()` per role (pivot
+    // detaches fire nothing).
+    model_events::deleted(&admin.st, &role).await;
     Ok(Ok(()))
 }
 

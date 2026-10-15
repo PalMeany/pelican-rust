@@ -9,7 +9,7 @@ use axum::Router;
 use axum::extract::Path;
 use axum::routing::{get, post};
 use minijinja::{Value as Mj, context};
-use pelican_api::validation::Validator;
+use pelican_api::{model_events, validation::Validator};
 use pelican_core::state::AppState;
 use pelican_db::entities::{backup_host_node, backup_hosts, backups, nodes, servers};
 use pelican_db::{Int, Json, Timestamp, raw};
@@ -723,6 +723,8 @@ async fn create(admin: Admin, form: Form) -> WebResult {
     let id = pelican_db::write::insert_id(&txn, &am).await?.ok_or_else(|| WebError::internal("no id"))?;
     sync_nodes(&txn, id, &requested_node_ids(&admin, &form).await?).await?;
     txn.commit().await?;
+    // CreateRecord → `BackupHost::create($data)` (created event).
+    model_events::fire_id::<backup_hosts::Entity>(&admin.st, model_events::Action::Created, id).await;
     admin.flash_success(admin.t("filament-panels::resources/pages/create-record.notifications.created.title"));
     Ok(admin.redirect(&format!("{BASE}/{id}/edit")))
 }
@@ -749,8 +751,13 @@ async fn update(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
         // Fields of another schema are not bound here: keep the stored value.
         am.configuration = NotSet;
     }
-    pelican_db::write::update(&admin.st.db, &am).await?;
+    // EditRecord → `$record->fill($data)->save()`; the write always touches
+    // `updated_at`, so treat it as dirty (updated event).
+    let changed = pelican_db::write::update(&admin.st.db, &am).await?;
     sync_nodes(&admin.st.db, h.id.0, &requested_node_ids(&admin, &form).await?).await?;
+    if changed {
+        model_events::fire_id::<backup_hosts::Entity>(&admin.st, model_events::Action::Updated, h.id.0).await;
+    }
     admin.flash_success(admin.t("filament-panels::resources/pages/edit-record.notifications.saved.title"));
     Ok(admin.redirect(&page_url(&admin)))
 }
@@ -774,6 +781,8 @@ async fn delete_host(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult
     .await?;
     backup_hosts::Entity::delete_by_id(h.id).exec(&txn).await?;
     txn.commit().await?;
+    // DeleteAction → `$record->delete()` (deleted event; `h` was read before).
+    model_events::deleted(&admin.st, &h).await;
     admin.flash_success(admin.t("filament-actions::delete.single.notifications.deleted.title"));
     Ok(admin.redirect(BASE))
 }

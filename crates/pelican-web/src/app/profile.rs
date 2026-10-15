@@ -7,8 +7,8 @@ use axum::Router;
 use axum::extract::Path;
 use axum::routing::{get, post};
 use minijinja::{Value as Mj, context};
-use pelican_api::services::LogActivity;
 use pelican_api::validation::{CustomRule, Validator};
+use pelican_api::{model_events, services::LogActivity};
 use pelican_core::activity::morph;
 use pelican_core::state::AppState;
 use pelican_db::entities::{activity_logs, api_keys, user_ssh_keys, users};
@@ -428,6 +428,16 @@ async fn save(web: Authed, form: Form) -> WebResult {
     st.db
         .execute_raw(raw::stmt(b, &format!("update {{users}} set {} where {{id}} = ?", sets.join(", ")), vals))
         .await?;
+    // Filament EditProfile → `$user->save()`; fires only when a field changed.
+    let changed_profile = web.user.user.timezone != account.timezone
+        || web.user.user.language != account.language
+        || web.user.user.customization.as_ref().and_then(|c| c.0.as_object()).map(|m| m.len())
+            != custom.as_object().map(|m| m.len())
+        || (!managed && web.user.user.username != account.username.to_lowercase())
+        || (!managed && web.user.user.email != account.email.to_lowercase());
+    if changed_profile {
+        model_events::fire_id::<users::Entity>(st, model_events::Action::Updated, web.user.id()).await;
+    }
     web.flash_success(web.t("filament-panels::auth/pages/edit-profile.notifications.saved.title"));
     Ok(web.redirect(&format!("/profile?tab={}", form.opt("_tab").filter(|t| TABS.contains(t)).unwrap_or("account"))))
 }
@@ -479,6 +489,10 @@ async fn api_key_create(web: Authed, form: Form) -> WebResult {
         ..Default::default()
     };
     let id = pelican_db::write::insert_id(&st.db, &am).await?.unwrap_or(0);
+    // User::createToken → `$user->tokens()->create([...])` (created).
+    if id > 0 {
+        model_events::fire_id::<api_keys::Entity>(st, model_events::Action::Created, id).await;
+    }
     let _ = web
         .activity("user:api-key.create")
         .subject(morph::USER, web.user.id())
@@ -499,7 +513,9 @@ async fn api_key_delete(web: Authed, Path(id): Path<i64>) -> WebResult {
         .one(&st.db)
         .await?
     {
+        // DeleteAction → `$key->delete()`.
         api_keys::Entity::delete_by_id(key.id).exec(&st.db).await?;
+        model_events::deleted(st, &key).await;
         let _ = web
             .activity("user:api-key.delete")
             .subject(morph::USER, web.user.id())
@@ -554,6 +570,10 @@ async fn ssh_key_create(web: Authed, form: Form) -> WebResult {
         ..Default::default()
     };
     let id = pelican_db::write::insert_id(&st.db, &am).await?.unwrap_or(0);
+    // KeyCreationService → `UserSSHKey::create([...])` (created).
+    if id > 0 {
+        model_events::fire_id::<user_ssh_keys::Entity>(st, model_events::Action::Created, id).await;
+    }
     let _ = web
         .activity("user:ssh-key.create")
         .subject(morph::USER, web.user.id())
@@ -588,6 +608,8 @@ async fn ssh_key_delete(web: Authed, Path(id): Path<i64>) -> WebResult {
             .filter(user_ssh_keys::Column::Id.eq(key.id))
             .exec(&st.db)
             .await?;
+        // Soft delete → `$key->delete()`; row now carries deleted_at.
+        model_events::fire_id::<user_ssh_keys::Entity>(st, model_events::Action::Deleted, key.id.0).await;
         let _ = web
             .activity("user:ssh-key.delete")
             .subject(morph::USER, web.user.id())
@@ -631,6 +653,8 @@ async fn set_user_columns(web: &Authed, sets: &[&str], mut vals: Vec<sea_orm::Va
         .db
         .execute_raw(raw::stmt(b, &format!("update {{users}} set {} where {{id}} = ?", cols.join(", ")), vals))
         .await?;
+    // MFA plugin writes persist via instance save → updated User.
+    model_events::fire_id::<users::Entity>(&web.st, model_events::Action::Updated, web.user.id()).await;
     Ok(())
 }
 
