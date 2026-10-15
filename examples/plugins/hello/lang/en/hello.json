@@ -1,0 +1,5 @@
+{
+    "nav": "Hello",
+    "title": "Hello from a plugin",
+    "starts": "Server starts seen: :count"
+}

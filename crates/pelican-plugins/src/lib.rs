@@ -4,6 +4,7 @@
 pub mod compat;
 pub mod lifecycle;
 pub mod manifest;
+pub mod runtime;
 pub mod updates;
 
 use std::path::PathBuf;

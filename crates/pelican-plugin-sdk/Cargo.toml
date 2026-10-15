@@ -1,0 +1,12 @@
+[package]
+name = "pelican-plugin-sdk"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Write pelican-rs plugins in Rust (wasm32-wasip2 components)."
+
+[dependencies]
+wit-bindgen = "0.57"
+serde.workspace = true
+serde_json.workspace = true

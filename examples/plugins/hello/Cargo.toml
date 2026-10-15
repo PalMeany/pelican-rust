@@ -1,0 +1,17 @@
+[package]
+name = "hello-plugin"
+version = "1.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pelican-plugin-sdk = { path = "../../../crates/pelican-plugin-sdk" }
+
+[profile.release]
+opt-level = "s"
+strip = true

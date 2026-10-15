@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Build a Rust plugin into a WASM component next to its plugin.json:
+#   scripts/build-plugin examples/plugins/hello
+# The component name comes from plugin.json's wasm.component.
+set -euo pipefail
+dir="${1:?plugin directory}"
+dir="${dir%/}"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"$here/cargo" build --release --target wasm32-wasip2 --manifest-path "$dir/Cargo.toml" --target-dir "$dir/target" >&2
+lib="$(sed -n 's/^name = "\(.*\)"/\1/p' "$dir/Cargo.toml" | head -1 | tr - _)"
+out="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["wasm"]["component"])' "$dir/plugin.json")"
+cp "$dir/target/wasm32-wasip2/release/$lib.wasm" "$dir/$out"
+ls -l "$dir/$out"

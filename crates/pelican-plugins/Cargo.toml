@@ -20,6 +20,8 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 sha2 = "0.10"
 hex = "0.4"
 regex = "1"
+wasmtime = { version = "49", default-features = false, features = ["component-model", "async", "cranelift", "runtime", "std"] }
+wasmtime-wasi = "49"
 
 [dev-dependencies]
 tempfile = "3"

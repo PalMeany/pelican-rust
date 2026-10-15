@@ -1,0 +1,193 @@
+/// The pelican-rs plugin world (ADR-0018). A plugin is a WASM component exporting this
+/// world; the panel calls its hooks and offers the `host` functions its manifest's
+/// `wasm.capabilities` allow. Panel objects cross the boundary as JSON documents in the
+/// shapes of the Application API transformers (users, servers, ...).
+package pelican:plugin@1.0.0;
+
+interface types {
+    /// A JSON document (UTF-8 text).
+    type json = string;
+
+    enum panel { admin, app, server }
+
+    enum level { trace, debug, info, warn, error }
+
+    record header { name: string, value: string }
+
+    /// A request routed to the plugin (its own routes or one of its pages).
+    record request {
+        method: string,
+        /// Path below the plugin's mount point, starting with `/`.
+        path: string,
+        query: string,
+        headers: list<header>,
+        body: list<u8>,
+        /// Locale of the signed-in user (or the panel's).
+        locale: string,
+        /// The signed-in user / API key owner (`user` attributes), if any.
+        user: option<json>,
+        /// The server of server-panel pages and client-API routes (`server` attributes).
+        server: option<json>,
+    }
+
+    record response {
+        status: u16,
+        headers: list<header>,
+        body: list<u8>,
+    }
+
+    /// Where a route is mounted:
+    /// web — `/plugins/<id>/<path>` (session auth, CSRF on writes),
+    /// client — `/api/client/plugins/<id>/<path>` and `/api/client/servers/{server}/plugins/<id>/<path>`,
+    /// application — `/api/application/plugins/<id>/<path>` (application key with `plugin-<id>` rights).
+    enum route-scope { web, client, application }
+
+    record route {
+        scope: route-scope,
+        /// HTTP method, `*` for any.
+        method: string,
+        /// Path pattern below the mount point (`/items/{id}`); `*` matches the rest.
+        path: string,
+    }
+
+    /// A page inside the panel layout: `/admin/plugins/<id>/<page>`, `/plugins/<id>/<page>`
+    /// (app) or `/server/{server}/plugins/<id>/<page>`.
+    record page {
+        panel: panel,
+        id: string,
+        /// Translation key or literal.
+        title: string,
+        /// Admin pages: spatie permission (`viewList thing`); server pages: subuser permission.
+        permission: option<string>,
+    }
+
+    record nav-item {
+        panel: panel,
+        page: string,
+        label: string,
+        /// Tabler icon name.
+        icon: option<string>,
+        /// Admin navigation group.
+        group: option<string>,
+        sort: option<s32>,
+    }
+
+    /// A schedule task type (`TaskSchemaInterface`).
+    record task-type {
+        id: string,
+        name: string,
+        payload-label: option<string>,
+        default-payload: option<string>,
+    }
+
+    /// A console-triggered server feature (`FeatureSchemaInterface`): Wings reports output
+    /// lines containing a listener; the panel then shows the plugin's page `feature-<id>`
+    /// in a modal on the console.
+    record feature { id: string, listeners: list<string> }
+
+    record avatar-provider { id: string, name: string }
+
+    /// `Role::registerCustomPermissions([model => prefixes])`.
+    record admin-permission { model: string, prefixes: list<string> }
+
+    /// `Subuser::registerCustomPermissions(name, permissions)`.
+    record permission-group { name: string, permissions: list<string>, icon: option<string> }
+
+    /// One field of the plugin's settings form.
+    record field {
+        name: string,
+        label: string,
+        /// text | password | number | textarea | toggle | select
+        kind: string,
+        options: list<tuple<string, string>>,
+        required: bool,
+        help: option<string>,
+    }
+
+    record registration {
+        /// Events to receive in `on-event`: activity events (`server:power.start`),
+        /// `App\Events\*` class names, `eloquent.created: App\Models\Server`, or `*`.
+        events: list<string>,
+        routes: list<route>,
+        pages: list<page>,
+        navigation: list<nav-item>,
+        tasks: list<task-type>,
+        features: list<feature>,
+        avatars: list<avatar-provider>,
+        admin-permissions: list<admin-permission>,
+        subuser-permissions: list<permission-group>,
+        /// Extra application API key resources (`ApiKey::registerCustomResourceName`).
+        api-resources: list<string>,
+        /// Whether `settings-form` / `save-settings` are offered in the admin plugin list.
+        settings: bool,
+    }
+}
+
+interface host {
+    use types.{json, level, header};
+
+    log: func(level: level, message: string);
+
+    /// The plugin's own persistent key/value store.
+    kv-get: func(key: string) -> option<string>;
+    kv-set: func(key: string, value: option<string>);
+
+    record http-request {
+        method: string,
+        url: string,
+        headers: list<header>,
+        body: list<u8>,
+    }
+
+    record http-response {
+        status: u16,
+        headers: list<header>,
+        body: list<u8>,
+    }
+
+    /// Outgoing HTTP to the hosts allowed by `wasm.capabilities.http`.
+    http: func(req: http-request) -> result<http-response, string>;
+
+    /// The panel's Application API (`/api/application/...`) with the rights granted by
+    /// `wasm.capabilities.api` (resource => 1 read, 2 write, 3 both): `(status, body)`.
+    api: func(method: string, path: string, body: option<json>) -> result<tuple<u16, json>, string>;
+
+    /// An activity log entry by the plugin (`properties` JSON object).
+    activity: func(event: string, properties: json);
+
+    /// `trans()` in the panel's locale; `<plugin-id>::group.key` reads the plugin's own files.
+    trans: func(key: string, replace: list<tuple<string, string>>) -> string;
+}
+
+world plugin {
+    use types.{registration, request, response, panel, field, json};
+
+    import host;
+
+    /// Called once when the plugin is loaded: what the plugin provides.
+    export register: func() -> registration;
+
+    /// Install / uninstall steps (the PHP plugin's migrations and seeders).
+    export install: func() -> result<_, string>;
+    export uninstall: func() -> result<_, string>;
+
+    /// A subscribed event with its payload (the webhook payload of the same event).
+    export on-event: func(event: string, payload: json);
+
+    /// One of the plugin's routes.
+    export handle: func(req: request) -> response;
+
+    /// The body of one of the plugin's pages as an HTML fragment (the host renders it
+    /// inside the panel layout).
+    export render-page: func(panel: panel, page: string, req: request) -> result<string, string>;
+
+    export settings-form: func() -> list<field>;
+    export settings-data: func() -> json;
+    export save-settings: func(data: json) -> result<_, string>;
+
+    /// A schedule task of one of the plugin's task types.
+    export run-task: func(task: string, payload: string, server: json) -> result<_, string>;
+
+    /// The avatar URL of one of the plugin's avatar providers (none = default avatar).
+    export avatar-url: func(provider: string, user: json) -> option<string>;
+}

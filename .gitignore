@@ -4,3 +4,5 @@ target
 docs/i18n-en.json
 # Read-only copy of the original panel for workers (scripts/worker/run.sh)
 .panel/
+examples/plugins/*/target/
+examples/plugins/*/*.wasm

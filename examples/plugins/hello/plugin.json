@@ -1,0 +1,23 @@
+{
+    "id": "hello",
+    "name": "Hello",
+    "author": "Pelican-rs",
+    "version": "1.0.0",
+    "description": "Example WASM plugin: counts server starts, adds a page and an API route.",
+    "category": "plugin",
+    "url": null,
+    "update_url": null,
+    "namespace": "Example\\Hello",
+    "class": "HelloPlugin",
+    "panels": null,
+    "panel_version": null,
+    "api_version": 1,
+    "composer_packages": null,
+    "wasm": {
+        "component": "hello.wasm",
+        "api": 1,
+        "capabilities": {
+            "http": ["api.github.com"]
+        }
+    }
+}
