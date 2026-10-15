@@ -70,8 +70,32 @@ fn collect(object: &str, attrs: Value, rel: Vec<(&'static str, Value)>) -> Value
 
 /// `UserData` (`user`). Includes: `servers` (server), `roles` (role).
 pub fn user_item<'a>(st: &'a AppState, ctx: &'a Ctx, u: &'a users::Model, inc: &'a Includes) -> Fut<'a> {
+    user_item_as(st, ctx, u, inc, None)
+}
+
+/// [`user_item`] for a page of users, their Root Admin role looked up together.
+pub async fn user_items(st: &AppState, ctx: &Ctx, users_: &[users::Model], inc: &Includes) -> ApiResult<Vec<Value>> {
+    let ids: Vec<i64> = users_.iter().map(|u| u.id.0).collect();
+    let roots = pelican_core::auth::root_admins(&st.db, &ids).await?;
+    let mut data = Vec::with_capacity(users_.len());
+    for u in users_ {
+        data.push(user_item_as(st, ctx, u, inc, Some(roots.contains(&u.id.0))).await?);
+    }
+    Ok(data)
+}
+
+fn user_item_as<'a>(
+    st: &'a AppState,
+    ctx: &'a Ctx,
+    u: &'a users::Model,
+    inc: &'a Includes,
+    root: Option<bool>,
+) -> Fut<'a> {
     Box::pin(async move {
-        let root = pelican_core::auth::is_root_admin(&st.db, u.id.0).await?;
+        let root = match root {
+            Some(r) => r,
+            None => pelican_core::auth::is_root_admin(&st.db, u.id.0).await?,
+        };
         let mfa = u.mfa_app_secret.as_deref().is_some_and(|s| !s.trim().is_empty());
         let mut a = Map::new();
         a.insert("id".into(), json!(u.id.0));

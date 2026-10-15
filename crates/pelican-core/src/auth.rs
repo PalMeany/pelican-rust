@@ -226,6 +226,34 @@ impl AuthUser {
 }
 
 /// `User::isRootAdmin()` for an arbitrary user id (role named `Root Admin`).
+/// [`is_root_admin`] for a page of users: the ids among `user_ids` holding the Root Admin role.
+pub async fn root_admins<C: ConnectionTrait>(db: &C, user_ids: &[i64]) -> Result<HashSet<i64>, DbErr> {
+    if user_ids.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let pairs: Vec<(Int, Int)> = model_has_roles::Entity::find()
+        .select_only()
+        .column(model_has_roles::Column::ModelId)
+        .column(model_has_roles::Column::RoleId)
+        .filter(model_has_roles::Column::ModelType.eq("user"))
+        .filter(model_has_roles::Column::ModelId.is_in(user_ids.iter().map(|id| Int(*id))))
+        .into_tuple()
+        .all(db)
+        .await?;
+    if pairs.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let root: HashSet<i64> = roles::Entity::find()
+        .filter(roles::Column::Id.is_in(pairs.iter().map(|(_, r)| *r)))
+        .filter(roles::Column::Name.eq(ROOT_ADMIN_ROLE))
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|r| r.id.0)
+        .collect();
+    Ok(pairs.into_iter().filter(|(_, r)| root.contains(&r.0)).map(|(u, _)| u.0).collect())
+}
+
 pub async fn is_root_admin<C: ConnectionTrait>(db: &C, user_id: i64) -> Result<bool, DbErr> {
     let role_ids: Vec<Int> = model_has_roles::Entity::find()
         .select_only()

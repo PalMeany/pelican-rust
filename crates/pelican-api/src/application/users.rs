@@ -84,10 +84,8 @@ pub async fn index(
             .db
             .query_all_raw(raw::stmt(b, &format!("select * from {{users}}{where_sql}{order}{}", page.sql()), vals))
             .await?;
-        for r in rows {
-            let u = users::Model::from_query_result(&r, "")?;
-            data.push(user_item(&st, &ctx, &u, &includes).await?);
-        }
+        let users_ = rows.iter().map(|r| users::Model::from_query_result(r, "")).collect::<Result<Vec<_>, _>>()?;
+        data = super::data::user_items(&st, &ctx, &users_, &includes).await?;
     }
     Ok(PhpJson::ok(page.envelope(&ctx, uri.path(), total, data)).into_response())
 }
