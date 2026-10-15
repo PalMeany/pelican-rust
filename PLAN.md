@@ -228,9 +228,14 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] Плагины: баннеры из `boot()` (announcements) и хуки панели; маршруты `web`+`auth` (карта/загрузки MC Toolkit)
       видят пользователя; права сабюзеров плагинов в Client API; роли не теряют права плагинов при недоступном sidecar;
       старые URL файлового менеджера (`/files/{path}`) → наши
-- [ ] Полный диф-тест на ветке `prod`, финальная сверка копии релизным бинарником
-- [ ] Переключение (`deploy.sh prepare|smoke|switch`, откат `rollback`): sidecar — копия кода в `/var/www/pelican-sidecar`
-      под тем же php-fpm, Caddy на loopback; `TRUSTED_PROXIES` + 127.0.0.1
+- [x] Шапка и футер как у оригинала (без APP_LOGO — название текстом; «© год, имя - Powered by Pelican»)
+- [x] Диф-тест SQLite 79/79 на ветке `prod`; копия прода с релизным бинарником — расхождения только `srv_target` и
+      секунда в `exported_at`
+- [x] 2026-10-15 ~10:57 UTC переключено (`/root/pelican-rs-deploy/deploy.sh`, откат `deploy.sh rollback`): sidecar —
+      копия кода в `/var/www/pelican-sidecar` под тем же php-fpm, Caddy на 127.0.0.1:8090; `TRUSTED_PROXIES` + 127.0.0.1;
+      Caddy доверяет DDoS-прокси (раньше в журнал попадали их IP, теперь — адреса посетителей). Проверено на проде:
+      Remote API всех 4 нод, плановый бэкап 11:00 (расписание → Wings → callback → уведомление), вход, регистрация
+- [ ] Диф-тест MariaDB/PostgreSQL/MySQL на ветке `prod`, затем слить в `main`
 - Не сделано (на проде не используется или некритично): тема Theme Customizer на страницах pelican-rs (не настроена),
   вкладка Subdomains в Edit Server и удаление DNS-записей при удалении сервера (Cloudflare-доменов 0), виджет System
   Status на дашборде (есть страница), лишняя колонка плагина `nodes.srv_target` в Application API, загрузка mclo.gs —

@@ -71,6 +71,8 @@
   плагин из zip импортируется, ставится, получает события, отдаёт маршруты, страницы, настройки, задачи расписаний.
   Dev-панель теперь `pelican-m7-dev` (тот же порт и данные).
 
+- 2026-10-15 (день): прод пользователя `panel.nuvira.su` переведён на pelican-rs (PLAN.md, «Переезд прода»).
+
 ## Где остановился / что дальше
 - Репозиторий: https://github.com/PalMeany/pelican-rust (публичный, AGPL-3.0-only как оригинал; автор коммитов —
   PalMeany, noreply-адрес; `gh` переключён на PalMeany). Пушить `main` и рабочие ветки; оригинал не трогать.
@@ -87,6 +89,11 @@
 - E2E-окружение: контейнер `pelican-sidecar` (образ `pelican-orig:dev`, сеть `pelican-e2e`), dev-панель
   `pelican-m8-dev` с `PANEL_PHP_SIDECAR=http://pelican-sidecar`, данные `.worktrees/.difftest/m6dev`.
 - ADR-0021 (SpacetimeDB) — отложено решением пользователя.
+- Прод пользователя: `root@77.239.97.118` (тот же ключ), `panel.nuvira.su` на pelican-rs с 2026-10-15. Данные —
+  `/var/www/pelican` (SQLite), бинарник `/usr/local/bin/pelican` (собирать под glibc 2.35: `shadow/build-jammy.sh` на
+  тестовом сервере), `pelican.service`, sidecar `/var/www/pelican-sidecar` (Caddy 127.0.0.1:8090), скрипты и откат —
+  `/root/pelican-rs-deploy/deploy.sh`, бэкап — `/root/pelican-backup-20261015`. Обновление: собрать, скопировать бинарник,
+  `systemctl restart pelican`. Копия прода для проверок — `/opt/pelican-rs-bench/shadow` на тестовом сервере (`compare.py`).
 
 ## Диск (просьба пользователя)
 На хосте мало места (~15–30 ГБ свободно). Сборки живут в docker-томах VM (`pelican-rs-target*`).
