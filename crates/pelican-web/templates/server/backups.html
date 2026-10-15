@@ -9,23 +9,27 @@
 <div class="page-head">
   <h1>{{ title }}</h1>
   <div class="page-actions">
-    <button type="button" class="btn btn-gray" data-modal-open="backup-notifications"
+    {# ListBackups header action (bell icon). #}
+    <button type="button" class="icon-btn action-icon" data-modal-open="backup-notifications"
       title="{{ trans('server/backup.notifications.action') }}" aria-label="{{ trans('server/backup.notifications.action') }}">
-      {{ icon('bell', 'icon-sm') }}{{ trans('server/backup.notifications.action') }}</button>
-    {% if can_create %}
-      {% if at_limit %}
-      <button type="button" class="btn btn-danger" disabled
-        title="{{ trans('server/backup.actions.create.limit') }}"
-        aria-label="{{ trans('server/backup.actions.create.title') }}">{{ icon('plus', 'icon-sm') }}</button>
-      {% else %}
-      <button type="button" class="btn" data-modal-open="create-backup"
-        title="{{ trans('server/backup.actions.create.title') }}" aria-label="{{ trans('server/backup.actions.create.title') }}">
-        {{ icon('plus', 'icon-sm') }}</button>
-      {% endif %}
-    {% endif %}
+      {{ icon('bell', 'icon-lg') }}</button>
   </div>
 </div>
-{{ tbl.render(table, csrf, button_style) }}
+{# Toolbar CreateAction (FileZip icon, danger and disabled at the backup limit). #}
+{% set toolbar %}
+{% if can_create %}
+  {% if at_limit %}
+  <button type="button" class="icon-btn action-icon danger" disabled
+    title="{{ trans('server/backup.actions.create.limit') }}"
+    aria-label="{{ trans('server/backup.actions.create.title') }}">{{ icon('file-zip', 'icon-lg') }}</button>
+  {% else %}
+  <button type="button" class="icon-btn action-icon" data-modal-open="create-backup"
+    title="{{ trans('server/backup.actions.create.title') }}" aria-label="{{ trans('server/backup.actions.create.title') }}">
+    {{ icon('file-zip', 'icon-lg') }}</button>
+  {% endif %}
+{% endif %}
+{% endset %}
+{{ tbl.render(table, csrf, button_style, toolbar) }}
 
 {# Toolbar CreateAction: name, ignored files, lock (with `backup.delete`). #}
 {% if can_create and not at_limit %}

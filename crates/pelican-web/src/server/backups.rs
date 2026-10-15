@@ -111,8 +111,8 @@ async fn rows(p: &ServerPanel, lp: &ListParams) -> Result<(Vec<backups::Model>, 
     let b = p.st.db.get_database_backend();
     let order = match lp.sort.as_deref() {
         Some("created_at") => format!("{{backups.created_at}} {}", if lp.desc { "desc" } else { "asc" }),
-        // Newest first.
-        _ => "{backups.created_at} desc".to_string(),
+        // No default sort: Filament's key sort.
+        _ => "{backups.id} asc".to_string(),
     };
     let mut where_sql = "where {backups.server_id} = ?".to_string();
     let mut vals = vec![p.server.id.into()];
@@ -267,13 +267,16 @@ async fn render_list(p: ServerPanel, lp: ListParams, view: ViewState) -> WebResu
     ];
     let download_label = t("actions.download");
     for b in &models {
-        let status = if pending(b) {
-            Cell::badge(t("backup_status.in_progress"), "primary")
+        // BackupStatus: label, colour and icon of the badge.
+        let (label, color, icon) = if pending(b) {
+            (t("backup_status.in_progress"), "primary", "circle-dashed")
         } else if b.is_successful.0 {
-            Cell::badge(t("backup_status.successful"), "success")
+            (t("backup_status.successful"), "success", "circle-check")
         } else {
-            Cell::badge(t("backup_status.failed"), "danger")
+            (t("backup_status.failed"), "danger", "circle-x")
         };
+        let status =
+            Cell::Badge { text: label, color: color.into(), icon: Some(icon.into()), tooltip: None, copy: None };
         let created =
             diff_for_humans(&locale, b.created_at.map(|c| c.0.and_utc()).unwrap_or_else(Utc::now), Utc::now());
         let mut row = Row::new(b.id.0.to_string())
@@ -281,7 +284,14 @@ async fn render_list(p: ServerPanel, lp: ListParams, view: ViewState) -> WebResu
             .cell("size", Cell::text(bytes(b.bytes.0, p.st.config.use_binary_prefix)))
             .cell("created_at", Cell::text(created))
             .cell("status", status)
-            .cell("is_locked", Cell::icon(if b.is_locked.0 { "lock" } else { "lock-open" }, "gray"));
+            .cell(
+                "is_locked",
+                // A boolean IconColumn: success when true, danger when false.
+                Cell::icon(
+                    if b.is_locked.0 { "lock" } else { "lock-open" },
+                    if b.is_locked.0 { "success" } else { "danger" },
+                ),
+            );
 
         // One action group per row (BackupsResource::defaultTable actions).
         let successful = is_successful(b);

@@ -77,20 +77,53 @@ fn ago_filter(state: &State, v: Value) -> String {
     diff_for_humans(&locale(state), t, chrono::Utc::now())
 }
 
-pub fn diff_for_humans(_locale: &str, t: chrono::DateTime<chrono::Utc>, now: chrono::DateTime<chrono::Utc>) -> String {
-    let secs = (now - t).num_seconds();
-    let (past, s) = (secs >= 0, secs.unsigned_abs());
-    let (n, unit) = match s {
-        0..=59 => (s.max(1), "second"),
-        60..=3599 => (s / 60, "minute"),
-        3600..=86399 => (s / 3600, "hour"),
-        86400..=604799 => (s / 86400, "day"),
-        604800..=2_629_799 => (s / 604800, "week"),
-        2_629_800..=31_557_599 => (s / 2_629_800, "month"),
-        _ => (s / 31_557_600, "year"),
-    };
+pub fn diff_for_humans(locale: &str, t: chrono::DateTime<chrono::Utc>, now: chrono::DateTime<chrono::Utc>) -> String {
+    let past = now >= t;
+    let (n, unit) = carbon_diff(t.min(now), t.max(now));
+    if locale.starts_with("ru") {
+        // Carbon's ru.php: three plural forms, accusative singulars after "назад"/"через".
+        let forms: [&str; 3] = match unit {
+            "year" => ["год", "года", "лет"],
+            "month" => ["месяц", "месяца", "месяцев"],
+            "week" => ["неделю", "недели", "недель"],
+            "day" => ["день", "дня", "дней"],
+            "hour" => ["час", "часа", "часов"],
+            "minute" => ["минуту", "минуты", "минут"],
+            _ => ["секунду", "секунды", "секунд"],
+        };
+        let form = match (n % 10, n % 100) {
+            (1, m) if m != 11 => forms[0],
+            (2..=4, m) if !(12..=14).contains(&m) => forms[1],
+            _ => forms[2],
+        };
+        return if past { format!("{n} {form} назад") } else { format!("через {n} {form}") };
+    }
     let plural = if n == 1 { "" } else { "s" };
     if past { format!("{n} {unit}{plural} ago") } else { format!("{n} {unit}{plural} from now") }
+}
+
+/// Carbon's `diffForHumans()` unit: the largest non-zero part of the calendar difference
+/// (`DateTime::diff`: years and months by the calendar, weeks from days), at least one second.
+fn carbon_diff(from: chrono::DateTime<chrono::Utc>, to: chrono::DateTime<chrono::Utc>) -> (u64, &'static str) {
+    use chrono::{Datelike, Months};
+    let mut months = (to.year() - from.year()) * 12 + to.month() as i32 - from.month() as i32;
+    let (fd, td) = (from.day(), to.day());
+    if months > 0 && (td < fd || (td == fd && to.time() < from.time())) {
+        months -= 1;
+    }
+    let anchor = from.checked_add_months(Months::new(months.max(0) as u32)).unwrap_or(from);
+    let rest = (to - anchor).num_seconds().max(0) as u64;
+    let months = months.max(0) as u64;
+    let days = rest / 86_400;
+    match () {
+        _ if months >= 12 => (months / 12, "year"),
+        _ if months > 0 => (months, "month"),
+        _ if days >= 7 => (days / 7, "week"),
+        _ if days > 0 => (days, "day"),
+        _ if rest >= 3600 => (rest / 3600, "hour"),
+        _ if rest >= 60 => (rest / 60, "minute"),
+        _ => (rest.max(1), "second"),
+    }
 }
 
 /// `{{ csrf_field() }}`.
@@ -185,5 +218,26 @@ mod tests {
         let now = chrono::Utc::now();
         assert_eq!(diff_for_humans("en", now - chrono::Duration::minutes(5), now), "5 minutes ago");
         assert_eq!(diff_for_humans("en", now + chrono::Duration::hours(1), now), "1 hour from now");
+    }
+}
+
+#[cfg(test)]
+mod diff_tests {
+    use chrono::TimeZone;
+
+    fn at(s: &str) -> chrono::DateTime<chrono::Utc> {
+        chrono::Utc.from_utc_datetime(&chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S").expect("date"))
+    }
+
+    #[test]
+    fn calendar_months_like_carbon() {
+        let now = at("2026-10-15 14:22:16");
+        assert_eq!(super::diff_for_humans("en", at("2026-02-15 13:37:44"), now), "8 months ago");
+        assert_eq!(super::diff_for_humans("en", at("2026-09-16 18:42:44"), now), "4 weeks ago");
+        assert_eq!(super::diff_for_humans("en", at("2025-10-15 14:22:16"), now), "1 year ago");
+        assert_eq!(super::diff_for_humans("ru", at("2026-02-15 13:37:44"), now), "8 месяцев назад");
+        assert_eq!(super::diff_for_humans("ru-RU", at("2026-10-14 14:22:16"), now), "1 день назад");
+        assert_eq!(super::diff_for_humans("ru", at("2026-10-15 14:20:16"), now), "2 минуты назад");
+        assert_eq!(super::diff_for_humans("ru", at("2026-10-15 14:21:16"), now), "1 минуту назад");
     }
 }

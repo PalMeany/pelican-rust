@@ -76,15 +76,17 @@
 </nav></div>
 {% endmacro %}
 
-{% macro render(t, csrf, icons=true) %}
+{# `toolbar`: HTML of the table's toolbar actions (Filament `toolbarActions`), left of the search. #}
+{% macro render(t, csrf, icons=true, toolbar='') %}
 <div id="{{ t.id }}" class="stack" hx-boost="true" hx-target="#{{ t.id }}" hx-select="#{{ t.id }}" hx-swap="outerHTML"
   {%- if t.poll %} hx-get="{{ t.current_url }}" hx-trigger="every {{ t.poll }}"{% endif %}>
   {% if t.tabs %}{{ tabs(t.tabs) }}{% endif %}
   <div class="card table-card">
-    {% if t.searchable or t.filters %}
+    {% if t.searchable or t.filters or toolbar %}
     <form class="table-toolbar" method="get" action="{{ t.base_url }}">
       {% for k in t.keep %}<input type="hidden" name="{{ k[0] }}" value="{{ k[1] }}">{% endfor %}
       <input type="hidden" name="per_page" value="{{ t.pagination.per_page }}">
+      {{ toolbar }}
       <div class="spacer"></div>
       {% if t.searchable %}
       <input class="input search" id="{{ t.id }}-search" type="search" name="search" value="{{ t.search }}"
@@ -137,7 +139,8 @@
         </tbody>
       </table>
     </div>
-    {% if t.pagination.total > 0 %}
+    {# paginated(false) tables (a single "All" option) have no footer. #}
+    {% if t.pagination.total > 0 and t.pagination.per_page_options | length > 1 %}
     <div class="table-foot">
       <span class="muted">{{ trans_choice('filament::components/pagination.overview', t.pagination.total, first=t.pagination.first, last=t.pagination.last, total=t.pagination.total) }}</span>
       <form method="get" action="{{ t.base_url }}" class="row small" style="gap:0.5rem">

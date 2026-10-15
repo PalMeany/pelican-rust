@@ -10,15 +10,11 @@
 {% block content %}
 <div class="page-head">
   <h1>{{ title }}</h1>
-  <div class="page-actions">
-    {% if can_create %}
-    <button type="button" class="btn" data-modal-open="invite-user"
-      title="{{ trans('server/user.invite_user') }}" aria-label="{{ trans('server/user.invite_user') }}">
-      {{ icon('user-plus', 'icon-sm') }}</button>
-    {% endif %}
-  </div>
 </div>
-{{ tbl.render(table, csrf, button_style) }}
+{# Toolbar CreateAction (invite, UserPlus icon). #}
+{% set toolbar %}{% if can_create %}<button type="button" class="icon-btn action-icon" data-modal-open="invite-user"
+  title="{{ trans('server/user.invite_user') }}" aria-label="{{ trans('server/user.invite_user') }}">{{ icon('user-plus', 'icon-lg') }}</button>{% endif %}{% endset %}
+{{ tbl.render(table, csrf, button_style, toolbar) }}
 
 {# Invite: CreateAction `invite` — email + permission tabs, submit label `action`. #}
 {% if can_create %}

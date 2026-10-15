@@ -132,22 +132,37 @@ async fn render_list(
         let mut row = Row::new(a.id.0.to_string())
             .cell(
                 "address",
-                Cell::mono(if alias.parse::<Ipv6Addr>().is_ok() { format!("[{alias}]") } else { alias.clone() }),
+                Cell::text(if alias.parse::<Ipv6Addr>().is_ok() { format!("[{alias}]") } else { alias.clone() }),
             )
             .cell("port", if a.show_port.0 { Cell::text(a.port.0.to_string()) } else { Cell::text(t("port_hidden")) })
             .cell(
                 "primary",
-                Cell::Icon {
-                    icon: (if is_primary { "star-filled" } else { "star" }).into(),
-                    color: (if is_primary { "warning" } else { "gray" }).into(),
-                    tooltip: Some(if is_primary { t("primary") } else { t("make_primary") }),
+                // IconColumn 'primary' with its action: clicking a star makes that allocation primary
+                // (`$server->update(['allocation_id' => …])`, guarded by AllocationUpdate).
+                if can_update && !is_primary {
+                    Cell::Html {
+                        html: format!(
+                            r#"<form method="post" action="{base}/network/{id}/primary" hx-boost="false" style="margin:0"><input type="hidden" name="_token" value="{csrf}"><input type="hidden" name="_back" value="{base}/network"><button type="submit" class="icon-btn text-gray" title="{tip}" aria-label="{tip}">{svg}</button></form>"#,
+                            id = a.id.0,
+                            csrf = crate::views::escape(&p.session.csrf()),
+                            tip = crate::views::escape(&t("make_primary")),
+                            svg = crate::views::icon_html("star", "icon"),
+                        ),
+                    }
+                } else {
+                    Cell::Icon {
+                        icon: (if is_primary { "star-filled" } else { "star" }).into(),
+                        color: (if is_primary { "warning" } else { "gray" }).into(),
+                        tooltip: Some(if is_primary { t("primary") } else { t("make_primary") }),
+                    }
                 },
             )
             .cell(
                 "is_locked",
+                // A boolean IconColumn: success when true, danger when false.
                 Cell::Icon {
                     icon: (if a.is_locked.0 { "lock" } else { "lock-open" }).into(),
-                    color: "gray".into(),
+                    color: (if a.is_locked.0 { "success" } else { "danger" }).into(),
                     tooltip: Some(t("locked_helper")),
                 },
             );
@@ -166,16 +181,11 @@ async fn render_list(
                 },
             },
         );
-        // IconColumn 'primary' action (`$server->update(['allocation_id' => …])`
-        // guarded by AllocationUpdate).
-        if can_update {
-            row.actions.push(Action::post(t("make_primary"), "star", format!("{base}/network/{}/primary", a.id.0)));
-        }
         // DetachAction: visible when unlocked (or node-updating admins) and more
         // than one allocation remains, authorized with allocation.delete.
         if can_delete && (!a.is_locked.0 || admin_update) && all.len() > 1 {
             row.actions.push(
-                Action::post(delete_label.clone(), "x", format!("{base}/network/{}/delete", a.id.0))
+                Action::post(delete_label.clone(), "trash", format!("{base}/network/{}/delete", a.id.0))
                     .color("danger")
                     .confirm(p.t("filament-actions::modal.confirmation")),
             );

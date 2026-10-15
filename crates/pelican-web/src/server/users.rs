@@ -230,6 +230,8 @@ struct SubRow {
     sub: subusers::Model,
     username: String,
     email: String,
+    /// `Filament::getUserAvatarUrl($subuser->user)`.
+    avatar: String,
 }
 
 /// Every subuser of the server joined with its user (`$server->subusers`,
@@ -249,7 +251,12 @@ async fn sub_rows(p: &ServerPanel) -> Result<Vec<SubRow>, WebError> {
     let mut out = Vec::new();
     for s in subs {
         if let Some(u) = people.iter().find(|u| u.id == s.user_id) {
-            out.push(SubRow { sub: s, username: u.username.clone(), email: u.email.clone() });
+            out.push(SubRow {
+                sub: s,
+                username: u.username.clone(),
+                email: u.email.clone(),
+                avatar: crate::models::avatar_url(&p.st, u),
+            });
         }
     }
     Ok(out)
@@ -331,8 +338,8 @@ async fn render_list(
     let mut table = Table::new("users", &format!("{base}/users"));
     table.columns = vec![
         Column::new("picture", "").center().wide_only(),
-        Column::new("username", t("username")).sortable(),
-        Column::new("email", t("email")).sortable(),
+        Column::new("username", t("username")),
+        Column::new("email", t("email")),
         Column::new("permissions_count", t("permissions.title")),
     ];
     table.searchable = true;
@@ -341,7 +348,10 @@ async fn render_list(
     for r in &rows {
         let own = r.sub.user_id.0 == viewer;
         let mut row = Row::new(r.sub.id.0.to_string())
-            .cell("picture", Cell::Image { src: avatar_src(&r.username) })
+            .cell(
+                "picture",
+                Cell::Image { src: if r.avatar.is_empty() { avatar_src(&r.username) } else { r.avatar.clone() } },
+            )
             .cell("username", Cell::text(r.username.clone()))
             .cell("email", Cell::text(r.email.clone()))
             .cell("permissions_count", Cell::text(visible_permission_count(&r.sub).to_string()));
