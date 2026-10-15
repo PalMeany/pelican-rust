@@ -38,7 +38,17 @@ PELICAN_TARGET_VOLUME="$VOLUME" "$REPO/scripts/cargo" build -q --release -p peli
 
 echo "== database and the original panel (creates the schema)"
 compose "up -d mariadb panel-orig >/dev/null 2>&1"
-for _ in $(seq 1 120); do compose "logs panel-orig 2>&1" | grep -q "Caching Blade views" && break; sleep 2; done
+ready=""
+for _ in $(seq 1 120); do
+  compose "logs panel-orig 2>&1" | grep -q "Caching Blade views" && { ready=1; break; }
+  compose "ps --status running panel-orig" | grep -q panel-orig || break
+  sleep 2
+done
+if [[ -z "$ready" ]]; then
+  echo "the original panel did not start:" >&2
+  compose "logs --tail 30 panel-orig" >&2
+  exit 1
+fi
 sleep 5
 
 echo "== seeding (scale $SCALE)"
