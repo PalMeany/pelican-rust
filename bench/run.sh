@@ -37,7 +37,9 @@ echo "== release build"
 PELICAN_TARGET_VOLUME="$VOLUME" "$REPO/scripts/cargo" build -q --release -p pelican
 
 echo "== database and the original panel (creates the schema)"
-compose "up -d mariadb panel-orig >/dev/null 2>&1"
+compose "up -d mariadb >/dev/null 2>&1"
+# A fresh original each run: clean caches, and its start-up log tells when it is ready.
+compose "up -d --force-recreate panel-orig >/dev/null 2>&1"
 ready=""
 for _ in $(seq 1 120); do
   compose "logs panel-orig 2>&1" | grep -q "Caching Blade views" && { ready=1; break; }
