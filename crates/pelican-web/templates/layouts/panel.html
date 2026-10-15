@@ -61,6 +61,9 @@
       <div class="banner {{ b.status }}">{{ icon('alert-triangle', 'icon') }}<div><strong>{{ b.title }}</strong>{% if b.body %}<div>{{ b.body }}</div>{% endif %}</div></div>
       {% endfor %}
       {% block content %}{% endblock %}
+      {% if plugin_hooks['pelican::footer.start'] or plugin_hooks['pelican::footer.end'] %}
+      <footer class="plugin-footer">{{ plugin_hooks['pelican::footer.start'] | safe if plugin_hooks['pelican::footer.start'] }}{{ plugin_hooks['pelican::footer.end'] | safe if plugin_hooks['pelican::footer.end'] }}</footer>
+      {% endif %}
     </main>
   </div>
 </div>

@@ -379,3 +379,6 @@ canvas.chart { width: 100%; height: 120px; display: block; }
 .wizard-steps li::before { content: counter(step); font-weight: 600; }
 .wizard-steps li.done { color: var(--success-600); border-color: rgb(34 197 94 / 0.35); }
 .wizard-steps li.current { color: var(--primary-600); border-color: var(--primary-600); font-weight: 600; }
+
+/* Footer content of PHP plugins' render hooks (ADR-0020). */
+.plugin-footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border, #e5e7eb); font-size: .875rem; text-align: center; color: var(--muted, #6b7280); }

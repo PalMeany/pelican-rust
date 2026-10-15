@@ -176,6 +176,9 @@ pub struct Manifest {
     pub navigation: Vec<NavEntry>,
     #[serde(default)]
     pub listeners: Vec<String>,
+    /// Filament render hooks registered by plugins (`panels::body.end`, `pelican::footer.end`, …).
+    #[serde(default)]
+    pub render_hooks: Vec<String>,
     #[serde(default)]
     pub tasks: Vec<TaskEntry>,
     #[serde(default)]
@@ -700,4 +703,39 @@ pub async fn user_navigation(st: &AppState, panel: &str, user: i64, tenant: Opti
         g.get_or_insert_with(Default::default).insert(key, (std::time::Instant::now(), items.clone()));
     }
     items
+}
+
+type HookCache =
+    std::collections::HashMap<(String, i64, String), (std::time::Instant, Arc<serde_json::Map<String, Value>>)>;
+static HOOKS: std::sync::Mutex<Option<HookCache>> = std::sync::Mutex::new(None);
+
+/// The HTML of the PHP plugins' render hooks for a page of `panel` (`admin`, `app`,
+/// `server` with its `tenant`) as `user` (or a guest) sees it: hook name → HTML. Empty when
+/// no plugin registered hooks; cached for 30 s.
+pub async fn render_hooks(
+    st: &AppState,
+    panel: &str,
+    user: Option<i64>,
+    tenant: Option<&str>,
+) -> Arc<serde_json::Map<String, Value>> {
+    let empty = || Arc::new(serde_json::Map::new());
+    if !manifest().is_some_and(|m| !m.render_hooks.is_empty()) || is_down() {
+        return empty();
+    }
+    let key = (panel.to_string(), user.unwrap_or(0), tenant.unwrap_or_default().to_string());
+    if let Some((at, html)) = HOOKS.lock().ok().and_then(|g| g.as_ref().and_then(|c| c.get(&key).cloned())) {
+        if at.elapsed() < Duration::from_secs(30) {
+            return html;
+        }
+    }
+    let Some(sc) = get(st) else { return empty() };
+    let body = json!({ "panel": panel, "tenant": tenant });
+    let html = match sc.call_as(reqwest::Method::POST, "/_bridge/hooks", user, Some(&body)).await {
+        Ok((200, Value::Object(m))) => Arc::new(m),
+        _ => empty(),
+    };
+    if let Ok(mut g) = HOOKS.lock() {
+        g.get_or_insert_with(Default::default).insert(key, (std::time::Instant::now(), html.clone()));
+    }
+    html
 }

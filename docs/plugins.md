@@ -129,6 +129,9 @@ docker run -d --name pelican-sidecar --network <сеть pelican-rs> \
 `examples/php-plugins/greeter`; проверено на плагинах `tickets`, `player-counter`, `robo-avatars`,
 `pirate-language` из [pelican-dev/plugins](https://github.com/pelican-dev/plugins).
 
+Render hooks плагинов (`FilamentView::registerRenderHook`: head, начало/конец страницы и body, футер, форма входа)
+вставляются в страницы pelican-rs.
+
 Ограничения: server features PHP-плагинов (модалки на консоли — действия Filament), темы и виджеты плагинов на
 страницах ядра, OAuth/captcha-провайдеры из PHP-плагинов. Версии sidecar и панели
 сверяются: при расхождении PHP-плагины отключаются (ошибка в логе).

@@ -19,9 +19,12 @@
   "error": "Error",
 } | tojson }};</script>
 {% block head %}{% endblock %}
+{% for h in ['panels::head.start', 'panels::styles.before', 'panels::styles.after', 'panels::head.end'] %}{{ plugin_hooks[h] | safe if plugin_hooks[h] }}{% endfor %}
 </head>
 <body>
+{% for h in ['panels::body.start', 'panels::page.start'] %}{{ plugin_hooks[h] | safe if plugin_hooks[h] }}{% endfor %}
 {% block body %}{% endblock %}
+{% for h in ['panels::page.end', 'panels::body.end', 'panels::scripts.before', 'panels::scripts.after'] %}{{ plugin_hooks[h] | safe if plugin_hooks[h] }}{% endfor %}
 <div id="toasts" class="toasts" aria-live="polite"></div>
 {% if flash %}<script type="application/json" data-flash>{{ flash | tojson }}</script>{% endif %}
 <dialog id="confirm-dialog" class="modal confirm">

@@ -36,6 +36,8 @@ pub struct Web {
     pub scheme_host: String,
     /// The `Origin` header.
     pub origin: Option<String>,
+    /// HTML of PHP plugins' Filament render hooks for this page (ADR-0020), by hook name.
+    pub plugin_hooks: std::sync::Arc<serde_json::Map<String, serde_json::Value>>,
 }
 
 /// A page that requires a signed-in user (Filament `Authenticate`).
@@ -133,6 +135,7 @@ impl Web {
             flash => Value::from_serialize(&flash),
             binary_prefix => self.st.config.use_binary_prefix,
             path => self.path.clone(),
+            plugin_hooks => Value::from_serialize(&*self.plugin_hooks),
             hx => self.hx,
         }
     }
@@ -229,6 +232,14 @@ impl FromRequestParts<AppState> for Web {
             Some(v6) => format!("[{}", v6.split(']').next().unwrap_or("")) + "]",
             None => http_host.split(':').next().unwrap_or("").to_string(),
         };
+        // The Filament panel this path belongs to (`/server/{tenant}/…`, `/admin…`, else `app`).
+        let segs: Vec<&str> = uri.path().trim_start_matches('/').split('/').collect();
+        let (panel, tenant) = match segs.first().copied() {
+            Some("admin") => ("admin", None),
+            Some("server") => ("server", segs.get(1).copied()),
+            _ => ("app", None),
+        };
+        let plugin_hooks = pelican_api::sidecar::render_hooks(st, panel, user.as_ref().map(|u| u.id()), tenant).await;
         Ok(Web {
             st: st.clone(),
             session,
@@ -242,6 +253,7 @@ impl FromRequestParts<AppState> for Web {
             secure,
             host,
             origin: header("origin"),
+            plugin_hooks,
         })
     }
 }

@@ -4,6 +4,7 @@
 {% block card %}
 <h1>{{ trans('filament-panels::auth/pages/login.heading') }}</h1>
 {% if password_login %}
+{{ plugin_hooks['panels::auth.login.form.before'] | safe if plugin_hooks['panels::auth.login.form.before'] }}
 <form method="post" action="/login" class="form">
   {{ csrf_field() }}
   {{ f.text('login', trans('filament-panels::auth/pages/login.title'), old.login, errors, required=true, autofocus=true, autocomplete='username') }}
@@ -18,6 +19,7 @@
   {% endif %}
   <button type="submit" class="btn btn-block">{{ trans('filament-panels::auth/pages/login.form.actions.authenticate.label') }}</button>
 </form>
+{{ plugin_hooks['panels::auth.login.form.after'] | safe if plugin_hooks['panels::auth.login.form.after'] }}
 {% endif %}
 {% if oauth %}
 <div class="row" style="flex-wrap:wrap;justify-content:center;margin-top:1rem">

@@ -34,6 +34,7 @@ class BridgeController extends Controller
             'framework_routes' => $this->frameworkRoutes(),
             'navigation' => $this->navigation(),
             'listeners' => $this->listenedEvents(),
+            'render_hooks' => array_keys($this->pluginRenderHooks()),
             'tasks' => $this->tasks(),
             'features' => $this->features(),
             'avatars' => $this->avatars(),
@@ -342,6 +343,75 @@ class BridgeController extends Controller
         }, $args);
 
         return new $class(...$values);
+    }
+
+    /**
+     * The plugins' Filament render hooks (`FilamentView::registerRenderHook()`): name => scope => closures.
+     *
+     * @return array<string, array<string, \Closure[]>>
+     */
+    private function pluginRenderHooks(): array
+    {
+        $manager = app(\Filament\Support\View\ViewManager::class);
+        $all = (new ReflectionProperty($manager, 'renderHooks'))->getValue($manager);
+        $out = [];
+        foreach ($all as $name => $scopes) {
+            foreach ($scopes as $scope => $hooks) {
+                foreach ($hooks as $hook) {
+                    if (!is_null(Origin::pluginOfListener($hook))) {
+                        $out[$name][$scope][] = $hook;
+                    }
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * The HTML of the plugins' render hooks for a page of `panel` (global hooks and those
+     * scoped to the panel), as the signed user (or a guest) sees it.
+     */
+    public function renderHooks(Request $request): JsonResponse
+    {
+        $id = (int) $request->header('X-Pelican-Rs-User', '0');
+        if ($id !== 0 && ($user = \App\Models\User::query()->find($id))) {
+            \Illuminate\Support\Facades\Auth::setUser($user);
+            if ($user->language) {
+                app()->setLocale($user->language);
+            }
+        }
+        $panelId = (string) $request->input('panel');
+        try {
+            $panel = Filament::getPanel($panelId);
+            Filament::setCurrentPanel($panel);
+            if ($panel->hasTenancy() && $request->filled('tenant')) {
+                $tenant = \App\Models\Server::query()->where('uuid_short', (string) $request->input('tenant'))->first();
+                if ($tenant) {
+                    Filament::setTenant($tenant);
+                }
+            }
+        } catch (Throwable) {
+            // Pages outside the panels (login): global hooks only.
+        }
+        $out = [];
+        foreach ($this->pluginRenderHooks() as $name => $scopes) {
+            $html = '';
+            foreach (['', $panelId] as $scope) {
+                foreach ($scopes[$scope] ?? [] as $hook) {
+                    try {
+                        $html .= (string) app()->call($hook, ['data' => [], 'scopes' => [$panelId]]);
+                    } catch (Throwable $exception) {
+                        report($exception);
+                    }
+                }
+            }
+            if ($html !== '') {
+                $out[$name] = $html;
+            }
+        }
+
+        return new JsonResponse((object) $out);
     }
 
     /** @return array<int, array<string, mixed>> */
