@@ -69,3 +69,39 @@ pub async fn exec(container: &str, cmd: &[&str]) -> Result<i64> {
     }
     Ok(code)
 }
+
+/// Docker's multiplexed stdout/stderr stream (`Tty: false`): keep stdout frames.
+fn demux(mut b: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    while b.len() >= 8 {
+        let kind = b[0];
+        let size = u32::from_be_bytes([b[4], b[5], b[6], b[7]]) as usize;
+        let end = (8 + size).min(b.len());
+        if kind == 1 {
+            out.extend_from_slice(&b[8..end]);
+        }
+        b = &b[end..];
+    }
+    out
+}
+
+/// `docker exec -u www-data <container> <cmd...>` returning stdout.
+pub async fn exec_output(container: &str, cmd: &[&str]) -> Result<String> {
+    let (st, body) = request(
+        "POST",
+        &format!("/containers/{container}/exec"),
+        Some(&serde_json::json!({"AttachStdout": true, "AttachStderr": true, "User": "www-data", "Cmd": cmd})),
+    )
+    .await?;
+    if st != 201 {
+        bail!("docker exec create: HTTP {st}: {}", String::from_utf8_lossy(&body));
+    }
+    let id = serde_json::from_slice::<serde_json::Value>(&body)?["Id"].as_str().context("exec id")?.to_string();
+    let (st, out) =
+        request("POST", &format!("/exec/{id}/start"), Some(&serde_json::json!({"Detach": false, "Tty": false})))
+            .await?;
+    if st != 200 {
+        bail!("docker exec start: HTTP {st}");
+    }
+    Ok(String::from_utf8_lossy(&demux(&out)).into_owned())
+}

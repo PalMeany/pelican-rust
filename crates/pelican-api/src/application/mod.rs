@@ -5,6 +5,7 @@ pub mod database_hosts;
 pub mod eggs;
 mod mounts;
 pub mod nodes;
+pub mod plugins;
 mod roles;
 pub mod servers;
 pub mod servers_write;
@@ -12,7 +13,7 @@ pub mod users;
 pub mod webhooks;
 
 use axum::Router;
-use axum::routing::{MethodRouter, delete, get, patch, post};
+use axum::routing::{MethodRouter, delete, get, patch, post, put};
 use pelican_core::state::AppState;
 use serde_json::{Map, Value, json};
 
@@ -173,6 +174,16 @@ pub fn routes(state: &AppState) -> Router<AppState> {
             "/database-hosts/{database_host}",
             p(get(database_hosts::view).patch(database_hosts::update).delete(database_hosts::delete)),
         )
+        .route("/plugins", p(get(plugins::index)))
+        .route("/plugins/import/file", p(post(plugins::import_file)))
+        .route("/plugins/import/url", p(post(plugins::import_url)))
+        .route("/plugins/hub", p(put(plugins::hub)))
+        .route("/plugins/{plugin}", p(get(plugins::view)))
+        .route("/plugins/{plugin}/install", p(post(plugins::install)))
+        .route("/plugins/{plugin}/update", p(post(plugins::update)))
+        .route("/plugins/{plugin}/uninstall", p(post(plugins::uninstall)))
+        .route("/plugins/{plugin}/enable", p(post(plugins::enable)))
+        .route("/plugins/{plugin}/disable", p(post(plugins::disable)))
         .route("/mounts", p(get(mounts::index).post(mounts::store)))
         .route("/mounts/{mount}", p(get(mounts::view).patch(mounts::update).delete(mounts::delete)))
         .route("/mounts/{mount}/eggs", p(get(mounts::get_eggs).post(mounts::add_eggs)))

@@ -1,0 +1,25 @@
+[package]
+name = "pelican-plugins"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+pelican-core = { path = "../pelican-core" }
+laravel-compat = { path = "../laravel-compat" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+rand.workspace = true
+uuid.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+sha2 = "0.10"
+hex = "0.4"
+regex = "1"
+
+[dev-dependencies]
+tempfile = "3"

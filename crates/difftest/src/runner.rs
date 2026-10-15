@@ -23,6 +23,8 @@ pub struct StepResult {
 pub struct RunResult {
     pub steps: Vec<StepResult>,
     pub changes: Vec<Change>,
+    /// `(dir/plugin.json, content)` after the steps (plugin scenarios only).
+    pub plugin_files: Vec<(String, String)>,
     pub start: chrono::NaiveDateTime,
     pub end: chrono::NaiveDateTime,
 }
@@ -67,6 +69,74 @@ impl Target<'_> {
         }
     }
 
+    /// Empty `plugins/` and write the scenario's files.
+    async fn plugins_setup(&self, files: &[(String, Vec<u8>)]) -> Result<()> {
+        use base64::Engine;
+        match self {
+            Target::Orig { container: Some(c), .. } => {
+                let mut script =
+                    String::from("set -e; cd /var/www/html/plugins; find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +;");
+                for (path, bytes) in files {
+                    let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+                    script
+                        .push_str(&format!(" mkdir -p \"$(dirname '{path}')\"; echo '{b64}' | base64 -d > '{path}';"));
+                }
+                let code = crate::docker::exec(c, &["sh", "-c", &script]).await?;
+                anyhow::ensure!(code == 0, "writing plugin files into panel-orig failed");
+                Ok(())
+            }
+            Target::Rust { state: Some(st), .. } => {
+                let root = st.config.base_path.join("plugins");
+                let _ = std::fs::remove_dir_all(&root);
+                std::fs::create_dir_all(&root)?;
+                for (path, bytes) in files {
+                    let file = root.join(path);
+                    if let Some(parent) = file.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    std::fs::write(file, bytes)?;
+                }
+                Ok(())
+            }
+            _ => anyhow::bail!("plugin scenarios need PELICAN_ORIG_CONTAINER and an in-process pelican-rs"),
+        }
+    }
+
+    /// Every `<dir>/plugin.json` (sorted) with its content.
+    async fn plugins_dump(&self) -> Result<Vec<(String, String)>> {
+        let mut out = Vec::new();
+        match self {
+            Target::Orig { container: Some(c), .. } => {
+                let text = crate::docker::exec_output(
+                    c,
+                    &["sh", "-c", "cd /var/www/html/plugins && for f in $(ls -d */ 2>/dev/null); do if [ -f \"$f/plugin.json\" ]; then printf '\\n@@@ %splugin.json\\n' \"$f\"; cat \"$f/plugin.json\"; fi; done"],
+                )
+                .await?;
+                for chunk in text.split("\n@@@ ").skip(1) {
+                    let (name, body) = chunk.split_once('\n').unwrap_or((chunk, ""));
+                    out.push((name.to_string(), body.to_string()));
+                }
+            }
+            Target::Rust { state: Some(st), .. } => {
+                let root = st.config.base_path.join("plugins");
+                let mut dirs: Vec<String> = std::fs::read_dir(&root)?
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().is_dir())
+                    .map(|e| e.file_name().to_string_lossy().into_owned())
+                    .filter(|n| !n.starts_with('.'))
+                    .collect();
+                dirs.sort();
+                for d in dirs {
+                    if let Ok(body) = std::fs::read_to_string(root.join(&d).join("plugin.json")) {
+                        out.push((format!("{d}/plugin.json"), body));
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(out)
+    }
+
     async fn command(&self, name: &str) -> Result<i64> {
         match self {
             Target::Orig { container: Some(c), .. } => {
@@ -88,6 +158,9 @@ pub async fn run(ctx: &Ctx<'_>, s: &Scenario, target: &Target<'_>) -> Result<Run
     ctx.db.load(&rows, ctx.enc, now()).await.context("loading fixtures")?;
     let before = ctx.db.dump().await?;
     let _ = ctx.wings.take_calls();
+    if s.plugins.is_some() {
+        target.plugins_setup(&crate::scenario::plugin_files(s)?).await.context("plugin files")?;
+    }
 
     let start = now();
     let mut steps = Vec::new();
@@ -153,7 +226,8 @@ pub async fn run(ctx: &Ctx<'_>, s: &Scenario, target: &Target<'_>) -> Result<Run
         .into_iter()
         .filter(|c| !s.normalize.ignore_tables.iter().any(|t| t == change_table(c)))
         .collect();
-    Ok(RunResult { steps, changes, start, end })
+    let plugin_files = if s.plugins.is_some() { target.plugins_dump().await? } else { Vec::new() };
+    Ok(RunResult { steps, changes, plugin_files, start, end })
 }
 
 fn change_table(c: &Change) -> &str {
@@ -241,6 +315,12 @@ pub fn report(enc: &Encrypter, s: &Scenario, rows_text: &str, r: &RunResult) -> 
     }
     raw.push_str(&lines.join("\n"));
     raw.push('\n');
+    if s.plugins.is_some() {
+        writeln!(raw, "### plugin files")?;
+        for (name, body) in &r.plugin_files {
+            writeln!(raw, "== {name}\n{body}")?;
+        }
+    }
 
     let known = format!(
         "{rows_text}\n{}",

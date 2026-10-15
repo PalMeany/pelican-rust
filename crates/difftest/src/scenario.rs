@@ -28,6 +28,11 @@ pub struct Scenario {
     pub normalize: NormalizeRules,
     #[serde(default)]
     pub wings: WingsConfig,
+    /// Plugin directories written into both panels' `plugins/` before the steps (the
+    /// directory is emptied first): `<dir>: {<relative file>: <string | yaml mapping>}`;
+    /// mappings are written as JSON. The resulting `plugin.json` files are compared.
+    #[serde(default)]
+    pub plugins: Option<IndexMap<String, IndexMap<String, serde_yaml::Value>>>,
     /// Restrict to these backends (default: all).
     #[serde(default)]
     pub backends: Option<Vec<String>>,
@@ -162,4 +167,19 @@ pub fn load_fixture(dir: &Path, name: &str) -> Result<Rows> {
     let p = dir.join(format!("{name}.yaml"));
     let text = std::fs::read_to_string(&p).with_context(|| format!("reading fixture {}", p.display()))?;
     serde_yaml::from_str(&text).with_context(|| format!("parsing fixture {}", p.display()))
+}
+
+/// `(relative path, bytes)` of a scenario's plugin files.
+pub fn plugin_files(s: &Scenario) -> Result<Vec<(String, Vec<u8>)>> {
+    let mut out = Vec::new();
+    for (dir, files) in s.plugins.iter().flatten() {
+        for (name, content) in files {
+            let bytes = match content {
+                serde_yaml::Value::String(t) => t.clone().into_bytes(),
+                other => serde_json::to_vec(&serde_json::to_value(other)?)?,
+            };
+            out.push((format!("{dir}/{name}"), bytes));
+        }
+    }
+    Ok(out)
 }

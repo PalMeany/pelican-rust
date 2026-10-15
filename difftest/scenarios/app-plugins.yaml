@@ -1,0 +1,80 @@
+name: app/plugins-read
+description: Listing (filters, sorts, pagination), error rows, binding and ACL of /api/application/plugins.
+fixtures: [base, infra, app-extra]
+plugins:
+  alpha:
+    plugin.json: { id: alpha, name: Alpha Tools, author: Jane, version: "1.2.0", description: First plugin, category: plugin, url: "https://example.com/alpha", namespace: "Jane\\Alpha", class: AlphaPlugin, panels: [admin, server], panel_version: "^1.0", api_version: 1, composer_packages: { "vendor/package": "^2.0" }, meta: { status: enabled, load_order: 2 } }
+    README.md: "# Alpha"
+  beta:
+    plugin.json: { id: Beta, name: Beta Theme, author: Bob, category: theme, namespace: "Bob\\Beta", class: BetaPlugin, panels: "app", custom_key: { keep: [1, 2] } }
+  gamma:
+    plugin.json: { id: gamma, name: Gamma, author: anna, version: "0.1.0", category: language, namespace: "Anna\\Gamma", class: GammaPlugin, meta: { status: Disabled, status_message: Paused, load_order: 1 } }
+  mismatch:
+    plugin.json: { id: something-else, name: Wrong, author: X, category: plugin, namespace: "X\\Y", class: Z }
+  noname:
+    plugin.json: { id: noname, author: X, category: plugin, namespace: "X\\Y", class: Z }
+  broken:
+    plugin.json: "{not json"
+  .hidden:
+    plugin.json: { id: .hidden, name: Hidden, author: X, category: plugin, namespace: "X\\Y", class: Z }
+  nomanifest:
+    README.md: nothing here
+steps:
+  - { path: /api/application/plugins, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 200 }
+  - { path: "/api/application/plugins?per_page=2&page=2", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/plugins?filter[name]=ALPHA", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/plugins?filter[author]=j,an", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/plugins?filter[category]=theme", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/plugins?filter[nope]=x", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/plugins?sort=-name", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/plugins?sort=author,id", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: "/api/application/plugins?sort=version", bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/plugins/alpha, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/plugins/beta, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/plugins/Alpha, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/plugins/missing, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/plugins, bearer: pacc_admin000001AdminClientSecret000000000000001 }
+  - { path: /api/application/plugins, bearer: papp_mountonly01MountOnlySecret00000000000000001 }
+  - { method: POST, path: /api/application/plugins/alpha/enable, bearer: papp_mountonly01MountOnlySecret00000000000000001 }
+normalize:
+  random_patterns:
+    - '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+---
+name: app/plugins-state
+description: Enable/disable transitions, the refused ones, and the rewritten plugin.json files.
+fixtures: [base, infra, app-extra]
+plugins:
+  alpha:
+    plugin.json: { id: alpha, name: Alpha, author: Jane, category: plugin, namespace: "Jane\\Alpha", class: AlphaPlugin, url: "https://example.com/a/b", description: "Ünïcode ✓", extra: {}, meta: { status: enabled, load_order: 3, note: kept } }
+  beta:
+    plugin.json: { id: beta, name: Beta, author: Bob, category: plugin, namespace: "Bob\\Beta", class: BetaPlugin, meta: { status: disabled } }
+  gamma:
+    plugin.json: { id: gamma, name: Gamma, author: Anna, category: plugin, namespace: "Anna\\Gamma", class: GammaPlugin }
+  delta:
+    plugin.json: { id: delta, name: Delta, author: Dan, category: plugin, namespace: "Dan\\Delta", class: DeltaPlugin, meta: { status: incompatible, status_message: old } }
+steps:
+  - { method: POST, path: /api/application/plugins/alpha/disable, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/plugins/alpha/disable, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/plugins/beta/enable, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/plugins/beta/enable, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/plugins/gamma/enable, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/plugins/gamma/disable, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/plugins/gamma/uninstall, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/plugins/beta/install, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/plugins/beta/update, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/plugins/beta/uninstall, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { delete: maybe } }
+  - { path: /api/application/plugins/delta, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: POST, path: /api/application/plugins/missing/enable, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+---
+name: app/plugins-hub-validation
+description: PUT /plugins/hub validation (no .env write) and the import endpoints' request errors.
+fixtures: [base, infra, app-extra]
+plugins: {}
+steps:
+  - { method: PUT, path: /api/application/plugins/hub, bearer: papp_admin000001AdminAppSecret000000000000000001, json: {} }
+  - { method: PUT, path: /api/application/plugins/hub, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { hub_url: "http://hub.example.com", api_key: "nope" } }
+  - { method: PUT, path: /api/application/plugins/hub, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { hub_url: "https://hub example.com", api_key: "pnl_abc!" } }
+  - { method: PUT, path: /api/application/plugins/hub, bearer: papp_mountonly01MountOnlySecret00000000000000001, json: {} }
+  - { method: POST, path: /api/application/plugins/import/url, bearer: papp_admin000001AdminAppSecret000000000000000001, json: {} }
+  - { method: POST, path: /api/application/plugins/import/file, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { path: /api/application/plugins, bearer: papp_admin000001AdminAppSecret000000000000000001 }

@@ -1,7 +1,6 @@
 //! Starting pelican-rs in-process as the second target.
 
 use std::collections::HashMap;
-use std::path::Path;
 
 use pelican_core::env::Env;
 
@@ -30,7 +29,10 @@ pub async fn start(backend: &str, app_key: &str) -> anyhow::Result<(String, peli
     set("DB_DATABASE", &cfg.database);
     set("DB_USERNAME", &cfg.username);
     set("DB_PASSWORD", &cfg.password);
-    let state = pelican::boot(Env::from_map(vars), Path::new("/nonexistent")).await?;
+    // A writable base path: plugin scenarios use its `plugins/` directory.
+    let base = std::env::temp_dir().join(format!("pelican-difftest-{backend}"));
+    std::fs::create_dir_all(base.join("plugins"))?;
+    let state = pelican::boot(Env::from_map(vars), &base).await?;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;
     let handle = state.clone();
