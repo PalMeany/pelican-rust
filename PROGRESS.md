@@ -74,9 +74,17 @@
 ## Где остановился / что дальше
 - Репозиторий: https://github.com/PalMeany/pelican-rust (публичный, AGPL-3.0-only как оригинал; автор коммитов —
   PalMeany, noreply-адрес; `gh` переключён на PalMeany). Пушить `main` и рабочие ветки; оригинал не трогать.
-- `main` = M1–M7 (полный диф-тест 4 СУБД: 77/0/2 на каждой). Ветка `m8` (`.worktrees/m8`) — PHP-sidecar
-  (ADR-0020), проверен на реальных плагинах pelican-dev/plugins (tickets, player-counter, robo-avatars,
-  pirate-language; исходники — `../.plugins-src`). Дальше: полный диф-тест m8 → слияние в main.
+- `main` = M1–M8 (полный диф-тест 4 СУБД: 77/0/2 на каждой; M8 — PHP-sidecar, ADR-0020, проверен на реальных
+  плагинах pelican-dev/plugins, исходники — `../.plugins-src`). Ветка `m9` (`.worktrees/m9`) — M9 по PLAN.md:
+  CLI `p:*` готов целиком, `/docs/api`, упаковка/CI, render hooks/входы/действия консоли PHP-плагинов, нагрузочный
+  стенд `bench/`. Дальше: замеры на сервере → оптимизация → полный диф-тест → слияние m9 в main.
+- Тестовый сервер пользователя `root@195.3.221.43` (ключ `~/.ssh/id_ed25519`, разрешено пользователем): Ryzen 5950X
+  32 потока, 125 ГБ. НА НЁМ ЖИВЫЕ WINGS И ИГРОВЫЕ СЕРВЕРЫ — ничего чужого не трогать, порты не публиковать, всё
+  своё — в `/opt/pelican-rs-bench` и compose-проектах `pelican-bench*`, CPU только 12–15,28–31 (`PELICAN_CPUSET`,
+  `BENCH_CPUSET_*`, buildx-билдер `pelican-rs-builder` с тем же cpuset; см. bench/README.md). Образ оригинала там
+  собирается из `../panel` (amd64; образ из VM — arm64 и не годится).
+- CLI-тесты: копии dev-данных `.worktrees/<wt>/.cli-test` — `DB_DATABASE` в их `.env` указывать на свою копию
+  (по умолчанию там абсолютный путь к базе dev-панели — однажды записали туда тестовые ноды).
 - E2E-окружение: контейнер `pelican-sidecar` (образ `pelican-orig:dev`, сеть `pelican-e2e`), dev-панель
   `pelican-m8-dev` с `PANEL_PHP_SIDECAR=http://pelican-sidecar`, данные `.worktrees/.difftest/m6dev`.
 - ADR-0021 (SpacetimeDB) — отложено решением пользователя.
@@ -86,7 +94,7 @@
 Кэш НЕ беречь: после каждой вехи/пачки воркеров — `scripts/clean.sh` (cargo clean в target-томах,
 удаление томов/окружений удалённых worktree, prune кэша docker) и `limactl shell pelican -- sudo fstrim -av`
 (иначе образ диска VM на хосте не уменьшится). Профиль dev/test без debug-инфо и incremental.
-Проверка: `df -h /Users/tazik`, `du -sh ~/.lima/pelican`. Пользователь предлагал отдельный сервер для сборок.
+Проверка: `df -h /Users/tazik`, `du -sh ~/.lima/pelican`. Тяжёлое (бенчмарки, при нехватке места — сборки) — на сервере (см. выше).
 
 ## Грабли (важно)
 - Каждый checkout (main, `.worktrees/<name>`) обязан иметь свой target-том: cargo хеширует path-крейты
