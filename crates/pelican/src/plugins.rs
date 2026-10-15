@@ -73,6 +73,13 @@ pub fn start(live: &Live) {
         tracing::info!("PANEL_PLUGIN_SAFE_MODE: plugins are not loaded");
         return;
     }
+    // PHP plugins run in the sidecar (ADR-0020): its plugins directory, then the manifest.
+    if pelican_api::sidecar::get(&st).is_some() {
+        if let Err(e) = pelican_api::sidecar::sync_plugins_dir(&st, &cfg.plugins()) {
+            tracing::error!(error = %e, "preparing the sidecar's plugins directory failed");
+        }
+        pelican_api::sidecar::spawn_refresher(st.clone());
+    }
     let storage = st.config.base_path.join("storage").join("plugins");
     match Runtime::new(Arc::new(PanelServices { live: live.clone() }), storage) {
         Ok(rt) => {

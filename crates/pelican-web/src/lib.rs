@@ -15,6 +15,7 @@ pub mod models;
 pub mod plugin_pages;
 pub mod server_info;
 pub mod session;
+pub mod sidecar_proxy;
 pub mod table;
 pub mod variables;
 pub mod views;
@@ -68,7 +69,7 @@ pub fn router(state: AppState) -> Router {
         .merge(app::routes())
         .merge(admin::routes())
         .merge(server::routes())
-        .fallback(error::not_found)
+        .fallback(sidecar_proxy::fallback)
         .layer(from_fn(csrf::layer))
         .layer(from_fn_with_state(state.clone(), session::layer));
     Router::new()

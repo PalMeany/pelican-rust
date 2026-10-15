@@ -22,6 +22,7 @@ pub mod remote;
 pub mod resources;
 pub mod s3;
 pub mod services;
+pub mod sidecar;
 pub mod url_rule;
 pub mod validation;
 pub mod versions;

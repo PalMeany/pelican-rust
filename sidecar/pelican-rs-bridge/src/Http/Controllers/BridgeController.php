@@ -31,6 +31,7 @@ class BridgeController extends Controller
             'version' => config('app.version'),
             'plugins' => array_values(Origin::namespaces()),
             'routes' => $this->routes(),
+            'framework_routes' => $this->frameworkRoutes(),
             'navigation' => $this->navigation(),
             'listeners' => $this->listenedEvents(),
             'tasks' => $this->tasks(),
@@ -130,6 +131,25 @@ class BridgeController extends Controller
         }
 
         return $out;
+    }
+
+    /**
+     * Livewire's endpoints (hashed prefix in Livewire 4) and Filament's export/import
+     * downloads: needed by the plugins' pages, owned by neither panel's core.
+     *
+     * @return string[]
+     */
+    private function frameworkRoutes(): array
+    {
+        $out = [];
+        foreach (Route::getRoutes()->getRoutes() as $route) {
+            $action = ltrim((string) $route->getActionName(), '\\');
+            if (str_starts_with($action, 'Livewire\\') || str_starts_with($action, 'Filament\\Actions\\')) {
+                $out[] = '/' . ltrim($route->uri(), '/');
+            }
+        }
+
+        return array_values(array_unique($out));
     }
 
     /** @return array<int, array<string, mixed>> */

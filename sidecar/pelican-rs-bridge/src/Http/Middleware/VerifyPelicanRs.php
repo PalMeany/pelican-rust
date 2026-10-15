@@ -12,7 +12,7 @@ class VerifyPelicanRs
 {
     public function handle(Request $request, Closure $next): Response
     {
-        abort_unless(Signature::valid($request, true), 403);
+        abort_unless(Signature::valid($request), 403);
 
         return $next($request);
     }

@@ -1,0 +1,466 @@
+//! PHP sidecar for the original's plugins (ADR-0020): the original panel of the same
+//! version runs next to pelican-rs with the `pelican-rs-bridge` plugin. This module signs
+//! requests to it, keeps its manifest (what the PHP plugins registered), forwards events
+//! and schedule tasks, and runs plugin lifecycle steps there. Request proxying lives in
+//! `pelican-web` (`sidecar_proxy`).
+
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
+use std::time::Duration;
+
+use hmac::{Hmac, Mac};
+use pelican_core::state::AppState;
+use serde::Deserialize;
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+
+use crate::error::{ApiError, ApiResult};
+
+/// The bridge plugin shipped into the sidecar's `plugins/` (hidden from pelican-rs).
+pub const BRIDGE_ID: &str = "pelican-rs-bridge";
+
+const BRIDGE_FILES: &[(&str, &str)] = &[
+    ("plugin.json", include_str!("../../../sidecar/pelican-rs-bridge/plugin.json")),
+    ("src/BridgePlugin.php", include_str!("../../../sidecar/pelican-rs-bridge/src/BridgePlugin.php")),
+    ("src/Origin.php", include_str!("../../../sidecar/pelican-rs-bridge/src/Origin.php")),
+    ("src/Signature.php", include_str!("../../../sidecar/pelican-rs-bridge/src/Signature.php")),
+    (
+        "src/Providers/BridgeProvider.php",
+        include_str!("../../../sidecar/pelican-rs-bridge/src/Providers/BridgeProvider.php"),
+    ),
+    (
+        "src/Http/Controllers/BridgeController.php",
+        include_str!("../../../sidecar/pelican-rs-bridge/src/Http/Controllers/BridgeController.php"),
+    ),
+    (
+        "src/Http/Middleware/AuthenticateFromPelicanRs.php",
+        include_str!("../../../sidecar/pelican-rs-bridge/src/Http/Middleware/AuthenticateFromPelicanRs.php"),
+    ),
+    (
+        "src/Http/Middleware/VerifyPelicanRs.php",
+        include_str!("../../../sidecar/pelican-rs-bridge/src/Http/Middleware/VerifyPelicanRs.php"),
+    ),
+];
+
+/// Paths of the Filament/Livewire front end the sidecar's pages load.
+const ASSET_PREFIXES: &[&str] = &["/build/", "/css/", "/js/", "/fonts/", "/vendor/"];
+
+/// Sidecar connection settings (`PANEL_PHP_SIDECAR=<base url>`).
+#[derive(Clone)]
+pub struct Sidecar {
+    pub url: String,
+    secret: [u8; 32],
+}
+
+/// `PANEL_PHP_SIDECAR`; `None` when not configured.
+pub fn get(st: &AppState) -> Option<Sidecar> {
+    let url = st.config.env.string("PANEL_PHP_SIDECAR").filter(|u| !u.is_empty())?;
+    let key = st.config.env.string("APP_KEY").unwrap_or_default();
+    Some(Sidecar { url: url.trim_end_matches('/').to_string(), secret: secret(&key) })
+}
+
+/// `hash_hmac('sha256', 'pelican-rs-sidecar', APP_KEY, true)`.
+fn secret(app_key: &str) -> [u8; 32] {
+    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(app_key.as_bytes()).expect("HMAC accepts any key length");
+    mac.update(b"pelican-rs-sidecar");
+    mac.finalize().into_bytes().into()
+}
+
+/// Sidecar failures surface as `SidecarException`; the detail goes to the log.
+fn fail(detail: String) -> ApiError {
+    tracing::warn!(%detail, "sidecar");
+    ApiError::internal("SidecarException")
+}
+
+/// Laravel's `$request->path()` with a leading slash: no surrounding slashes.
+pub fn canonical_path(path: &str) -> String {
+    format!("/{}", path.trim_matches('/'))
+}
+
+impl Sidecar {
+    /// `X-Pelican-Rs-*` headers for a request (see the bridge's `Signature`).
+    pub fn signature(&self, method: &str, path: &str, user: Option<i64>, body: &[u8]) -> Vec<(&'static str, String)> {
+        let ts = pelican_core::time::now().and_utc().timestamp().to_string();
+        let user = user.map(|u| u.to_string()).unwrap_or_default();
+        let message = [
+            method.to_ascii_uppercase(),
+            canonical_path(path),
+            ts.clone(),
+            user.clone(),
+            hex::encode(Sha256::digest(body)),
+        ]
+        .join("\n");
+        let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(&self.secret).expect("HMAC accepts any key length");
+        mac.update(message.as_bytes());
+        let mut out =
+            vec![("x-pelican-rs-timestamp", ts), ("x-pelican-rs-signature", hex::encode(mac.finalize().into_bytes()))];
+        if !user.is_empty() {
+            out.push(("x-pelican-rs-user", user));
+        }
+        out
+    }
+
+    fn client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(60))
+            .connect_timeout(Duration::from_secs(5))
+            .build()
+            .unwrap_or_default()
+    }
+
+    /// A signed JSON call to a bridge endpoint.
+    async fn call(&self, method: reqwest::Method, path: &str, body: Option<&Value>) -> ApiResult<(u16, Value)> {
+        let bytes = body.map(|b| serde_json::to_vec(b).unwrap_or_default()).unwrap_or_default();
+        let mut req = Self::client()
+            .request(method.clone(), format!("{}{path}", self.url))
+            .header("accept", "application/json")
+            .header("content-type", "application/json");
+        for (k, v) in self.signature(method.as_str(), path, None, &bytes) {
+            req = req.header(k, v);
+        }
+        let resp = req.body(bytes).send().await.map_err(|e| fail(format!("sidecar: {e}")))?;
+        let status = resp.status().as_u16();
+        let value = resp.json::<Value>().await.unwrap_or(Value::Null);
+        Ok((status, value))
+    }
+}
+
+// --- manifest ------------------------------------------------------------------
+
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct Manifest {
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub plugins: Vec<String>,
+    #[serde(default)]
+    pub routes: Vec<RouteEntry>,
+    /// Livewire endpoints and Filament action downloads the plugins' pages use.
+    #[serde(default)]
+    pub framework_routes: Vec<String>,
+    #[serde(default)]
+    pub navigation: Vec<NavEntry>,
+    #[serde(default)]
+    pub listeners: Vec<String>,
+    #[serde(default)]
+    pub tasks: Vec<TaskEntry>,
+    #[serde(default)]
+    pub features: Vec<FeatureEntry>,
+    #[serde(default)]
+    pub avatars: Vec<AvatarEntry>,
+    /// `Role::$customPermissions` (`[]` when empty, an object otherwise).
+    #[serde(default)]
+    pub admin_permissions: Value,
+    #[serde(default)]
+    pub subuser_permissions: Vec<SubuserGroup>,
+    #[serde(default)]
+    pub api_resources: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RouteEntry {
+    pub plugin: String,
+    pub methods: Vec<String>,
+    pub uri: String,
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct NavEntry {
+    pub plugin: String,
+    pub panel: String,
+    pub path: String,
+    #[serde(default)]
+    pub tenant: bool,
+    pub label: String,
+    #[serde(default)]
+    pub group: Option<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub sort: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TaskEntry {
+    pub plugin: String,
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub payload_label: Option<String>,
+    #[serde(default)]
+    pub default_payload: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct FeatureEntry {
+    pub plugin: String,
+    pub id: String,
+    pub listeners: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AvatarEntry {
+    pub plugin: String,
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SubuserGroup {
+    pub name: String,
+    pub permissions: Vec<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub hidden: bool,
+    #[serde(default)]
+    pub translation_prefix: Option<String>,
+}
+
+static MANIFEST: RwLock<Option<Arc<Manifest>>> = RwLock::new(None);
+
+/// The last manifest fetched from the sidecar.
+pub fn manifest() -> Option<Arc<Manifest>> {
+    MANIFEST.read().ok().and_then(|m| m.clone())
+}
+
+/// Re-read the manifest (after start-up and plugin changes). A failed fetch keeps the
+/// previous one.
+pub async fn refresh(st: &AppState) -> ApiResult<()> {
+    let Some(sc) = get(st) else {
+        if let Ok(mut m) = MANIFEST.write() {
+            *m = None;
+        }
+        return Ok(());
+    };
+    let (status, body) = sc.call(reqwest::Method::GET, "/_bridge/manifest", None).await?;
+    if status != 200 {
+        return Err(fail(format!("sidecar manifest: HTTP {status}")));
+    }
+    let manifest: Manifest = serde_json::from_value(body).map_err(|e| fail(format!("sidecar manifest: {e}")))?;
+    if let Ok(mut m) = MANIFEST.write() {
+        *m = Some(Arc::new(manifest));
+    }
+    Ok(())
+}
+
+/// Keep the manifest fresh: now and every minute (plugins may change in the sidecar too).
+pub fn spawn_refresher(st: AppState) {
+    if get(&st).is_none() {
+        return;
+    }
+    tokio::spawn(async move {
+        loop {
+            if let Err(e) = refresh(&st).await {
+                tracing::warn!(error = ?e, "sidecar manifest refresh failed");
+            }
+            tokio::time::sleep(Duration::from_secs(60)).await;
+        }
+    });
+}
+
+/// Laravel route URI pattern (`/admin/x/{record}/edit`, `{param?}`) against a path.
+pub fn uri_matches(pattern: &str, path: &str) -> bool {
+    let pat: Vec<&str> = pattern.trim_matches('/').split('/').filter(|s| !s.is_empty()).collect();
+    let got: Vec<&str> = path.trim_matches('/').split('/').filter(|s| !s.is_empty()).collect();
+    let required = pat.iter().filter(|p| !(p.starts_with('{') && p.ends_with("?}"))).count();
+    if got.len() < required || got.len() > pat.len() {
+        return false;
+    }
+    pat.iter().zip(got.iter()).all(|(p, g)| (p.starts_with('{') && p.ends_with('}')) || p == g)
+}
+
+/// Whether a web path belongs to the sidecar: a PHP plugin's route or the front-end
+/// assets its pages load.
+pub fn owns(path: &str) -> bool {
+    let Some(m) = manifest() else { return false };
+    ASSET_PREFIXES.iter().any(|p| path.starts_with(p))
+        || m.routes.iter().any(|r| uri_matches(&r.uri, path))
+        || m.framework_routes.iter().any(|r| uri_matches(r, path))
+}
+
+/// `Str::is()` for listener names (`*` wildcards).
+fn name_matches(pattern: &str, name: &str) -> bool {
+    if !pattern.contains('*') {
+        return pattern == name;
+    }
+    let parts: Vec<&str> = pattern.split('*').collect();
+    let mut rest = name;
+    for (i, part) in parts.iter().enumerate() {
+        if i == 0 {
+            match rest.strip_prefix(part) {
+                Some(r) => rest = r,
+                None => return false,
+            }
+        } else if i == parts.len() - 1 {
+            return rest.ends_with(part);
+        } else {
+            match rest.find(part) {
+                Some(at) => rest = &rest[at + part.len()..],
+                None => return false,
+            }
+        }
+    }
+    true
+}
+
+/// Whether a PHP plugin listens to the event.
+pub fn listens(event: &str) -> bool {
+    manifest().is_some_and(|m| m.listeners.iter().any(|l| name_matches(l, event)))
+}
+
+/// Deliver an event to the PHP plugins' listeners (`body` = the bridge's event request).
+pub async fn event(st: &AppState, event: &str, body: Value) {
+    let Some(sc) = get(st) else { return };
+    if !listens(event) {
+        return;
+    }
+    match sc.call(reqwest::Method::POST, "/_bridge/event", Some(&body)).await {
+        Ok((200, _)) => {}
+        Ok((status, body)) => tracing::warn!(status, %body, event, "sidecar event failed"),
+        Err(e) => tracing::warn!(error = ?e, event, "sidecar event failed"),
+    }
+}
+
+/// `eloquent.*` for the PHP plugins: re-read by id, or rebuilt from `attributes` (deleted).
+pub async fn model_event(st: &AppState, event: &str, data: &Value) {
+    if !listens(event) {
+        return;
+    }
+    let body = json!({ "event": event, "model": { "id": data.get("id"), "attributes": data } });
+    self::event(st, event, body).await
+}
+
+/// `App\Events\ActivityLogged` for the PHP plugins.
+pub async fn activity_logged(st: &AppState, activity_id: i64) {
+    const EVENT: &str = "App\\Events\\ActivityLogged";
+    if !listens(EVENT) {
+        return;
+    }
+    let body = json!({ "event": EVENT, "args": [{ "model": "App\\Models\\ActivityLog", "id": activity_id }] });
+    self::event(st, EVENT, body).await
+}
+
+/// A schedule task of a type registered by a PHP plugin.
+pub fn task_type(action: &str) -> Option<TaskEntry> {
+    manifest().and_then(|m| m.tasks.iter().find(|t| t.id == action).cloned())
+}
+
+pub async fn run_task(st: &AppState, task_id: i64) -> ApiResult<()> {
+    let sc = get(st).ok_or_else(|| fail("sidecar not configured".into()))?;
+    match sc.call(reqwest::Method::POST, "/_bridge/task", Some(&json!({ "task": task_id }))).await? {
+        (200, _) => Ok(()),
+        (status, body) => Err(fail(format!(
+            "sidecar task: HTTP {status}: {}",
+            body.get("error").and_then(Value::as_str).unwrap_or_default()
+        ))),
+    }
+}
+
+/// `PluginService::{install,update,uninstall,enable,disable}Plugin` in the sidecar.
+pub async fn lifecycle(st: &AppState, plugin: &str, action: &str, extra: Value) -> Result<(), String> {
+    let sc = get(st).ok_or_else(|| "sidecar not configured".to_string())?;
+    let mut body = json!({ "plugin": plugin, "action": action });
+    if let (Value::Object(b), Value::Object(e)) = (&mut body, extra) {
+        b.extend(e);
+    }
+    let result = match sc.call(reqwest::Method::POST, "/_bridge/artisan", Some(&body)).await {
+        Ok((200, _)) => Ok(()),
+        Ok((status, body)) => Err(body
+            .get("error")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("sidecar: HTTP {status}"))),
+        Err(e) => Err(format!("{e:?}")),
+    };
+    if let Err(e) = refresh(st).await {
+        tracing::warn!(error = ?e, "sidecar manifest refresh failed");
+    }
+    result
+}
+
+// --- the sidecar's plugins directory --------------------------------------------
+
+/// `storage/sidecar/plugins`: the bridge plus links to the PHP plugins (WASM plugins
+/// stay out of the original's sight: it would mark them errored).
+pub fn plugins_dir(base: &Path) -> PathBuf {
+    base.join("storage").join("sidecar").join("plugins")
+}
+
+/// Write the bridge and link every PHP plugin; links point at `PANEL_PHP_SIDECAR_DATA`
+/// (this data directory as the sidecar sees it; defaults to the same path).
+pub fn sync_plugins_dir(st: &AppState, plugins: &[pelican_plugins::Plugin]) -> std::io::Result<()> {
+    let base = st.config.base_path.clone();
+    let dir = plugins_dir(&base);
+    std::fs::create_dir_all(&dir)?;
+    for (rel, content) in BRIDGE_FILES {
+        let path = dir.join(BRIDGE_ID).join(rel);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        if std::fs::read_to_string(&path).ok().as_deref() != Some(*content) {
+            std::fs::write(&path, content)?;
+        }
+    }
+    let seen_as = st
+        .config
+        .env
+        .string("PANEL_PHP_SIDECAR_DATA")
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| base.clone());
+    let wanted: Vec<&pelican_plugins::Plugin> = plugins.iter().filter(|p| p.wasm.is_none()).collect();
+    for entry in std::fs::read_dir(&dir)?.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name != BRIDGE_ID && !wanted.iter().any(|p| p.id == name) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+    #[cfg(unix)]
+    for p in wanted {
+        let link = dir.join(&p.id);
+        let target = seen_as.join("plugins").join(&p.id);
+        if std::fs::read_link(&link).ok().as_deref() != Some(target.as_path()) {
+            let _ = std::fs::remove_file(&link);
+            std::os::unix::fs::symlink(&target, &link)?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn uris() {
+        assert!(uri_matches("/admin/greeter", "/admin/greeter"));
+        assert!(uri_matches("/admin/greeter", "/admin/greeter/"));
+        assert!(uri_matches("/admin/things/{record}/edit", "/admin/things/5/edit"));
+        assert!(uri_matches("/plugin/{id?}", "/plugin"));
+        assert!(uri_matches("/plugin/{id?}", "/plugin/3"));
+        assert!(!uri_matches("/admin/greeter", "/admin/greeter/x"));
+        assert!(!uri_matches("/admin/things/{record}/edit", "/admin/things/5"));
+    }
+
+    #[test]
+    fn wildcards() {
+        assert!(name_matches("eloquent.*", "eloquent.updated: App\\Models\\Server"));
+        assert!(name_matches("eloquent.updated: *", "eloquent.updated: App\\Models\\Server"));
+        assert!(!name_matches("eloquent.created: *", "eloquent.updated: App\\Models\\Server"));
+        assert!(name_matches("App\\Events\\ActivityLogged", "App\\Events\\ActivityLogged"));
+    }
+
+    /// Header set and canonical paths (the HMAC itself is checked live against the bridge).
+    #[test]
+    fn signature_shape() {
+        let sc = Sidecar { url: String::new(), secret: secret("base64:AAAA") };
+        let h = sc.signature("get", "/_bridge/manifest/", Some(1), b"");
+        assert_eq!(h.len(), 3);
+        assert_eq!(h[1].1.len(), 64);
+        assert_eq!(canonical_path("/_bridge/manifest/"), "/_bridge/manifest");
+        assert_eq!(canonical_path("/"), "/");
+    }
+}

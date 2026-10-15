@@ -18,7 +18,10 @@ fn form_token(body: &[u8]) -> Option<String> {
 }
 
 pub async fn layer(req: Request, next: Next) -> Result<Response, WebError> {
-    if matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS) {
+    // The PHP sidecar verifies its own CSRF tokens (Livewire, Filament forms).
+    if matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS)
+        || pelican_api::sidecar::owns(req.uri().path())
+    {
         return Ok(next.run(req).await);
     }
     let Some(session) = req.extensions().get::<Session>().cloned() else {
