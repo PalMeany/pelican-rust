@@ -102,7 +102,7 @@ pub async fn serve_or_install(env: Env, base: &Path, listener: tokio::net::TcpLi
 }
 
 /// `php artisan key:generate` when the installer starts without an `APP_KEY`.
-fn ensure_app_key(env: &Env, base: &Path) -> Result<()> {
+pub(crate) fn ensure_app_key(env: &Env, base: &Path) -> Result<()> {
     if env.string("APP_KEY").is_some_and(|k| !k.is_empty()) {
         return Ok(());
     }
