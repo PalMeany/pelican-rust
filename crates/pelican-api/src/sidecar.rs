@@ -224,6 +224,9 @@ pub struct Manifest {
     /// A plugin acts when a panel boots (`boot()` sending alert banners, panel render hooks).
     #[serde(default)]
     pub boots: bool,
+    /// A plugin sets a panel's colours, font or default theme mode.
+    #[serde(default)]
+    pub themed: bool,
     /// Widgets plugins add to the admin panel's dashboard (shown from `/admin/rs-widgets`).
     #[serde(default)]
     pub admin_widgets: usize,
@@ -874,6 +877,7 @@ static PAGE: std::sync::Mutex<Option<SwrMap<(String, i64, String), Arc<PageExtra
 pub async fn page_extras(st: &AppState, panel: &str, user: Option<i64>, tenant: Option<&str>) -> Arc<PageExtras> {
     let Some(m) = manifest() else { return Arc::default() };
     let wanted = m.boots
+        || m.themed
         || !m.render_hooks.is_empty()
         || (user.is_some()
             && (m.navigation.iter().any(|n| n.panel == panel) || (panel == "server" && !m.console_actions.is_empty())));
@@ -936,6 +940,20 @@ pub struct PageExtras {
     /// The panel's whole menu as the original builds it for the user (order, groups, badges).
     #[serde(default)]
     pub layout: Vec<LayoutGroup>,
+    /// What plugins set on the panel's look (theme customizers).
+    #[serde(default)]
+    pub theme: Option<PluginTheme>,
+}
+
+/// Colour palettes (name → shade → CSS colour), font family and default theme mode set by plugins.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct PluginTheme {
+    #[serde(default)]
+    pub colors: indexmap::IndexMap<String, indexmap::IndexMap<String, String>>,
+    #[serde(default)]
+    pub font: Option<String>,
+    #[serde(default)]
+    pub mode: Option<String>,
 }
 
 /// A group of the original's menu ([`PageExtras::layout`]).

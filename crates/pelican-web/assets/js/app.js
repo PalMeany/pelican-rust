@@ -11,7 +11,8 @@
     if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
     else delete document.documentElement.dataset.theme;
   }
-  try { applyTheme(localStorage.getItem('theme')); } catch (_) { /* storage blocked */ }
+  // The initial theme (the stored choice, else the panel's default mode) is applied by the
+  // inline script in the page head before the first paint.
   window.setTheme = function (t) {
     try { localStorage.setItem('theme', t); } catch (_) { /* ignore */ }
     applyTheme(t);

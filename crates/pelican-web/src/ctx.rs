@@ -166,6 +166,7 @@ impl Web {
             path => self.path.clone(),
             plugin_hooks => Value::from_serialize(&self.plugin_hooks.hooks),
             plugin_banners => Value::from_serialize(banners(&self.plugin_hooks.banners)),
+            plugin_theme => self.plugin_hooks.theme.as_ref().map(|t| Value::from_serialize(theme_view(t))),
             hx => self.hx,
         }
     }
@@ -239,6 +240,28 @@ fn banners(list: &[pelican_api::sidecar::Banner]) -> Vec<pelican_api::sidecar::B
             pelican_api::sidecar::Banner { status: Some(status.to_string()), icon: Some(icon.to_string()), ..b.clone() }
         })
         .collect()
+}
+
+/// A plugin theme as CSS: custom properties over ours (palettes of the colours the layout uses,
+/// the font), and the default theme mode for visitors who have not chosen one.
+fn theme_view(t: &pelican_api::sidecar::PluginTheme) -> serde_json::Value {
+    let safe = |s: &str| s.chars().all(|c| c.is_ascii_alphanumeric() || " .,%()#-_/".contains(c));
+    let mut css = String::new();
+    for (name, shades) in &t.colors {
+        if !matches!(name.as_str(), "primary" | "gray" | "danger" | "success" | "warning" | "info") {
+            continue;
+        }
+        for (shade, color) in shades {
+            if shade.chars().all(|c| c.is_ascii_digit()) && safe(color) {
+                css.push_str(&format!("--{name}-{shade}: {color}; "));
+            }
+        }
+    }
+    if let Some(font) = t.font.as_deref().filter(|f| safe(f)) {
+        css.push_str(&format!("--font: \"{font}\", ui-sans-serif, system-ui, sans-serif; "));
+    }
+    let mode = t.mode.as_deref().filter(|m| matches!(*m, "light" | "dark"));
+    serde_json::json!({ "css": css, "mode": mode })
 }
 
 fn page(html: String) -> Response {

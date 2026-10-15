@@ -36,6 +36,7 @@ class BridgeController extends Controller
             'listeners' => $this->listenedEvents(),
             'render_hooks' => array_keys($this->pluginRenderHooks()),
             'boots' => $this->pluginsBootPanels(),
+            'themed' => collect(Filament::getPanels())->contains(fn ($panel) => $this->theme($panel) !== null),
             'admin_widgets' => count(\PelicanRs\Bridge\Filament\WidgetsHost::pluginWidgets(Filament::getPanel('admin'))),
             'admin_relations' => (object) array_map('count', \PelicanRs\Bridge\Filament\RelationsHost::pluginRelations()),
             'console_actions' => array_map(fn ($a) => $a->getName(), \PelicanRs\Bridge\Filament\ConsoleActionHost::pluginHeaderActions()),
@@ -489,7 +490,38 @@ class BridgeController extends Controller
             'banners' => $banners,
             'console_actions' => $user && $tenant && $panelId === 'server' ? $this->consoleActions() : [],
             'layout' => $user && $tenantReady ? $this->panelNavigation() : [],
+            'theme' => $panel ? $this->theme($panel) : null,
         ]);
+    }
+
+    /**
+     * What plugins set on the panel's look (the core sets none of it): colour palettes by name
+     * (shade => CSS colour), the font family, the default theme mode.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function theme(\Filament\Panel $panel): ?array
+    {
+        try {
+            $palettes = [];
+            foreach ($panel->getColors() as $name => $color) {
+                $palette = is_string($color) ? \Filament\Support\Colors\Color::generatePalette($color) : $color;
+                if (is_array($palette) && $palette !== []) {
+                    $palettes[$name] = (object) $palette;
+                }
+            }
+            $font = (new ReflectionProperty($panel, 'fontFamily'))->getValue($panel);
+            $mode = $panel->getDefaultThemeMode()->value;
+            if ($palettes === [] && !is_string($font) && $mode === 'system') {
+                return null;
+            }
+
+            return ['colors' => (object) $palettes, 'font' => is_string($font) ? $font : null, 'mode' => $mode];
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return null;
+        }
     }
 
     /**

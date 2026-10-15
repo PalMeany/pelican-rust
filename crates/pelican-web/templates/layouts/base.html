@@ -10,7 +10,8 @@
    Filament's components, so the layout keeps its look and the page keeps Filament's. #}
 <style>@layer properties, theme, base, pelican-rs, components, utilities; @import url("{{ asset('css/app.css') | safe }}") layer(pelican-rs);</style>
 {% else %}<link rel="stylesheet" href="{{ asset('css/app.css') }}">{% endif %}
-<script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+<script>try{var t=localStorage.getItem('theme'){% if plugin_theme and plugin_theme.mode %}||{{ plugin_theme.mode | tojson }}{% endif %};if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+{% if plugin_theme and plugin_theme.css %}<style>:root { {{ plugin_theme.css | safe }} }</style>{% endif %}
 <script src="{{ asset('vendor/htmx/htmx.min.js') }}" defer></script>
 <script src="{{ asset('js/app.js') }}" defer></script>
 <script>window.PELICAN_STRINGS = {{ {
