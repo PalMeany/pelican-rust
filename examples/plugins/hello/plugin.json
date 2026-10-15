@@ -17,7 +17,12 @@
         "component": "hello.wasm",
         "api": 1,
         "capabilities": {
-            "http": ["api.github.com"]
+            "http": [
+                "api.github.com"
+            ],
+            "api": {
+                "server": 1
+            }
         }
     }
 }

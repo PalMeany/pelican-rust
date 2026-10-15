@@ -6,6 +6,8 @@ license.workspace = true
 description = "pelican-rs panel binary"
 
 [dependencies]
+pelican-wings = { path = "../pelican-wings" }
+sea-orm.workspace = true
 pelican-core = { path = "../pelican-core" }
 pelican-api = { path = "../pelican-api" }
 pelican-web = { path = "../pelican-web" }

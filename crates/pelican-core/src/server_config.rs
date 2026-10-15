@@ -178,6 +178,13 @@ fn mappings(b: &ServerBundle) -> Value {
     php_assoc(Value::Object(m))
 }
 
+/// Features registered at runtime (WASM plugins): `(id, listeners)`, installed by the binary.
+static EXTRA_FEATURES: std::sync::OnceLock<fn() -> Vec<(String, Vec<String>)>> = std::sync::OnceLock::new();
+
+pub fn set_extra_features(f: fn() -> Vec<(String, Vec<String>)>) {
+    let _ = EXTRA_FEATURES.set(f);
+}
+
 /// `FeatureService::getMappings($egg->features)`.
 fn features(egg: &eggs::Model) -> Value {
     let wanted: Option<Vec<String>> = egg.features.as_ref().map(|f| match &f.0 {
@@ -190,6 +197,11 @@ fn features(egg: &eggs::Model) -> Value {
     for (id, listeners) in FEATURES {
         if wanted.as_ref().is_none_or(|w| w.iter().any(|x| x == id)) {
             out.insert((*id).to_string(), json!(listeners));
+        }
+    }
+    for (id, listeners) in EXTRA_FEATURES.get().map(|f| f()).unwrap_or_default() {
+        if !out.contains_key(&id) && wanted.as_ref().is_none_or(|w| w.iter().any(|x| *x == id)) {
+            out.insert(id, json!(listeners));
         }
     }
     if out.is_empty() { Value::Array(vec![]) } else { Value::Object(out) }

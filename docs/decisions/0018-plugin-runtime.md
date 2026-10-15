@@ -35,6 +35,10 @@ Application API `/plugins`, админка) от PHP почти не завис�
    (`plugins/<id>/.data/kv.json`, ответ на открытый вопрос §6 спецификации), исходящий HTTP по allowlist
    хостов, вызовы API панели от имени плагина (внутренний вызов роутеров Client/Application API с ACL,
    ограниченным манифестом), запись активити, уведомления. Прямого доступа к БД и ФС нет.
+   Возможность `api` реализована настоящим application-ключом плагина (memo `Plugin: <id>`, владелец — первый
+   Root Admin, права = `capabilities.api`, пересинхронизируются при изменении манифеста): ключ виден и отзывается
+   в списке API-ключей, вызовы проходят обычный конвейер Application API и попадают в активити с этим ключом;
+   секрет хранится в `storage/plugins/<id>/api-key.json`, вне досягаемости плагина.
 6. *События моделей:* общий шина `model_events` (`eloquent.created/updated/deleted: App\Models\X`) —
    и для вебхуков (недостающий хвост M5), и для `on-event` плагинов.
 7. *SDK:* крейт `pelican-plugin-sdk` (wit-bindgen, Rust → `wasm32-wasip2`), пример плагина и

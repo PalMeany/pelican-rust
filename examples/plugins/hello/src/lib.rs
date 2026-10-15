@@ -23,6 +23,7 @@ impl PelicanPlugin for Hello {
             events: vec!["server:power.start".into()],
             routes: vec![
                 Route { scope: RouteScope::Client, method: "GET".into(), path: "/count".into() },
+                Route { scope: RouteScope::Client, method: "GET".into(), path: "/servers".into() },
                 Route { scope: RouteScope::Web, method: "GET".into(), path: "/status".into() },
             ],
             pages: vec![
@@ -95,6 +96,17 @@ impl PelicanPlugin for Hello {
             ("GET", "/count") => {
                 Response::json(200, &json!({"starts": count(), "server": req.server().map(|s| s["uuid"].clone())}))
             }
+            ("GET", "/servers") => match host::api("GET", "/servers?per_page=100", None) {
+                Ok((status, body)) => {
+                    let doc: Value = pelican_plugin_sdk::serde_json::from_str(&body).unwrap_or(Value::Null);
+                    let names: Vec<Value> = doc["data"]
+                        .as_array()
+                        .map(|a| a.iter().map(|s| s["attributes"]["name"].clone()).collect())
+                        .unwrap_or_default();
+                    Response::json(200, &json!({"api_status": status, "servers": names}))
+                }
+                Err(e) => Response::json(502, &json!({"error": e})),
+            },
             ("GET", "/status") => Response::text(
                 200,
                 &format!(

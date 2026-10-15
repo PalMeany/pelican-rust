@@ -244,6 +244,18 @@ pub fn api_resources() -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Server features of the loaded plugins: `(feature id, listeners)` (Wings config).
+pub fn feature_listeners() -> Vec<(String, Vec<String>)> {
+    global()
+        .map(|rt| {
+            rt.loaded()
+                .iter()
+                .flat_map(|l| l.registration.features.iter().map(|f| (f.id.clone(), f.listeners.clone())))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Avatar providers of the loaded plugins: `(plugin, provider)`.
 pub fn avatar_providers() -> Vec<(String, pelican::plugin::types::AvatarProvider)> {
     global()

@@ -36,13 +36,32 @@ impl Services for PanelServices {
 
     fn api<'a>(
         &'a self,
-        _plugin: &'a str,
-        _grants: &'a Map<String, Value>,
-        _method: &'a str,
-        _path: &'a str,
-        _body: Option<String>,
+        plugin: &'a str,
+        grants: &'a Map<String, Value>,
+        method: &'a str,
+        path: &'a str,
+        body: Option<String>,
     ) -> BoxFuture<'a, Result<(u16, String), String>> {
-        Box::pin(async { Err("the api capability is not available in this panel version".into()) })
+        Box::pin(async move {
+            use tower::ServiceExt;
+            if !path.starts_with('/') || path.contains("..") {
+                return Err("invalid path".into());
+            }
+            let st = self.live.get();
+            let token = plugin_key(&st, plugin, grants).await?;
+            let req = axum::http::Request::builder()
+                .method(method)
+                .uri(format!("/api/application{path}"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("accept", "application/json")
+                .header("content-type", "application/json")
+                .body(axum::body::Body::from(body.unwrap_or_default()))
+                .map_err(|e| e.to_string())?;
+            let resp = pelican_api::router(st).oneshot(req).await.map_err(|e| e.to_string())?;
+            let status = resp.status().as_u16();
+            let bytes = axum::body::to_bytes(resp.into_body(), 16 << 20).await.map_err(|e| e.to_string())?;
+            Ok((status, String::from_utf8_lossy(&bytes).into_owned()))
+        })
     }
 }
 
@@ -58,8 +77,94 @@ pub fn start(live: &Live) {
     match Runtime::new(Arc::new(PanelServices { live: live.clone() }), storage) {
         Ok(rt) => {
             pelican_plugins::runtime::set_global(rt.clone());
+            pelican_core::server_config::set_extra_features(pelican_plugins::runtime::feature_listeners);
             tokio::spawn(async move { rt.load_all(&cfg).await });
         }
         Err(e) => tracing::error!(error = %e, "starting the plugin runtime failed"),
     }
+}
+
+/// The plugin's own application API key (memo `Plugin: <id>`, owned by the first Root Admin,
+/// permissions = the manifest's `capabilities.api`): visible and revocable in the admin
+/// API key list. The secret is kept in `storage/plugins/<id>/api-key.json`, outside the
+/// plugin's reach. Returns the bearer token.
+async fn plugin_key(
+    st: &pelican_core::state::AppState,
+    plugin: &str,
+    grants: &Map<String, Value>,
+) -> Result<String, String> {
+    use pelican_db::entities::api_keys;
+    use pelican_db::{Int, Json, Timestamp};
+    use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
+    let file = st.config.base_path.join("storage").join("plugins").join(plugin).join("api-key.json");
+    let stored: Option<(String, String)> = std::fs::read(&file)
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+        .and_then(|v| Some((v.get("identifier")?.as_str()?.to_string(), v.get("secret")?.as_str()?.to_string())));
+    let perms = Value::Object(grants.clone());
+    if let Some((identifier, secret)) = stored {
+        let row = api_keys::Entity::find()
+            .filter(api_keys::Column::Identifier.eq(identifier.clone()))
+            .one(&st.db)
+            .await
+            .map_err(|e| e.to_string())?;
+        if let Some(row) = row {
+            if row.permissions.as_ref().map(|p| &p.0) != Some(&perms) {
+                api_keys::Entity::update_many()
+                    .col_expr(api_keys::Column::Permissions, sea_orm::sea_query::Expr::value(Some(Json(perms))))
+                    .filter(api_keys::Column::Id.eq(row.id))
+                    .exec(&st.db)
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
+            return Ok(format!("{identifier}{secret}"));
+        }
+    }
+    // The first Root Admin owns plugin keys.
+    let owner: Option<i64> = {
+        #[derive(sea_orm::FromQueryResult)]
+        struct Owner {
+            model_id: Int,
+        }
+        let b = st.db.get_database_backend();
+        <Owner as sea_orm::FromQueryResult>::find_by_statement(pelican_db::raw::stmt(
+            b,
+            "select {model_has_roles.model_id} as {model_id} from {model_has_roles} inner join {roles} on {roles.id} = {model_has_roles.role_id} \
+             where {roles.name} = ? and {model_has_roles.model_type} = ? order by {model_has_roles.model_id} limit 1",
+            vec![pelican_core::auth::ROOT_ADMIN_ROLE.into(), "user".into()],
+        ))
+        .one(&st.db)
+        .await
+        .map_err(|e| e.to_string())?
+        .map(|o| o.model_id.0)
+    };
+    let owner = owner.ok_or("no Root Admin to own the plugin API key")?;
+    let identifier = format!("papp_{}", pelican_wings::jwt::str_random(11));
+    let secret = pelican_wings::jwt::str_random(32);
+    let now = Timestamp(pelican_core::time::now());
+    pelican_db::write::insert(
+        &st.db,
+        api_keys::ActiveModel {
+            user_id: Set(Some(Int(owner))),
+            key_type: Set(Int(2)),
+            identifier: Set(Some(identifier.clone())),
+            token: Set(st.enc.encrypt_string(&secret)),
+            permissions: Set(Some(Json(perms))),
+            allowed_ips: Set(Json(Value::Array(vec![]))),
+            memo: Set(Some(format!("Plugin: {plugin}"))),
+            last_used_at: Set(None),
+            expires_at: Set(None),
+            created_at: Set(Some(now)),
+            updated_at: Set(Some(now)),
+            ..Default::default()
+        },
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    if let Some(parent) = file.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(&file, serde_json::json!({"identifier": identifier, "secret": secret}).to_string())
+        .map_err(|e| e.to_string())?;
+    Ok(format!("{identifier}{secret}"))
 }
