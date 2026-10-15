@@ -70,9 +70,9 @@ Application API → UI → плагины → PHP-sidecar.
   - замечание: при QUEUE_CONNECTION=sync вебхук на ActivityLogged доставляется внутри транзакции восстановления (как в оригинале), и R13 может прийти раньше коммита — статус restoring_backup остаётся; с очередью database гонки нет
 - [x] `Server::saved` → удаление сабюзера-владельца (SubuserDeletionService)
 - [x] Клиент Wings (семантика throwIf/User-Agent) + JWT (побайтно = PHP lcobucci); остальные вызовы — по мере эндпоинтов M4/M5
-- [ ] Конфигурация ноды (JSON/YAML) — вместе с Application API nodes (M5)
+- [x] Конфигурация ноды: JSON (`/nodes/{id}/configuration`), YAML — вкладка ноды в админке (порт Symfony Yaml::dump)
 - [x] Диф-тесты Remote API на 4 СУБД (remote*.yaml, 9 сценариев)
-- [ ] Ручная проверка с настоящим Wings (контейнер), см. QUESTIONS
+- [x] Проверка с настоящим Wings 1.0.0-rc.1 (E2E, см. M6)
 
 ### M4 — Client API (`/api/client/*`)
 - [x] account, api-keys, ssh-keys, activity, permissions
@@ -95,7 +95,7 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] Вебхуки: доставка (ProcessWebhook), диспатч по активности (server scope, ActivityLogged)
 - [ ] Вебхуки на события моделей `eloquent.created/updated/deleted:*`
 - [x] Фоновые задачи: prune activity/webhooks, prune/clean backups, prune images, почта (уведомления)
-- [ ] egg check-updates/update-index (вместе с UI яиц)
+- [x] egg check-updates/update-index (планировщик + UI яиц)
 - [x] Диф-тесты на каждый маршрут (app/*), 4 СУБД
 
 ### M6 — UI (паритет функций)
