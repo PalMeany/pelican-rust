@@ -149,7 +149,7 @@ pub async fn listening(st: &AppState, action: Action, model: &str) -> ApiResult<
     if BLACKLIST.contains(&event.as_str()) {
         return Ok(false);
     }
-    if pelican_plugins::runtime::global().is_some_and(|rt| rt.wants(&event)) {
+    if pelican_plugins::runtime::global().is_some_and(|rt| rt.wants(&event)) || crate::sidecar::listens(&event) {
         return Ok(true);
     }
     Ok(global_webhooks(&st.db).await?.iter().any(|h| crate::services::listens(h, &event)))
@@ -339,9 +339,10 @@ pub async fn fire<C: ConnectionTrait>(
         return Ok(());
     }
     let plugins = pelican_plugins::runtime::global().filter(|rt| rt.wants(&event));
+    let sidecar = crate::sidecar::listens(&event);
     let hooks: Vec<webhook_configurations::Model> =
         global_webhooks(db).await?.into_iter().filter(|h| crate::services::listens(h, &event)).collect();
-    if hooks.is_empty() && plugins.is_none() {
+    if hooks.is_empty() && plugins.is_none() && !sidecar {
         return Ok(());
     }
     let mut payload = Map::new();
@@ -352,11 +353,14 @@ pub async fn fire<C: ConnectionTrait>(
     if let Some(rt) = plugins {
         rt.dispatch(&event, &payload);
     }
-    if !crate::services::has_content(&payload) {
-        return Ok(());
+    // DispatchWebhooks runs before the PHP plugins' listeners (registered later).
+    if crate::services::has_content(&payload) {
+        for h in &hooks {
+            crate::application::webhooks::process_webhook_in(st, db, h, &event, &payload).await?;
+        }
     }
-    for h in &hooks {
-        crate::application::webhooks::process_webhook_in(st, db, h, &event, &payload).await?;
+    if sidecar {
+        crate::sidecar::model_event(st, &event, &payload["data"]).await;
     }
     Ok(())
 }

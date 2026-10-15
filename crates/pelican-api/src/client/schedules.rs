@@ -287,7 +287,7 @@ fn validate_task(input: &Input) -> ApiResult<()> {
     let mut v = Validator::new(input);
     let mut actions = String::from("in:command,power,backup,delete_files");
     if PANEL_FORM.try_with(|f| *f).unwrap_or(false) {
-        for (_, t) in pelican_plugins::runtime::task_types() {
+        for (_, t) in crate::sidecar::all_task_types() {
             actions.push(',');
             actions.push_str(&t.id);
         }

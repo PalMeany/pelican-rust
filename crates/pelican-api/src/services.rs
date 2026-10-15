@@ -269,7 +269,14 @@ pub(crate) fn has_content(data: &Value) -> bool {
 }
 
 /// `DispatchWebhooks::handleActivityLogged()` + `handleGlobalWebhooks()`.
-pub async fn activity_logged<C: ConnectionTrait>(st: &AppState, db: &C, a: &Activity, _id: i64) -> ApiResult<()> {
+pub async fn activity_logged<C: ConnectionTrait>(st: &AppState, db: &C, a: &Activity, id: i64) -> ApiResult<()> {
+    activity_logged_core(st, db, a).await?;
+    // The PHP plugins' listeners run after the core's DispatchWebhooks (ADR-0020).
+    crate::sidecar::activity_logged(st, id, a).await;
+    Ok(())
+}
+
+async fn activity_logged_core<C: ConnectionTrait>(st: &AppState, db: &C, a: &Activity) -> ApiResult<()> {
     // Plugins (ADR-0018): the event itself and `App\Events\ActivityLogged` listeners.
     if let Some(rt) = pelican_plugins::runtime::global() {
         let (own, all) = (rt.wants(&a.event), rt.wants("App\\Events\\ActivityLogged"));

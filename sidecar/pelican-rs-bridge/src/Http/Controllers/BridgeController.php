@@ -248,8 +248,17 @@ class BridgeController extends Controller
     {
         abort_unless(str_starts_with($class, 'App\\Events\\') && class_exists($class), 422);
         $values = array_map(function ($arg) {
-            if (is_array($arg) && isset($arg['model'], $arg['id']) && is_subclass_of($arg['model'], Model::class)) {
-                return $arg['model']::query()->findOrFail($arg['id']);
+            if (is_array($arg) && isset($arg['model']) && is_subclass_of($arg['model'], Model::class)) {
+                if (isset($arg['attributes'])) {
+                    // Rows that may not be committed yet arrive as raw attributes.
+                    $model = (new $arg['model']())->newFromBuilder($arg['attributes']);
+                    $model->exists = true;
+
+                    return $model;
+                }
+                if (isset($arg['id'])) {
+                    return $arg['model']::query()->findOrFail($arg['id']);
+                }
             }
 
             return $arg;

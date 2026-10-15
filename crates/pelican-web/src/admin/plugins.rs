@@ -17,6 +17,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use minijinja::{Value as Mj, context};
 use pelican_api::application::plugins as api;
+use pelican_api::sidecar;
 use pelican_core::state::AppState;
 use pelican_plugins::{Category, Plugin, Status, compat, lifecycle, updates};
 use serde_json::json;
@@ -390,10 +391,14 @@ async fn action(admin: Admin, AxPath(plugin): AxPath<String>, form: Form) -> Web
             // InstallPlugin: enable unless it is a theme and another theme is
             // already enabled.
             let enable = !p.is_theme() || !lifecycle::has_theme_enabled(&cfg);
-            let hooked = pelican_api::application::plugins::lifecycle_hook(&cfg, &p, true)
-                .await
-                .map_err(pelican_plugins::Error::Message);
-            match hooked.and_then(|()| lifecycle::install(&cfg, &fresh(&cfg, &p), enable)) {
+            let done = match sidecar::delegate(&admin.st, &p, "install", json!({ "enable": enable })).await {
+                Some(r) => r.map_err(pelican_plugins::Error::Message),
+                None => pelican_api::application::plugins::lifecycle_hook(&cfg, &p, true)
+                    .await
+                    .map_err(pelican_plugins::Error::Message)
+                    .and_then(|()| lifecycle::install(&cfg, &fresh(&cfg, &p), enable)),
+            };
+            match done {
                 Ok(()) => admin.session.flash(
                     "success",
                     admin.t("admin/plugin.notifications.installed"),
@@ -405,14 +410,17 @@ async fn action(admin: Admin, AxPath(plugin): AxPath<String>, form: Form) -> Web
         "update" => {
             admin.authorize("update plugin")?;
             let p = bound(&cfg, &plugin)?;
-            let updated = match lifecycle::update(&cfg, &fresh(&cfg, &p)).await {
-                Ok(u) if u.status != Status::NotInstalled => {
-                    pelican_api::application::plugins::lifecycle_hook(&cfg, &u, true)
-                        .await
-                        .map(|()| u)
-                        .map_err(pelican_plugins::Error::Message)
-                }
-                other => other,
+            let updated = match sidecar::delegate(&admin.st, &p, "update", json!({})).await {
+                Some(r) => r.map_err(pelican_plugins::Error::Message).map(|()| p.clone()),
+                None => match lifecycle::update(&cfg, &fresh(&cfg, &p)).await {
+                    Ok(u) if u.status != Status::NotInstalled => {
+                        pelican_api::application::plugins::lifecycle_hook(&cfg, &u, true)
+                            .await
+                            .map(|()| u)
+                            .map_err(pelican_plugins::Error::Message)
+                    }
+                    other => other,
+                },
             };
             match updated {
                 Ok(_) => {
@@ -427,7 +435,11 @@ async fn action(admin: Admin, AxPath(plugin): AxPath<String>, form: Form) -> Web
             if !can_enable(&cfg, &p) {
                 return Err(bad_state());
             }
-            match lifecycle::enable(&cfg, &p) {
+            let done = match sidecar::delegate(&admin.st, &p, "enable", json!({})).await {
+                Some(r) => r.map_err(pelican_plugins::Error::Message),
+                None => lifecycle::enable(&cfg, &p),
+            };
+            match done {
                 Ok(()) => admin.flash_success(admin.t("admin/plugin.notifications.enabled")),
                 Err(e) => admin.flash_danger(notify_err(e), None),
             }
@@ -438,7 +450,11 @@ async fn action(admin: Admin, AxPath(plugin): AxPath<String>, form: Form) -> Web
             if !matches!(p.status, Status::Enabled | Status::Incompatible) {
                 return Err(bad_state());
             }
-            match lifecycle::disable(&cfg, &p) {
+            let done = match sidecar::delegate(&admin.st, &p, "disable", json!({})).await {
+                Some(r) => r.map_err(pelican_plugins::Error::Message),
+                None => lifecycle::disable(&cfg, &p),
+            };
+            match done {
                 Ok(()) => admin.flash_success(admin.t("admin/plugin.notifications.disabled")),
                 Err(e) => admin.flash_danger(notify_err(e), None),
             }
@@ -460,10 +476,14 @@ async fn action(admin: Admin, AxPath(plugin): AxPath<String>, form: Form) -> Web
             if matches!(p.status, Status::NotInstalled | Status::Errored) {
                 return Err(bad_state());
             }
-            let hooked = pelican_api::application::plugins::lifecycle_hook(&cfg, &p, false)
-                .await
-                .map_err(pelican_plugins::Error::Message);
-            match hooked.and_then(|()| lifecycle::uninstall(&cfg, &p, false)) {
+            let done = match sidecar::delegate(&admin.st, &p, "uninstall", json!({ "delete": false })).await {
+                Some(r) => r.map_err(pelican_plugins::Error::Message),
+                None => pelican_api::application::plugins::lifecycle_hook(&cfg, &p, false)
+                    .await
+                    .map_err(pelican_plugins::Error::Message)
+                    .and_then(|()| lifecycle::uninstall(&cfg, &p, false)),
+            };
+            match done {
                 Ok(()) => admin.session.flash(
                     "success",
                     admin.t("admin/plugin.notifications.uninstalled"),

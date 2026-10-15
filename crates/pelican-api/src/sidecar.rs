@@ -333,13 +333,25 @@ pub async fn model_event(st: &AppState, event: &str, data: &Value) {
     self::event(st, event, body).await
 }
 
-/// `App\Events\ActivityLogged` for the PHP plugins.
-pub async fn activity_logged(st: &AppState, activity_id: i64) {
+/// `App\Events\ActivityLogged` for the PHP plugins. The log row is sent as raw
+/// attributes: it may not be committed yet (`Activity::transaction`).
+pub async fn activity_logged(st: &AppState, id: i64, a: &pelican_core::activity::Activity) {
     const EVENT: &str = "App\\Events\\ActivityLogged";
     if !listens(EVENT) {
         return;
     }
-    let body = json!({ "event": EVENT, "args": [{ "model": "App\\Models\\ActivityLog", "id": activity_id }] });
+    let attributes = json!({
+        "id": id,
+        "event": a.event,
+        "ip": a.ip,
+        "description": a.description,
+        "actor_type": a.actor.as_ref().map(|(t, _)| t),
+        "actor_id": a.actor.as_ref().map(|(_, i)| i),
+        "api_key_id": a.api_key_id,
+        "properties": pelican_db::write::php_json(&a.properties),
+        "timestamp": pelican_core::time::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+    });
+    let body = json!({ "event": EVENT, "args": [{ "model": "App\\Models\\ActivityLog", "attributes": attributes }] });
     self::event(st, EVENT, body).await
 }
 
@@ -463,4 +475,42 @@ mod tests {
         assert_eq!(canonical_path("/_bridge/manifest/"), "/_bridge/manifest");
         assert_eq!(canonical_path("/"), "/");
     }
+}
+
+/// Schedule task types of WASM plugins and of PHP plugins (`(plugin, type)`); PHP
+/// plugins' names arrive translated.
+pub fn all_task_types() -> Vec<(String, pelican_plugins::runtime::TaskType)> {
+    let mut out = pelican_plugins::runtime::task_types();
+    if let Some(m) = manifest() {
+        out.extend(m.tasks.iter().map(|t| {
+            (
+                t.plugin.clone(),
+                pelican_plugins::runtime::TaskType {
+                    id: t.id.clone(),
+                    name: t.name.clone(),
+                    payload_label: t.payload_label.clone(),
+                    default_payload: t.default_payload.clone(),
+                },
+            )
+        }));
+    }
+    out
+}
+
+/// A lifecycle step of a PHP plugin, run in the sidecar after linking the plugin into its
+/// `plugins/` (`None` for WASM plugins or without a sidecar: the caller does it itself).
+pub async fn delegate(
+    st: &AppState,
+    p: &pelican_plugins::Plugin,
+    action: &str,
+    extra: Value,
+) -> Option<Result<(), String>> {
+    if p.wasm.is_some() || get(st).is_none() {
+        return None;
+    }
+    let cfg = crate::application::plugins::config(st);
+    if let Err(e) = sync_plugins_dir(st, &cfg.plugins()) {
+        return Some(Err(e.to_string()));
+    }
+    Some(lifecycle(st, &p.id, action, extra).await)
 }

@@ -120,3 +120,19 @@ mod tests {
         assert_eq!(super::forwarded_cookies("pelican_session=abc", "pelican_session"), "");
     }
 }
+
+/// Navigation entries of PHP plugins' pages for one Filament panel (`admin`, `server`,
+/// `app`), by sort.
+pub fn nav(panel: &str) -> Vec<sidecar::NavEntry> {
+    let Some(m) = sidecar::manifest() else { return Vec::new() };
+    let mut out: Vec<sidecar::NavEntry> = m.navigation.iter().filter(|n| n.panel == panel).cloned().collect();
+    out.sort_by_key(|n| n.sort.unwrap_or(0));
+    out
+}
+
+/// Filament icons are Heroicons (`o-hand-raised`); use the Tabler icon of the same name
+/// when there is one.
+pub fn icon(name: Option<&str>) -> &'static str {
+    let name = name.map(|n| n.trim_start_matches("heroicon-").trim_start_matches("o-").trim_start_matches("s-"));
+    crate::plugin_pages::icon(name)
+}

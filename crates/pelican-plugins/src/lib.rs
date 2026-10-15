@@ -66,6 +66,8 @@ pub struct Config {
     /// `currentPanelVersion()` for messages.
     pub panel_version_display: String,
     pub production: bool,
+    /// PHP plugins run in the sidecar (ADR-0020), which sets their load statuses itself.
+    pub php_sidecar: bool,
     pub translate: Translate,
 }
 
@@ -92,6 +94,7 @@ impl Config {
             panel_version: version.map(str::to_string),
             panel_version_display: display,
             production: env.string_or("APP_ENV", "production") == "production",
+            php_sidecar: env.string("PANEL_PHP_SIDECAR").is_some_and(|s| !s.is_empty()),
             translate: std::sync::Arc::new(english),
         }
     }
@@ -162,8 +165,12 @@ impl Config {
         }
         // `loadPanelPlugins()` for the admin, app and server panels: a PHP plugin whose class
         // cannot be autoloaded becomes `errored`; a loadable one turns `errored` back to
-        // `enabled`. WASM plugins are judged by the runtime instead.
+        // `enabled`. WASM plugins are judged by the runtime instead; with a PHP sidecar the
+        // original does this pass itself.
         for panel in ["admin", "app", "server"] {
+            if self.php_sidecar {
+                break;
+            }
             let mut plugins = self.plugins();
             plugins.sort_by_key(|p| p.load_order);
             for p in plugins.into_iter().filter(|p| p.wasm.is_none() && p.should_load(Some(panel))) {

@@ -333,6 +333,8 @@ async fn run_action(st: &AppState, server: &servers::Model, task: &tasks::Model)
             Ok(())
         }
         "delete_files" => delete_files(st, &conn()?, server, &task.payload).await,
+        // Task types registered by PHP plugins run in the sidecar (ADR-0020).
+        other if crate::sidecar::task_type(other).is_some() => crate::sidecar::run_task(st, task.id.0).await,
         // Task types registered by WASM plugins (ADR-0018).
         other => {
             let owner = pelican_plugins::runtime::task_types().into_iter().find(|(_, t)| t.id == other).map(|(p, _)| p);

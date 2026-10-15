@@ -243,6 +243,32 @@ impl Admin {
                 }
             }
         }
+        // PHP plugins' Filament pages, served by the sidecar (ADR-0020).
+        for n in crate::sidecar_proxy::nav("admin") {
+            let entry = NavItem {
+                url: n.path.clone(),
+                icon: crate::sidecar_proxy::icon(n.icon.as_deref()),
+                active: false,
+                label: n.label.clone(),
+                badge: None,
+                badge_color: None,
+                badge_tooltip: None,
+            };
+            let group = n.group.as_deref().map(str::to_lowercase);
+            match group.as_deref() {
+                None => top.push(entry),
+                Some(g) if g == t("admin/dashboard.server").to_lowercase() => server.push(entry),
+                Some(g) if g == t("admin/dashboard.user").to_lowercase() => user.push(entry),
+                Some(g) if g == t("admin/dashboard.advanced").to_lowercase() => advanced.push(entry),
+                Some(_) => {
+                    let name = n.group.clone().unwrap_or_default();
+                    match custom.iter_mut().find(|(g, _)| *g == name) {
+                        Some((_, items)) => items.push(entry),
+                        None => custom.push((name, vec![entry])),
+                    }
+                }
+            }
+        }
         let mut groups = vec![NavGroup { label: None, items: top }];
         for (label, items) in [
             (t("admin/dashboard.server"), server),

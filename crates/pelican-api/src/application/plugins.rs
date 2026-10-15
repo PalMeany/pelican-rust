@@ -29,6 +29,11 @@ pub fn config(st: &AppState) -> Config {
 }
 
 /// Plugin service errors: plain exceptions are 500s, upload problems 400s.
+/// A lifecycle step that failed in the PHP sidecar (the original's `Exception`).
+fn sidecar_err(message: String) -> ApiError {
+    service_err(pelican_plugins::Error::Message(message))
+}
+
 fn service_err(e: pelican_plugins::Error) -> ApiError {
     tracing::error!(error = %e, "plugin operation failed");
     match e {
@@ -267,8 +272,13 @@ pub async fn install(State(st): State<AppState>, Extension(ctx): Extension<Ctx>)
     if p.status != Status::NotInstalled {
         return Err(panel_exception());
     }
-    run_hook(&cfg, &p, true).await?;
-    lifecycle::install(&cfg, &p, true).map_err(service_err)?;
+    match crate::sidecar::delegate(&st, &p, "install", json!({ "enable": true })).await {
+        Some(r) => r.map_err(sidecar_err)?,
+        None => {
+            run_hook(&cfg, &p, true).await?;
+            lifecycle::install(&cfg, &p, true).map_err(service_err)?;
+        }
+    }
     pelican_plugins::runtime::reload_global(&cfg);
     respond(&cfg, &p.id).await
 }
@@ -281,10 +291,20 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
     if !updates::update_available(&cfg, &p).await {
         return Err(panel_exception());
     }
-    let p = lifecycle::update(&cfg, &p).await.map_err(service_err)?;
-    if p.status != Status::NotInstalled {
-        run_hook(&cfg, &p, true).await?;
-    }
+    let p = match crate::sidecar::delegate(&st, &p, "update", json!({})).await {
+        Some(r) => {
+            r.map_err(sidecar_err)?;
+            pelican_plugins::updates::forget(&p.id);
+            cfg.find(&p.id).map_err(service_err)?
+        }
+        None => {
+            let p = lifecycle::update(&cfg, &p).await.map_err(service_err)?;
+            if p.status != Status::NotInstalled {
+                run_hook(&cfg, &p, true).await?;
+            }
+            p
+        }
+    };
     pelican_plugins::runtime::reload_global(&cfg);
     Ok(PhpJson::ok(plugin_data(&cfg, &p).await).into_response())
 }
@@ -305,8 +325,19 @@ pub async fn uninstall(
         return Err(panel_exception());
     }
     let delete = php_boolean(input.get("delete"));
-    run_hook(&cfg, &p, false).await?;
-    lifecycle::uninstall(&cfg, &p, delete).map_err(service_err)?;
+    match crate::sidecar::delegate(&st, &p, "uninstall", json!({ "delete": false })).await {
+        // The sidecar sees the plugin through a link: files are deleted here.
+        Some(r) => {
+            r.map_err(sidecar_err)?;
+            if delete {
+                lifecycle::delete(&cfg, &p).map_err(service_err)?;
+            }
+        }
+        None => {
+            run_hook(&cfg, &p, false).await?;
+            lifecycle::uninstall(&cfg, &p, delete).map_err(service_err)?;
+        }
+    }
     pelican_plugins::runtime::reload_global(&cfg);
     // The response transforms the (stale) model instance, deleted or not.
     let mut after = p.clone();
@@ -324,7 +355,10 @@ pub async fn enable(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
     if !(matches!(p.status, Status::Disabled | Status::Crashed) && compatible) {
         return Err(panel_exception());
     }
-    lifecycle::enable(&cfg, &p).map_err(service_err)?;
+    match crate::sidecar::delegate(&st, &p, "enable", json!({})).await {
+        Some(r) => r.map_err(sidecar_err)?,
+        None => lifecycle::enable(&cfg, &p).map_err(service_err)?,
+    }
     pelican_plugins::runtime::reload_global(&cfg);
     respond(&cfg, &p.id).await
 }
@@ -337,7 +371,10 @@ pub async fn disable(State(st): State<AppState>, Extension(ctx): Extension<Ctx>)
     if !matches!(p.status, Status::Enabled | Status::Incompatible) {
         return Err(panel_exception());
     }
-    lifecycle::disable(&cfg, &p).map_err(service_err)?;
+    match crate::sidecar::delegate(&st, &p, "disable", json!({})).await {
+        Some(r) => r.map_err(sidecar_err)?,
+        None => lifecycle::disable(&cfg, &p).map_err(service_err)?,
+    }
     pelican_plugins::runtime::reload_global(&cfg);
     respond(&cfg, &p.id).await
 }

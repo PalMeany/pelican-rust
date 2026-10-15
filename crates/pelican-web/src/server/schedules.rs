@@ -1175,7 +1175,7 @@ pub fn action_options(p: &ServerPanel) -> Vec<(String, String)> {
         .map(|(id, _)| ((*id).to_string(), p.t(&format!("server/schedule.tasks.actions.{id}.title"))))
         .collect();
     // Task types of WASM plugins (`TaskService::register`).
-    for (plugin, t) in pelican_plugins::runtime::task_types() {
+    for (plugin, t) in pelican_api::sidecar::all_task_types() {
         out.push((t.id.clone(), crate::plugin_pages::label(&p.st, &plugin, &p.locale(), &t.name)));
     }
     out
@@ -1183,7 +1183,7 @@ pub fn action_options(p: &ServerPanel) -> Vec<(String, String)> {
 
 /// Plugin task type by id: `(plugin, type)`.
 fn plugin_task(action: &str) -> Option<(String, pelican_plugins::runtime::TaskType)> {
-    pelican_plugins::runtime::task_types().into_iter().find(|(_, t)| t.id == action)
+    pelican_api::sidecar::all_task_types().into_iter().find(|(_, t)| t.id == action)
 }
 
 /// `GET /schedules/create` — `CreateSchedule`.
@@ -1447,7 +1447,7 @@ fn validate_task_local(form: &Form, p: &ServerPanel) -> Errors {
     v.attribute_name("time_offset", &p.t("server/schedule.tasks.time_offset").to_lowercase());
     v.attribute_name("continue_on_failure", &p.t("server/schedule.tasks.continue_on_failure").to_lowercase());
     let mut actions: Vec<String> = ACTIONS.iter().map(|(a, _)| (*a).to_string()).collect();
-    actions.extend(pelican_plugins::runtime::task_types().into_iter().map(|(_, t)| t.id));
+    actions.extend(pelican_api::sidecar::all_task_types().into_iter().map(|(_, t)| t.id));
     let rule = format!("in:{}", actions.join(","));
     v.rules("action", &["required", rule.as_str()]);
     v.rules("payload", &["required_unless:action,backup", "string", "nullable"]);

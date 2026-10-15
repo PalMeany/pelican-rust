@@ -237,6 +237,19 @@ impl ServerPanel {
                 badge_tooltip: None,
             });
         }
+        // PHP plugins' pages of the tenant-scoped server panel (ADR-0020): `/server/{tenant}/<slug>`.
+        for n in crate::sidecar_proxy::nav("server") {
+            let rest = n.path.strip_prefix("/server").unwrap_or(&n.path);
+            items.push(NavItem {
+                label: n.label.clone(),
+                url: format!("{base}{rest}"),
+                icon: crate::sidecar_proxy::icon(n.icon.as_deref()),
+                active: false,
+                badge: None,
+                badge_color: None,
+                badge_tooltip: None,
+            });
+        }
         if self.user.is_admin() && self.user.can_view_server(self.node.id.0) {
             items.push(NavItem {
                 label: self.t("server/console.open_in_admin"),
