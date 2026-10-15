@@ -174,6 +174,30 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] Жизненный цикл PHP-плагинов через sidecar (install/update/uninstall/enable/disable, API и админка); языковые плагины — переводы из sidecar поверх встроенных
 - [x] E2E с реальными плагинами из pelican-dev/plugins: tickets (миграции, ресурсы admin/server, создание тикета через Livewire), player-counter (composer-пакеты, доступ к странице по `canAccess`), robo-avatars, pirate-language — импорт и установка через pelican-rs
 
+### M9 — полная замена оригинала (порядок согласован с пользователем 2026-10-15)
+1. Слияние и проверки
+   - [ ] Полный диф-тест m8 на 4 СУБД → слияние m8 в main, push
+   - [ ] Включить пропущенные smoke-сценарии (`smoke/client-unauthenticated`, `smoke/application-unauthenticated`)
+2. Функциональный паритет
+   - [ ] CLI как `php artisan p:*`: user (make/delete/disable2fa), node (make/list/configuration), environment
+         (setup/database/mail/cache/session/queue/queue-service), redis:setup, info, server:bulk-power,
+         egg (check-updates/update-index/normalize), maintenance (clean-service-backups/prune-backups/prune-images),
+         plugin (list/install/update/uninstall/disable/composer/make), schedule:process; имена и опции как в оригинале
+   - [ ] Документация API `/docs/api` (Scramble): индекс, UI и JSON-спецификации application/client
+3. Готовность к продакшену, скорость и нагрузка
+   - [ ] Упаковка: release-сборка, Docker-образ, systemd-юнит, руководство по переезду с PHP и откату, CI (сборка + тесты)
+   - [ ] Нагрузочный стенд `bench/`: одинаковые данные (тысячи пользователей/серверов, сотни тысяч записей активности)
+         для оригинала (php-fpm + opcache, prod-конфиг) и pelican-rs (release); сценарии: Client API список серверов,
+         Application API списки, Remote API (загрузка конфигов Wings, активность), страницы админки/сервера, логин;
+         метрики RPS, p50/p95/p99, CPU/память; отчёт сравнения
+   - [ ] Профилирование и оптимизация горячих путей (N+1-запросы, пул соединений, шаблоны, JSON) с повторным
+         прогоном стенда и диф-тестов после каждой оптимизации
+4. PHP-плагины (sidecar)
+   - [ ] Render hooks Filament в разметке pelican-rs (`snowflakes`, `tawkto-widget`, ссылки `legal-pages`)
+   - [ ] Расширения входа: OAuth-провайдеры и регистрация из PHP-плагинов (`generic-oidc-providers`, `register`)
+   - [ ] Действия на странице консоли и модалки server features из PHP-плагинов (`mclogs-uploader`)
+5. Не планируется без запроса: темы Filament для UI pelican-rs, Redis-драйверы (несколько экземпляров панели)
+
 ## Делегирование
 Механика — `../glm-worker.sh` (одна задача = один модуль/файл, явные входы/выходы).
 Сам: архитектура, БД-типизация, крипто/форматы, auth, Remote API, конкурентность, неочевидная
