@@ -132,6 +132,8 @@ docker run -d --name pelican-sidecar --network <сеть pelican-rs> \
 Render hooks плагинов (`FilamentView::registerRenderHook`: head, начало/конец страницы и body, футер, форма входа)
 вставляются в страницы pelican-rs.
 
+Вход, выполненный внутри sidecar (OAuth-провайдер плагина, страница регистрации плагина), передаётся в сессию pelican-rs.
+
 Ограничения: server features PHP-плагинов (модалки на консоли — действия Filament), темы и виджеты плагинов на
-страницах ядра, OAuth/captcha-провайдеры из PHP-плагинов. Версии sidecar и панели
+страницах ядра, captcha-провайдеры из PHP-плагинов. Версии sidecar и панели
 сверяются: при расхождении PHP-плагины отключаются (ошибка в логе).

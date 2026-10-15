@@ -22,7 +22,15 @@ class AuthenticateFromPelicanRs
         // Per request, without `Login` events (the original logs those as activity;
         // pelican-rs already did when the user signed in).
         $id = (int) $request->header('X-Pelican-Rs-User', '0');
-        if ($id !== 0) {
+        if ($id === 0) {
+            // A guest in pelican-rs is a guest here: drop a sign-in left in the sidecar's own
+            // session (registration, OAuth) without the original's logout side effects.
+            $guard = Auth::guard();
+            if ($guard instanceof \Illuminate\Auth\SessionGuard && $request->hasSession()) {
+                $request->session()->forget($guard->getName());
+                $guard->forgetUser();
+            }
+        } else {
             $user = User::query()->find($id);
             abort_if(is_null($user), 403);
             Auth::setUser($user);

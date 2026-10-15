@@ -24,9 +24,9 @@ pub const PROVIDERS: [&str; 11] =
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct Schema {
-    pub id: &'static str,
+    pub id: String,
     pub name: String,
-    pub icon: Option<&'static str>,
+    pub icon: Option<String>,
     pub color: Option<String>,
 }
 
@@ -64,12 +64,28 @@ pub fn schema(env: &Env, id: &'static str) -> Schema {
         let mut c = id.chars();
         (c.next().map(|f| f.to_uppercase().chain(c).collect()).unwrap_or_default(), color.map(String::from))
     };
-    Schema { id, name, icon, color }
+    Schema { id: id.to_string(), name, icon: icon.map(String::from), color }
 }
 
 /// `OAuthService::getEnabled()`.
+/// Enabled providers: the built-in ones, then those registered by PHP plugins (ADR-0020).
 pub fn enabled(env: &Env) -> Vec<Schema> {
-    PROVIDERS.iter().filter(|id| is_enabled(env, id)).map(|id| schema(env, id)).collect()
+    let mut out: Vec<Schema> = PROVIDERS.iter().filter(|id| is_enabled(env, id)).map(|id| schema(env, id)).collect();
+    if let Some(m) = pelican_api::sidecar::manifest() {
+        out.extend(m.oauth_providers.iter().filter(|p| p.enabled).map(|p| Schema {
+            id: p.id.clone(),
+            name: p.name.clone(),
+            icon: p.icon.as_deref().map(|i| i.trim_start_matches("tabler-").to_string()),
+            color: p.color.clone(),
+        }));
+    }
+    out
+}
+
+/// A plugin provider's OAuth flow runs in the PHP sidecar (Socialite there); a sign-in comes
+/// back through the proxy's login hand-off.
+fn plugin_driver(driver: &str) -> bool {
+    find_id(driver).is_none() && pelican_api::sidecar::oauth_provider(driver).is_some_and(|p| p.enabled)
 }
 
 fn find_id(id: &str) -> Option<&'static str> {
@@ -600,7 +616,10 @@ async fn steam_user(web: &Web, params: &[(String, String)]) -> Result<OAuthUser,
 }
 
 /// `GET /auth/oauth/redirect/{driver}` (guest route).
-pub async fn redirect(web: Web, Path(driver): Path<String>) -> WebResult {
+pub async fn redirect(web: Web, Path(driver): Path<String>, req: axum::extract::Request) -> WebResult {
+    if plugin_driver(&driver) && web.user.is_none() {
+        return Ok(crate::sidecar_proxy::proxy(&web, req, None).await);
+    }
     let Some(id) = find_id(&driver).filter(|id| is_enabled(&web.st.config.env, id)) else {
         return Ok(web.redirect("/login"));
     };
@@ -611,9 +630,14 @@ pub async fn redirect(web: Web, Path(driver): Path<String>) -> WebResult {
 }
 
 /// `POST /profile/oauth/{driver}/link`: the profile tab's link action.
-pub async fn link(web: Web, Path(driver): Path<String>) -> WebResult {
+pub async fn link(web: Web, Path(driver): Path<String>, req: axum::extract::Request) -> WebResult {
     if web.user.is_none() {
         return Ok(web.redirect("/login"));
+    }
+    if plugin_driver(&driver) {
+        // The original links from the profile through Socialite's redirect; its callback
+        // links to the signed-in user (the bridge passes ours along).
+        return Ok(crate::sidecar_proxy::proxy(&web, req, Some(&format!("/auth/oauth/redirect/{driver}"))).await);
     }
     let Some(id) = find_id(&driver).filter(|id| is_enabled(&web.st.config.env, id)) else {
         return Err(WebError::NotFound);
@@ -643,7 +667,10 @@ fn error_redirect(web: &Web, error: Option<&str>) -> Response {
 }
 
 /// `GET /auth/oauth/callback/{driver}` (`OAuthController::callback`).
-pub async fn callback(web: Web, Path(driver): Path<String>) -> WebResult {
+pub async fn callback(web: Web, Path(driver): Path<String>, req: axum::extract::Request) -> WebResult {
+    if plugin_driver(&driver) {
+        return Ok(crate::sidecar_proxy::proxy(&web, req, None).await);
+    }
     let st = web.st.clone();
     let Some(id) = find_id(&driver).filter(|id| is_enabled(&st.config.env, id)) else {
         return Ok(web.redirect("/login"));

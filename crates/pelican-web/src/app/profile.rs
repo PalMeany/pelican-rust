@@ -74,7 +74,7 @@ async fn oauth_unlink(web: Authed, axum::extract::Path(driver): axum::extract::P
         .into_iter()
         .find(|s| s.id == driver)
         .ok_or(WebError::NotFound)?;
-    if crate::auth::oauth::unlink_user(&web.st, &web.user.user, schema.id).await? {
+    if crate::auth::oauth::unlink_user(&web.st, &web.user.user, &schema.id).await? {
         web.flash_success(web.t_with("profile.unlinked", &[("name", &schema.name)]));
     }
     Ok(web.redirect("/profile?tab=oauth"))
@@ -268,7 +268,7 @@ async fn render(web: &Authed, account: &Account, errors: &Errors, extra: Mj) -> 
             oauth => crate::auth::oauth::enabled(&web.st.config.env)
                 .into_iter()
                 .map(|s| {
-                    let linked = u.oauth.as_ref().and_then(|j| j.0.get(s.id)).is_some();
+                    let linked = u.oauth.as_ref().and_then(|j| j.0.get(s.id.as_str())).is_some();
                     context! { id => s.id, name => s.name, icon => s.icon, color => s.color, linked => linked }
                 })
                 .collect::<Vec<_>>(),

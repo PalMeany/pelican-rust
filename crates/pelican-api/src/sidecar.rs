@@ -37,6 +37,10 @@ const BRIDGE_FILES: &[(&str, &str)] = &[
         include_str!("../../../sidecar/pelican-rs-bridge/src/Http/Middleware/AuthenticateFromPelicanRs.php"),
     ),
     (
+        "src/Http/Middleware/LoginHandoff.php",
+        include_str!("../../../sidecar/pelican-rs-bridge/src/Http/Middleware/LoginHandoff.php"),
+    ),
+    (
         "src/Http/Middleware/VerifyPelicanRs.php",
         include_str!("../../../sidecar/pelican-rs-bridge/src/Http/Middleware/VerifyPelicanRs.php"),
     ),
@@ -185,6 +189,9 @@ pub struct Manifest {
     pub features: Vec<FeatureEntry>,
     #[serde(default)]
     pub avatars: Vec<AvatarEntry>,
+    /// OAuth providers registered by plugins (`OAuthService::register()`).
+    #[serde(default)]
+    pub oauth_providers: Vec<OAuthEntry>,
     /// `Role::$customPermissions` (`[]` when empty, an object otherwise).
     #[serde(default)]
     pub admin_permissions: Value,
@@ -242,6 +249,19 @@ pub struct AvatarEntry {
     pub plugin: String,
     pub id: String,
     pub name: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct OAuthEntry {
+    pub plugin: String,
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub color: Option<String>,
+    #[serde(default)]
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -738,4 +758,25 @@ pub async fn render_hooks(
         g.get_or_insert_with(Default::default).insert(key, (std::time::Instant::now(), html.clone()));
     }
     html
+}
+
+/// An OAuth provider registered by a PHP plugin (its redirect and callback run in the sidecar).
+pub fn oauth_provider(id: &str) -> Option<OAuthEntry> {
+    manifest().and_then(|m| m.oauth_providers.iter().find(|p| p.id == id).cloned())
+}
+
+/// The bridge's `X-Pelican-Rs-Login: <id>.<ts>.<hmac>` (a sign-in inside the sidecar):
+/// the user id when the signature holds and the timestamp is fresh.
+pub fn verify_login_handoff(st: &AppState, value: &str) -> Option<i64> {
+    let sc = get(st)?;
+    let mut parts = value.splitn(3, '.');
+    let (id, ts, sig) = (parts.next()?, parts.next()?, parts.next()?);
+    let (id, ts_num) = (id.parse::<i64>().ok()?, ts.parse::<i64>().ok()?);
+    if (unix_now() - ts_num).abs() > 60 {
+        return None;
+    }
+    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(&sc.secret).ok()?;
+    mac.update(format!("login\n{id}\n{ts}").as_bytes());
+    mac.verify_slice(&hex::decode(sig).ok()?).ok()?;
+    Some(id)
 }

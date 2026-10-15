@@ -29,6 +29,19 @@ class BridgeProvider extends ServiceProvider
                 Route::post('hooks', [BridgeController::class, 'renderHooks']);
             });
 
+        // Real sign-ins inside the sidecar are handed to pelican-rs (LoginHandoff); the bridge's
+        // own per-request `Auth::setUser()` fires no `Login` event.
+        Event::listen(\Illuminate\Auth\Events\Login::class, function ($event) {
+            app()->instance('pelican-rs.login', $event->user->getAuthIdentifier());
+        });
+        $this->app->make(\Illuminate\Contracts\Http\Kernel::class)
+            ->pushMiddleware(\PelicanRs\Bridge\Http\Middleware\LoginHandoff::class);
+        // The OAuth callback links a provider to the signed-in pelican-rs user.
+        $this->app->booted(function () {
+            Route::getRoutes()->getByName('auth.oauth.callback')
+                ?->middleware(\PelicanRs\Bridge\Http\Middleware\AuthenticateFromPelicanRs::class);
+        });
+
         // pelican-rs runs the core schedule; the sidecar keeps only what plugins add. The
         // schedule is complete once every provider's resolving callback ran, i.e. when
         // `schedule:*` starts.

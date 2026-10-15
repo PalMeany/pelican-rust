@@ -60,6 +60,10 @@ fn render_login(web: &Web, errors: &Errors, login: &str, remember: bool) -> WebR
             old => context! { login => login, remember => remember },
             captcha_site_key => captcha::site_key(&web.st),
             oauth => Value::from_serialize(oauth::enabled(&web.st.config.env)),
+            // A plugin's registration page (`$panel->registration()`, served by the PHP sidecar).
+            register_url => pelican_api::sidecar::manifest().and_then(|m| {
+                m.routes.iter().find(|r| r.name.as_deref() == Some("filament.app.auth.register")).map(|r| r.uri.clone())
+            }),
             // The passkey action is hidden unless `$request->isSecure()`.
             passkeys_enabled => web.secure,
             password_login => !web.st.config.env.bool_or("PANEL_DISABLE_PASSWORD_LOGIN", false)

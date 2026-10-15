@@ -55,6 +55,27 @@ pub async fn fallback(web: Web, req: Request) -> Response {
     }
 }
 
+/// Proxy a request a pelican-rs route handler gives up to the sidecar (plugin OAuth
+/// providers), optionally under another path.
+pub async fn proxy(web: &Web, mut req: Request, path: Option<&str>) -> Response {
+    let Some(sc) = sidecar::get(&web.st) else {
+        return WebError::NotFound.into_response();
+    };
+    if let Some(p) = path {
+        let query = req.uri().query().map(|q| format!("?{q}")).unwrap_or_default();
+        if let Ok(uri) = format!("{p}{query}").parse() {
+            *req.uri_mut() = uri;
+        }
+    }
+    match forward(&sc, web, req).await {
+        Ok(resp) => resp,
+        Err(e) => {
+            tracing::warn!(error = %e, "sidecar proxy failed");
+            (StatusCode::SERVICE_UNAVAILABLE, "The plugin service is unavailable.").into_response()
+        }
+    }
+}
+
 /// Our session cookie stays here; everything else (the sidecar's session, XSRF) goes along.
 fn forwarded_cookies(raw: &str, own: &str) -> String {
     raw.split(';')
@@ -92,11 +113,21 @@ async fn forward(sc: &sidecar::Sidecar, web: &Web, req: Request) -> Result<Respo
         rb = rb.header(k, v);
     }
     let upstream = rb.body(reqwest::Body::wrap_stream(body.into_data_stream())).send().await?;
+    // A sign-in inside the sidecar (plugin OAuth provider, plugin registration page): the
+    // session is pelican-rs's (`auth()->login($user, true)`).
+    if let Some(id) = upstream
+        .headers()
+        .get("x-pelican-rs-login")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| sidecar::verify_login_handoff(&web.st, v))
+    {
+        web.session.login(id, true);
+    }
 
     let mut out = Response::builder().status(upstream.status().as_u16());
     if let Some(headers) = out.headers_mut() {
         for (name, value) in upstream.headers() {
-            if matches!(name.as_str(), "connection" | "transfer-encoding" | "keep-alive") {
+            if matches!(name.as_str(), "connection" | "transfer-encoding" | "keep-alive" | "x-pelican-rs-login") {
                 continue;
             }
             if let (Ok(n), Ok(v)) =

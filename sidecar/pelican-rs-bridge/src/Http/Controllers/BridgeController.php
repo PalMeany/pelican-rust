@@ -38,6 +38,7 @@ class BridgeController extends Controller
             'tasks' => $this->tasks(),
             'features' => $this->features(),
             'avatars' => $this->avatars(),
+            'oauth_providers' => $this->oauthProviders(),
             'admin_permissions' => $this->staticProperty(Role::class, 'customPermissions'),
             'subuser_permissions' => array_values(array_map(fn ($group) => [
                 'name' => $group['name'],
@@ -440,6 +441,26 @@ class BridgeController extends Controller
         foreach (app(FeatureService::class)->getAll() as $schema) {
             if ($plugin = Origin::pluginOfClass($schema::class)) {
                 $out[] = ['plugin' => $plugin, 'id' => $schema->getId(), 'listeners' => $schema->getListeners()];
+            }
+        }
+
+        return $out;
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function oauthProviders(): array
+    {
+        $out = [];
+        foreach (app(\App\Extensions\OAuth\OAuthService::class)->getAll() as $schema) {
+            if ($plugin = Origin::pluginOfClass($schema::class)) {
+                $out[] = [
+                    'plugin' => $plugin,
+                    'id' => $schema->getId(),
+                    'name' => $schema->getName(),
+                    'icon' => $this->iconName($schema->getIcon()),
+                    'color' => $schema->getHexColor(),
+                    'enabled' => $schema->isEnabled(),
+                ];
             }
         }
 

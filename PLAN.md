@@ -197,7 +197,9 @@ Application API → UI → плагины → PHP-sidecar.
 4. PHP-плагины (sidecar)
    - [x] Render hooks Filament в разметке pelican-rs (head/body/page/footer/login): только хуки плагинов, для пользователя и
          панели/сервера страницы, кэш 30 с; проверено на `snowflakes` и `legal-pages` (футер + страница /imprint)
-   - [ ] Расширения входа: OAuth-провайдеры и регистрация из PHP-плагинов (`generic-oidc-providers`, `register`)
+   - [x] Расширения входа: передача входа из sidecar (подписанный заголовок ответа → сессия pelican-rs), регистрация
+         (`register`: ссылка на странице входа, вход после регистрации — проверено), OAuth-провайдеры плагинов (кнопки входа/
+         привязки, redirect/callback через sidecar; без реального IdP не проверено)
    - [ ] Действия на странице консоли и модалки server features из PHP-плагинов (`mclogs-uploader`)
 5. Не планируется без запроса: темы Filament для UI pelican-rs, Redis-драйверы (несколько экземпляров панели)
 

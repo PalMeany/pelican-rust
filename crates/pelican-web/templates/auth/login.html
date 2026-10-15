@@ -3,6 +3,7 @@
 {% set title = trans('filament-panels::auth/pages/login.title') %}
 {% block card %}
 <h1>{{ trans('filament-panels::auth/pages/login.heading') }}</h1>
+{% if register_url %}<p class="muted" style="text-align:center">{{ trans('filament-panels::auth/pages/login.actions.register.before') }} <a href="{{ register_url }}">{{ trans('filament-panels::auth/pages/login.actions.register.label') }}</a></p>{% endif %}
 {% if password_login %}
 {{ plugin_hooks['panels::auth.login.form.before'] | safe if plugin_hooks['panels::auth.login.form.before'] }}
 <form method="post" action="/login" class="form">
