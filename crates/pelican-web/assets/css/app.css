@@ -530,3 +530,12 @@ fieldset > legend { padding: 0 0.5rem; margin-left: -0.5rem; font-size: 0.875rem
 .icon-btn.action-icon.danger { color: var(--danger-600); }
 td.actions .icon-btn.action-icon { width: 2rem; height: 2rem; }
 .icon-btn.action-icon.text-success { color: var(--success-600); }
+/* `button_style` (the default): page header actions are bare XL icons, the label left to the tooltip. */
+.icon-actions .page-actions .btn:has(svg) { font-size: 0; gap: 0; padding: 0.375rem; background: none; border-color: transparent;
+  box-shadow: none; color: var(--primary-600); }
+.icon-actions .page-actions .btn:has(svg):hover { background: var(--hover); }
+.icon-actions .page-actions .btn:has(svg) .icon-sm, .icon-actions .page-actions .btn:has(svg) .icon { width: 1.5rem; height: 1.5rem; }
+.icon-actions .page-actions .btn-danger:has(svg) { color: var(--danger-600); }
+.icon-actions .page-actions .btn-gray:has(svg) { color: var(--text-3); }
+.icon-actions .page-actions .btn-success:has(svg) { color: var(--success-600); }
+.icon-actions .page-actions .btn:has(svg):disabled { opacity: 0.5; }
