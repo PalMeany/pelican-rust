@@ -35,6 +35,7 @@ class BridgeController extends Controller
             'navigation' => $this->navigation(),
             'listeners' => $this->listenedEvents(),
             'render_hooks' => array_keys($this->pluginRenderHooks()),
+            'console_actions' => array_map(fn ($a) => $a->getName(), \PelicanRs\Bridge\Filament\ConsoleActionHost::pluginHeaderActions()),
             'tasks' => $this->tasks(),
             'features' => $this->features(),
             'avatars' => $this->avatars(),
@@ -190,7 +191,8 @@ class BridgeController extends Controller
         $out = [];
         foreach (Route::getRoutes()->getRoutes() as $route) {
             $action = ltrim((string) $route->getActionName(), '\\');
-            if (str_starts_with($action, 'Livewire\\') || str_starts_with($action, 'Filament\\Actions\\')) {
+            if (str_starts_with($action, 'Livewire\\') || str_starts_with($action, 'Filament\\Actions\\')
+                || str_starts_with($action, 'PelicanRs\\Bridge\\Filament\\')) {
                 $out[] = '/' . ltrim($route->uri(), '/');
             }
         }
@@ -413,6 +415,40 @@ class BridgeController extends Controller
         }
 
         return new JsonResponse((object) $out);
+    }
+
+    /** The plugins' console header actions the signed user can use on a server. */
+    public function consoleActions(Request $request): JsonResponse
+    {
+        $user = \App\Models\User::query()->find((int) $request->header('X-Pelican-Rs-User', '0'));
+        abort_if(is_null($user), 403);
+        \Illuminate\Support\Facades\Auth::setUser($user);
+        if ($user->language) {
+            app()->setLocale($user->language);
+        }
+        Filament::setCurrentPanel(Filament::getPanel('server'));
+        $tenant = \App\Models\Server::query()->where('uuid_short', (string) $request->input('tenant'))->first();
+        abort_if(is_null($tenant), 404);
+        Filament::setTenant($tenant);
+        $out = [];
+        foreach (\PelicanRs\Bridge\Filament\ConsoleActionHost::pluginHeaderActions() as $action) {
+            try {
+                if ($action->isHidden()) {
+                    continue;
+                }
+                $out[] = [
+                    'name' => $action->getName(),
+                    'label' => $action->getTooltip() ?: $action->getLabel(),
+                    'icon' => $this->iconName($action->getIcon()),
+                    'color' => is_string($action->getColor()) ? $action->getColor() : null,
+                ];
+            } catch (Throwable) {
+                // An action that needs the Livewire page to decide: offered, the page decides.
+                $out[] = ['name' => $action->getName(), 'label' => $action->getName(), 'icon' => null, 'color' => null];
+            }
+        }
+
+        return new JsonResponse($out);
     }
 
     /** @return array<int, array<string, mixed>> */

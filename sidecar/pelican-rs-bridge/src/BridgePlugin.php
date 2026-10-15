@@ -18,6 +18,9 @@ class BridgePlugin implements Plugin
         // Runs after StartSession and before the panel's Authenticate; persistent so that
         // Livewire update requests of the panel's components pass through it too.
         $panel->middleware([AuthenticateFromPelicanRs::class], isPersistent: true);
+        if ($panel->getId() === 'server') {
+            $panel->pages([Filament\ConsoleActionHost::class]);
+        }
     }
 
     public function boot(Panel $panel): void {}

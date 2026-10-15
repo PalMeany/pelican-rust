@@ -258,6 +258,16 @@ async fn modal(p: ServerPanel, FeatureKey(key): FeatureKey) -> WebResult<Respons
         }
     }
 
+    // A PHP plugin's feature: its Filament action runs on the bridge's host page (ADR-0020).
+    if pelican_api::sidecar::php_feature(&key).is_some() {
+        let url = format!("{}/rs-console-action?feature={}", p.base_url(), super::rawurlencode(&key));
+        let html = format!(
+            "<p><a class=\"btn\" href=\"{}\">{}</a></p>",
+            crate::views::escape(&url),
+            crate::views::escape(&p.t("filament-actions::modal.actions.confirm.label"))
+        );
+        return p.render("plugins/feature.html", context! { heading => key.clone(), html });
+    }
     match validate_state(&p, &key).await? {
         Kind::PidLimit => {
             ModalView {

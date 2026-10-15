@@ -84,7 +84,7 @@ pub fn start(live: &Live) {
     match Runtime::new(Arc::new(PanelServices { live: live.clone() }), storage) {
         Ok(rt) => {
             pelican_plugins::runtime::set_global(rt.clone());
-            pelican_core::server_config::set_extra_features(pelican_plugins::runtime::feature_listeners);
+            pelican_core::server_config::set_extra_features(pelican_api::sidecar::all_feature_listeners);
             tokio::spawn(async move { rt.load_all(&cfg).await });
         }
         Err(e) => tracing::error!(error = %e, "starting the plugin runtime failed"),

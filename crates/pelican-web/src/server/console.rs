@@ -80,6 +80,18 @@ async fn page(p: ServerPanel) -> WebResult {
         },
     });
     let power = |perm: &str| p.can(perm);
+    // PHP plugins' console actions (ADR-0020): links to the bridge's host page.
+    let plugin_actions: Vec<_> = pelican_api::sidecar::console_actions(&p.st, p.user.id(), &p.server.uuid_short)
+        .await
+        .into_iter()
+        .map(|a| {
+            context! {
+                url => format!("{}/rs-console-action?action={}", p.base_url(), super::rawurlencode(&a.name)),
+                label => a.label,
+                icon => crate::sidecar_proxy::icon(a.icon.as_deref()),
+            }
+        })
+        .collect();
     p.page(
         "",
         "server/console.html",
@@ -98,6 +110,7 @@ async fn page(p: ServerPanel) -> WebResult {
                 command => p.can("control.console"),
             },
             font => font,
+            plugin_actions => plugin_actions,
         },
     )
 }

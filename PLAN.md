@@ -200,7 +200,10 @@ Application API → UI → плагины → PHP-sidecar.
    - [x] Расширения входа: передача входа из sidecar (подписанный заголовок ответа → сессия pelican-rs), регистрация
          (`register`: ссылка на странице входа, вход после регистрации — проверено), OAuth-провайдеры плагинов (кнопки входа/
          привязки, redirect/callback через sidecar; без реального IdP не проверено)
-   - [ ] Действия на странице консоли и модалки server features из PHP-плагинов (`mclogs-uploader`)
+   - [x] Действия консоли (`Console::registerCustomHeaderActions`) и server features PHP-плагинов: кнопки на консоли
+         pelican-rs (видимость по `hidden()` для пользователя/сервера), выполнение на странице-хосте моста
+         (`/server/{id}/rs-console-action?action=|feature=`), listeners фич PHP-плагинов уходят в Wings; проверено на
+         действии примера greeter (`mclogs-uploader` в dev-стенде скрыт: libcurl не достаёт `*.localhost` до Wings)
 5. Не планируется без запроса: темы Filament для UI pelican-rs, Redis-драйверы (несколько экземпляров панели)
 
 ## Делегирование

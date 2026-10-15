@@ -2,7 +2,11 @@
 
 namespace Example\Greeter\Providers;
 
+use App\Enums\HeaderActionPosition;
 use App\Extensions\Tasks\TaskService;
+use App\Filament\Server\Pages\Console;
+use Filament\Actions\Action;
+use Filament\Notifications\Notification;
 use App\Models\Server;
 use Example\Greeter\Tasks\GreetTask;
 use Illuminate\Support\Facades\Event;
@@ -14,6 +18,13 @@ class GreeterProvider extends ServiceProvider
     public function register(): void
     {
         $this->callAfterResolving(TaskService::class, fn (TaskService $tasks) => $tasks->register(new GreetTask()));
+
+        // A console header action (shown on pelican-rs's console through the bridge).
+        Console::registerCustomHeaderActions(HeaderActionPosition::Before, Action::make('greeter_wave')
+            ->icon('tabler-hand-stop')
+            ->tooltip('Wave')
+            ->requiresConfirmation()
+            ->action(fn () => Notification::make()->title('The greeter waves back')->success()->send()));
     }
 
     public function boot(): void

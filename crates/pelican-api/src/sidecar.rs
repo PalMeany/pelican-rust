@@ -37,6 +37,14 @@ const BRIDGE_FILES: &[(&str, &str)] = &[
         include_str!("../../../sidecar/pelican-rs-bridge/src/Http/Middleware/AuthenticateFromPelicanRs.php"),
     ),
     (
+        "src/Filament/ConsoleActionHost.php",
+        include_str!("../../../sidecar/pelican-rs-bridge/src/Filament/ConsoleActionHost.php"),
+    ),
+    (
+        "resources/views/console-action.blade.php",
+        include_str!("../../../sidecar/pelican-rs-bridge/resources/views/console-action.blade.php"),
+    ),
+    (
         "src/Http/Middleware/LoginHandoff.php",
         include_str!("../../../sidecar/pelican-rs-bridge/src/Http/Middleware/LoginHandoff.php"),
     ),
@@ -183,6 +191,9 @@ pub struct Manifest {
     /// Filament render hooks registered by plugins (`panels::body.end`, `pelican::footer.end`, …).
     #[serde(default)]
     pub render_hooks: Vec<String>,
+    /// Names of the console header actions plugins added (`Console::registerCustomHeaderActions()`).
+    #[serde(default)]
+    pub console_actions: Vec<String>,
     #[serde(default)]
     pub tasks: Vec<TaskEntry>,
     #[serde(default)]
@@ -779,4 +790,62 @@ pub fn verify_login_handoff(st: &AppState, value: &str) -> Option<i64> {
     mac.update(format!("login\n{id}\n{ts}").as_bytes());
     mac.verify_slice(&hex::decode(sig).ok()?).ok()?;
     Some(id)
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct ConsoleAction {
+    pub name: String,
+    pub label: String,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub color: Option<String>,
+}
+
+type ActionCache = std::collections::HashMap<(i64, String), (std::time::Instant, Vec<ConsoleAction>)>;
+static ACTIONS: std::sync::Mutex<Option<ActionCache>> = std::sync::Mutex::new(None);
+
+/// The PHP plugins' console actions `user` can use on server `tenant` (run on the bridge's
+/// host page `/server/<tenant>/rs-console-action?action=<name>`); cached for 30 s.
+pub async fn console_actions(st: &AppState, user: i64, tenant: &str) -> Vec<ConsoleAction> {
+    if !manifest().is_some_and(|m| !m.console_actions.is_empty()) || is_down() {
+        return Vec::new();
+    }
+    let key = (user, tenant.to_string());
+    if let Some((at, list)) = ACTIONS.lock().ok().and_then(|g| g.as_ref().and_then(|c| c.get(&key).cloned())) {
+        if at.elapsed() < Duration::from_secs(30) {
+            return list;
+        }
+    }
+    let Some(sc) = get(st) else { return Vec::new() };
+    let list: Vec<ConsoleAction> = match sc
+        .call_as(reqwest::Method::POST, "/_bridge/console-actions", Some(user), Some(&json!({ "tenant": tenant })))
+        .await
+    {
+        Ok((200, v)) => serde_json::from_value(v).unwrap_or_default(),
+        _ => Vec::new(),
+    };
+    if let Ok(mut g) = ACTIONS.lock() {
+        g.get_or_insert_with(Default::default).insert(key, (std::time::Instant::now(), list.clone()));
+    }
+    list
+}
+
+/// Server features (Wings console listeners) of WASM and PHP plugins: `(id, listeners)`.
+pub fn all_feature_listeners() -> Vec<(String, Vec<String>)> {
+    let mut out = pelican_plugins::runtime::feature_listeners();
+    if let Some(m) = manifest() {
+        for f in &m.features {
+            if !out.iter().any(|(id, _)| *id == f.id) {
+                out.push((f.id.clone(), f.listeners.clone()));
+            }
+        }
+    }
+    out
+}
+
+/// A server feature registered by a PHP plugin (its modal is the feature's Filament action,
+/// run on the bridge's host page).
+pub fn php_feature(id: &str) -> Option<FeatureEntry> {
+    manifest().and_then(|m| m.features.iter().find(|f| f.id == id).cloned())
 }

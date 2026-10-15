@@ -12,6 +12,7 @@
 <div class="page-head">
   <h1>{{ title }}</h1>
   <div class="btn-group" role="group">
+    {% for a in plugin_actions or [] %}<a class="btn btn-gray" href="{{ a.url }}" title="{{ a.label }}" aria-label="{{ a.label }}">{{ icon(a.icon, 'icon-sm') }}</a>{% endfor %}
     {% if can.start %}<button type="button" class="btn" data-power="start" disabled>{{ icon('player-play-filled', 'icon-sm') }}{{ trans('server/console.power_actions.start') }}</button>{% endif %}
     {% if can.restart %}<button type="button" class="btn btn-gray" data-power="restart" disabled>{{ icon('reload', 'icon-sm') }}{{ trans('server/console.power_actions.restart') }}</button>{% endif %}
     {% if can.stop %}<button type="button" class="btn btn-danger" data-power="stop" disabled>{{ icon('player-stop-filled', 'icon-sm') }}{{ trans('server/console.power_actions.stop') }}</button>

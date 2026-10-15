@@ -27,6 +27,7 @@ class BridgeProvider extends ServiceProvider
                 Route::get('lang', [BridgeController::class, 'lang']);
                 Route::post('navigation', [BridgeController::class, 'userNavigation']);
                 Route::post('hooks', [BridgeController::class, 'renderHooks']);
+                Route::post('console-actions', [BridgeController::class, 'consoleActions']);
             });
 
         // Real sign-ins inside the sidecar are handed to pelican-rs (LoginHandoff); the bridge's
