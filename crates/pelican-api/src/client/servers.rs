@@ -70,7 +70,8 @@ pub const PERMISSIONS: &[&str] = &[
 
 /// `GET /permissions`.
 pub async fn permissions() -> ApiResult<Response> {
-    Ok(PhpJson::ok(json!({"object": "system_permissions", "attributes": {"permissions": PERMISSIONS}})).into_response())
+    let permissions = crate::sidecar::all_subuser_permission_keys();
+    Ok(PhpJson::ok(json!({"object": "system_permissions", "attributes": {"permissions": permissions}})).into_response())
 }
 
 /// `User::directAccessibleServers()->pluck('id')`.

@@ -8,7 +8,7 @@ pub mod databases;
 mod files;
 pub mod network;
 pub mod schedules;
-mod servers;
+pub(crate) mod servers;
 mod settings;
 mod startup;
 pub mod subusers;

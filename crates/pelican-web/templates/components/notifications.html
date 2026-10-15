@@ -1,0 +1,59 @@
+{#
+  Database notifications (Filament `DatabaseNotifications`, notifications.rs): the topbar bell
+  with the unread count (polled every 30 s) and the slide-over list.
+#}
+{% block trigger %}
+<span id="notifications-trigger" hx-get="/_notifications/trigger" hx-trigger="every 30s" hx-swap="outerHTML"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <button type="button" class="icon-btn notifications-btn" data-modal-open="notifications" hx-get="/_notifications" hx-target="#notifications-panel" hx-swap="innerHTML"
+    aria-label="{% if unread %}{{ trans_choice('filament-panels::layout.actions.open_database_notifications.label_with_unread_count', unread, count=unread) }}{% else %}{{ trans('filament-panels::layout.actions.open_database_notifications.label') }}{% endif %}">
+    {{ icon('bell', 'icon') }}{% if unread %}<span class="notifications-count">{{ unread }}</span>{% endif %}
+  </button>
+</span>
+{% endblock %}
+
+{% block panel %}
+{% if items %}
+<div class="notifications-head">
+  <h2 id="notifications-heading">{{ trans('filament-notifications::database.modal.heading') }}{% if unread %} <span class="badge badge-primary">{{ unread }}</span>{% endif %}</h2>
+  <button type="button" class="icon-btn" data-modal-close aria-label="{{ trans('filament-actions::modal.actions.cancel.label') }}">{{ icon('x') }}</button>
+</div>
+<div class="notifications-tools">
+  {% if unread %}<button type="button" class="btn-link" hx-post="/_notifications/read-all" hx-target="#notifications-panel">{{ trans('filament-notifications::database.modal.actions.mark_all_as_read.label') }}</button>{% endif %}
+  <button type="button" class="btn-link danger" hx-post="/_notifications/clear" hx-target="#notifications-panel">{{ trans('filament-notifications::database.modal.actions.clear.label') }}</button>
+</div>
+<div class="notifications-list" role="list" aria-label="{{ trans('filament-notifications::database.modal.heading') }}">
+  {% for n in items %}
+  <div role="listitem" class="notification{% if n.unread %} unread{% endif %}">
+    {% if n.icon %}<span class="notification-icon text-{{ n.color }}">{{ icon(n.icon, 'icon') }}</span>{% endif %}
+    <div class="notification-main">
+      {% if n.unread %}<span class="sr-only">{{ trans('filament-notifications::database.modal.unread_label') }}</span>{% endif %}
+      <div class="notification-title">{{ n.title | safe }}</div>
+      <div class="notification-date">{{ n.date }}</div>
+      {% if n.body %}<div class="notification-body">{{ n.body | safe }}</div>{% endif %}
+      {% if n.actions %}
+      <div class="notification-actions">
+        {% for act in n.actions %}
+        <form method="post" action="/_notifications/{{ n.id }}/actions/{{ act.index }}"{% if act.new_tab %} target="_blank"{% endif %}>{{ csrf_field() }}<button type="submit" class="{% if act.link %}btn-link{% else %}btn btn-sm{% if act.outlined or act.color == 'gray' %} btn-gray{% endif %}{% endif %}">{{ act.label }}</button></form>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    <button type="button" class="icon-btn notification-close" hx-post="/_notifications/{{ n.id }}/remove" hx-target="#notifications-panel" aria-label="{{ trans('filament-notifications::notification.actions.close.label') }}">{{ icon('x', 'icon-sm') }}</button>
+  </div>
+  {% endfor %}
+</div>
+{% if page > 1 or has_more %}
+<nav class="notifications-pages" aria-label="{{ trans('filament::components/pagination.label') }}">
+  {% if page > 1 %}<button type="button" class="btn btn-sm btn-gray" hx-get="/_notifications?page={{ page - 1 }}" hx-target="#notifications-panel">{{ trans('filament::components/pagination.actions.previous.label') }}</button>{% else %}<span></span>{% endif %}
+  {% if has_more %}<button type="button" class="btn btn-sm btn-gray" hx-get="/_notifications?page={{ page + 1 }}" hx-target="#notifications-panel">{{ trans('filament::components/pagination.actions.next.label') }}</button>{% endif %}
+</nav>
+{% endif %}
+{% else %}
+<div class="notifications-head"><span></span><button type="button" class="icon-btn" data-modal-close aria-label="{{ trans('filament-actions::modal.actions.cancel.label') }}">{{ icon('x') }}</button></div>
+<div class="notifications-empty">
+  <div class="notifications-empty-icon">{{ icon('bell-off', 'icon') }}</div>
+  <h2 id="notifications-heading">{{ trans('filament-notifications::database.modal.empty.heading') }}</h2>
+  <p class="muted">{{ trans('filament-notifications::database.modal.empty.description') }}</p>
+</div>
+{% endif %}
+{% endblock %}

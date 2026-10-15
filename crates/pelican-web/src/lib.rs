@@ -13,6 +13,7 @@ pub mod forms;
 pub mod i18n;
 pub mod installer;
 pub mod models;
+mod notifications;
 pub mod plugin_pages;
 pub mod server_info;
 pub mod session;
@@ -71,6 +72,7 @@ pub fn router(state: AppState) -> Router {
         .merge(app::routes())
         .merge(admin::routes())
         .merge(server::routes())
+        .merge(notifications::routes())
         .fallback(sidecar_proxy::fallback)
         .layer(from_fn(csrf::layer))
         .layer(from_fn_with_state(state.clone(), session::layer));

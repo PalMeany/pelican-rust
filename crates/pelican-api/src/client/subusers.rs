@@ -14,7 +14,6 @@ use sea_orm::{ActiveValue::Set, ColumnTrait, ConnectionTrait, EntityTrait, Query
 use serde_json::{Value, json};
 
 use super::data::{server_subusers, subuser_item};
-use super::servers::PERMISSIONS;
 use crate::envelope::list;
 use crate::error::{ApiError, ApiResult, Style};
 use crate::input::{In, Input};
@@ -70,8 +69,9 @@ fn cleaned_permissions(input: &Input) -> Vec<String> {
         Some(Value::Object(m)) => m.values().map(pelican_core::php::string).collect(),
         _ => Vec::new(),
     };
+    let known = crate::sidecar::all_subuser_permission_keys();
     for p in items {
-        if PERMISSIONS.contains(&p.as_str()) && !out.contains(&p) {
+        if known.contains(&p) && !out.contains(&p) {
             out.push(p);
         }
     }

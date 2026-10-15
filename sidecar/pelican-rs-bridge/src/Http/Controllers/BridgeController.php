@@ -35,6 +35,7 @@ class BridgeController extends Controller
             'navigation' => $this->navigation(),
             'listeners' => $this->listenedEvents(),
             'render_hooks' => array_keys($this->pluginRenderHooks()),
+            'boots' => $this->pluginsBootPanels(),
             'console_actions' => array_map(fn ($a) => $a->getName(), \PelicanRs\Bridge\Filament\ConsoleActionHost::pluginHeaderActions()),
             'tasks' => $this->tasks(),
             'features' => $this->features(),
@@ -386,8 +387,92 @@ class BridgeController extends Controller
     }
 
     /**
-     * The HTML of the plugins' render hooks for a page of `panel` (global hooks and those
-     * scoped to the panel), as the signed user (or a guest) sees it.
+     * Whether a plugin does something when a panel boots (`SetUpPanel` on every panel request):
+     * a `boot()` with a body (alert banners, hooks) or render hooks given to the panel.
+     */
+    private function pluginsBootPanels(): bool
+    {
+        foreach (Filament::getPanels() as $panel) {
+            foreach ($panel->getPlugins() as $plugin) {
+                if (is_null(Origin::pluginOfClass($plugin::class))) {
+                    continue;
+                }
+                $boot = new \ReflectionMethod($plugin, 'boot');
+                $lines = array_slice((array) file((string) $boot->getFileName()), $boot->getStartLine() - 1, $boot->getEndLine() - $boot->getStartLine() + 1);
+                $body = implode('', $lines);
+                $body = substr($body, (int) strpos($body, '{') + 1, (int) strrpos($body, '}') - (int) strpos($body, '{') - 1);
+                $body = preg_replace(['~/\*.*?\*/~s', '~//[^\n]*~', '~#[^\n]*~'], '', $body);
+                if (trim((string) $body) !== '') {
+                    return true;
+                }
+            }
+            if ($this->pluginPanelRenderHooks($panel) !== []) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Render hooks plugins gave the panel (`$panel->renderHook()`), registered only when it boots.
+     *
+     * @return array<string, array<string, \Closure[]>>
+     */
+    private function pluginPanelRenderHooks(\Filament\Panel $panel): array
+    {
+        $out = [];
+        foreach ((new ReflectionProperty($panel, 'renderHooks'))->getValue($panel) as $name => $scopes) {
+            foreach ($scopes as $scope => $hooks) {
+                foreach ($hooks as $hook) {
+                    if (!is_null(Origin::pluginOfListener($hook))) {
+                        $out[$name][$scope][] = $hook;
+                    }
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * What `SetUpPanel` does for the plugins on a panel request: their `boot()`, collecting the
+     * alert banners they send (`AlertBanner::send()`, shown at the top of the page).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function bootPlugins(\Filament\Panel $panel): array
+    {
+        session()->forget('alert-banners');
+        foreach ($panel->getPlugins() as $plugin) {
+            if (is_null(Origin::pluginOfClass($plugin::class))) {
+                continue;
+            }
+            try {
+                $plugin->boot($panel);
+            } catch (Throwable $exception) {
+                report($exception);
+            }
+        }
+        $banners = [];
+        foreach ((array) session()->pull('alert-banners', []) as $banner) {
+            $banners[] = [
+                'id' => (string) ($banner['id'] ?? ''),
+                'title' => filled($banner['title'] ?? null) ? (string) str($banner['title'])->sanitizeHtml() : null,
+                'body' => filled($banner['body'] ?? null) ? (string) str($banner['body'])->sanitizeHtml() : null,
+                'status' => $banner['status'] ?? 'info',
+                'icon' => $this->iconName($banner['icon'] ?? null),
+                'closeable' => (bool) ($banner['closeable'] ?? false),
+            ];
+        }
+
+        return $banners;
+    }
+
+    /**
+     * The HTML of the plugins' render hooks for a page of `panel` (global hooks, those scoped to
+     * the panel and those the plugins gave the panel) and the alert banners their `boot()` sends,
+     * as the signed user (or a guest) sees them.
      */
     public function renderHooks(Request $request): JsonResponse
     {
@@ -399,6 +484,7 @@ class BridgeController extends Controller
             }
         }
         $panelId = (string) $request->input('panel');
+        $panel = null;
         try {
             $panel = Filament::getPanel($panelId);
             Filament::setCurrentPanel($panel);
@@ -410,9 +496,18 @@ class BridgeController extends Controller
             }
         } catch (Throwable) {
             // Pages outside the panels (login): global hooks only.
+            $panel = null;
         }
+        $banners = [];
+        $all = [];
+        if ($panel) {
+            $banners = $this->bootPlugins($panel);
+            $all = $this->pluginPanelRenderHooks($panel);
+        }
+        // Read after the plugins booted: `boot()` may register hooks too.
+        $all = array_merge_recursive($all, $this->pluginRenderHooks());
         $out = [];
-        foreach ($this->pluginRenderHooks() as $name => $scopes) {
+        foreach ($all as $name => $scopes) {
             $html = '';
             foreach (['', $panelId] as $scope) {
                 foreach ($scopes[$scope] ?? [] as $hook) {
@@ -428,7 +523,7 @@ class BridgeController extends Controller
             }
         }
 
-        return new JsonResponse((object) $out);
+        return new JsonResponse(['hooks' => (object) $out, 'banners' => $banners]);
     }
 
     /** The plugins' console header actions the signed user can use on a server. */

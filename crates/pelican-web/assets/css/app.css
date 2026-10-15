@@ -300,6 +300,7 @@ dialog.modal::backdrop { background: rgb(9 9 11 / 0.5); }
 .banner.danger { background: rgb(239 68 68 / 0.1); border-color: rgb(239 68 68 / 0.3); }
 .banner.info { background: rgb(14 165 233 / 0.1); border-color: rgb(14 165 233 / 0.3); }
 .banner.success { background: rgb(34 197 94 / 0.1); border-color: rgb(34 197 94 / 0.3); }
+.banner .banner-close { margin-left: auto; width: 1.75rem; height: 1.75rem; }
 
 /* ---------- progress / misc ---------- */
 .progress { height: 0.5rem; border-radius: 999px; background: var(--muted-bg); overflow: hidden; min-width: 6rem; }
@@ -382,3 +383,28 @@ canvas.chart { width: 100%; height: 120px; display: block; }
 
 /* Footer content of PHP plugins' render hooks (ADR-0020). */
 .plugin-footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border, #e5e7eb); font-size: .875rem; text-align: center; color: var(--muted, #6b7280); }
+
+/* Database notifications: topbar bell and slide-over (Filament `DatabaseNotifications`). */
+.notifications-btn { position: relative; }
+.notifications-count { position: absolute; top: -0.125rem; right: -0.25rem; min-width: 1.125rem; height: 1.125rem; padding: 0 0.25rem;
+  border-radius: 9999px; background: var(--primary-600); color: #fff; font-size: 0.6875rem; font-weight: 600; line-height: 1.125rem; text-align: center; }
+dialog.modal.slide-over { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; width: min(28rem, 100vw); border-radius: 0; }
+.notifications-panel { display: flex; flex-direction: column; min-height: 100%; }
+.notifications-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.25rem 1.5rem 0.5rem; }
+.notifications-head h2 { font-size: 1.125rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+.notifications-tools { display: flex; gap: 1rem; padding: 0 1.5rem 1rem; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
+.notifications-list { display: flex; flex-direction: column; }
+.notification { display: flex; gap: 0.75rem; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); }
+.notification.unread { background: var(--hover); }
+.notification-icon { flex: none; padding-top: 0.125rem; }
+.notification-icon.text-info { color: var(--info-600); } .notification-icon.text-primary { color: var(--primary-600); } .notification-icon.text-gray { color: var(--text-3); }
+.notification-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.875rem; }
+.notification-title { font-weight: 600; }
+.notification-date { color: var(--text-3); font-size: 0.75rem; }
+.notification-body { color: var(--text-2); overflow-wrap: anywhere; }
+.notification-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; }
+.notification-close { flex: none; width: 1.75rem; height: 1.75rem; }
+.notifications-pages { display: flex; justify-content: space-between; padding: 1rem 1.5rem; }
+.notifications-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; padding: 3rem 1.5rem; text-align: center; }
+.notifications-empty-icon { width: 3rem; height: 3rem; border-radius: 50%; background: var(--muted-bg); color: var(--text-2); display: flex; align-items: center; justify-content: center; }
+.notifications-empty h2 { font-size: 1.125rem; font-weight: 600; }

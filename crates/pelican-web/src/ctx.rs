@@ -36,8 +36,8 @@ pub struct Web {
     pub scheme_host: String,
     /// The `Origin` header.
     pub origin: Option<String>,
-    /// HTML of PHP plugins' Filament render hooks for this page (ADR-0020), by hook name.
-    pub plugin_hooks: std::sync::Arc<serde_json::Map<String, serde_json::Value>>,
+    /// PHP plugins' Filament render hooks (HTML by hook name) and alert banners for this page (ADR-0020).
+    pub plugin_hooks: std::sync::Arc<pelican_api::sidecar::PageExtras>,
 }
 
 /// A page that requires a signed-in user (Filament `Authenticate`).
@@ -135,7 +135,8 @@ impl Web {
             flash => Value::from_serialize(&flash),
             binary_prefix => self.st.config.use_binary_prefix,
             path => self.path.clone(),
-            plugin_hooks => Value::from_serialize(&*self.plugin_hooks),
+            plugin_hooks => Value::from_serialize(&self.plugin_hooks.hooks),
+            plugin_banners => Value::from_serialize(banners(&self.plugin_hooks.banners)),
             hx => self.hx,
         }
     }
@@ -183,6 +184,31 @@ impl Web {
     pub fn flash_danger(&self, title: impl Into<String>, body: Option<String>) {
         self.session.flash("danger", title, body);
     }
+}
+
+/// Plugin alert banners for the layout: a known status and an icon we have (the banner's own
+/// Tabler icon, else the status's).
+fn banners(list: &[pelican_api::sidecar::Banner]) -> Vec<pelican_api::sidecar::Banner> {
+    list.iter()
+        .map(|b| {
+            let status = match b.status.as_deref() {
+                Some(s @ ("success" | "danger" | "warning" | "info")) => s,
+                _ => "info",
+            };
+            let own = b
+                .icon
+                .as_deref()
+                .map(|i| i.trim_start_matches("tabler-"))
+                .filter(|i| crate::assets::icon_key(i).is_some());
+            let icon = own.unwrap_or(match status {
+                "success" => "circle-check",
+                "danger" => "alert-circle",
+                "warning" => "alert-triangle",
+                _ => "info-circle",
+            });
+            pelican_api::sidecar::Banner { status: Some(status.to_string()), icon: Some(icon.to_string()), ..b.clone() }
+        })
+        .collect()
 }
 
 fn page(html: String) -> Response {

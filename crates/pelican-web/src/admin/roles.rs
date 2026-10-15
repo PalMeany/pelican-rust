@@ -704,7 +704,18 @@ async fn update(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
             },
         )
         .await?;
-        sync_permissions(&txn, id, &collected(&data)).await?;
+        let mut names = collected(&data);
+        // With the PHP sidecar configured but unavailable the form lacks the PHP plugins' sections:
+        // keep the permissions it could not show instead of dropping them.
+        if pelican_api::sidecar::get(&admin.st).is_some() && pelican_api::sidecar::manifest().is_none() {
+            let offered: Vec<String> = all_models().iter().flat_map(|m| section_perms(m)).collect();
+            for name in permission_names(&txn, id).await? {
+                if !offered.contains(&name) && !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+        }
+        sync_permissions(&txn, id, &names).await?;
         sync_nodes(&txn, id, &parse_ids(&data.nodes)).await?;
     }
     txn.commit().await?;

@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use PelicanRs\Bridge\Http\Controllers\BridgeController;
+use PelicanRs\Bridge\Http\Middleware\AuthenticateFromPelicanRs;
 use PelicanRs\Bridge\Http\Middleware\VerifyPelicanRs;
 use PelicanRs\Bridge\Origin;
 
@@ -37,6 +38,16 @@ class BridgeProvider extends ServiceProvider
         });
         $this->app->make(\Illuminate\Contracts\Http\Kernel::class)
             ->pushMiddleware(\PelicanRs\Bridge\Http\Middleware\LoginHandoff::class);
+        // Plugin routes in the `web` group (`auth` behind it) see the pelican-rs user as well: right
+        // after StartSession, where the group's order puts it before any route `auth` middleware.
+        $router = $this->app->make(\Illuminate\Routing\Router::class);
+        $web = $router->getMiddlewareGroups()['web'] ?? [];
+        if (!in_array(AuthenticateFromPelicanRs::class, $web, true)) {
+            $at = array_search(\Illuminate\Session\Middleware\StartSession::class, $web, true);
+            array_splice($web, $at === false ? count($web) : $at + 1, 0, [AuthenticateFromPelicanRs::class]);
+            $router->middlewareGroup('web', $web);
+        }
+
         // The OAuth callback links a provider to the signed-in pelican-rs user.
         $this->app->booted(function () {
             Route::getRoutes()->getByName('auth.oauth.callback')

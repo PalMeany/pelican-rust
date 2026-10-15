@@ -29,6 +29,7 @@ pub fn routes() -> Router<AppState> {
         .route("/server/{server}/files/upload-url", get(upload_url))
         .route("/server/{server}/files/uploaded", post(uploaded))
         .route("/server/{server}/files/search", get(search))
+        .route("/server/{server}/files/{*rest}", get(original_url))
 }
 
 /// `File::ARCHIVE_MIMES`.
@@ -216,6 +217,30 @@ fn wings_message(e: &WingsError) -> String {
         WingsError::Connection(_) => "Node connection failed".into(),
         WingsError::Request { status, .. } => format!("Wings returned HTTP {status}"),
     }
+}
+
+/// The original's file manager URLs (`/files/{path?}`, `/files/edit/{path}`, `/files/download/{path}`,
+/// `/files/search/{searchTerm}`, app/Filament/Server/Resources/Files/FileResource.php), as plugins and
+/// bookmarks link them: redirected to ours, which take the path as a query parameter.
+async fn original_url(
+    axum::extract::Path((server, rest)): axum::extract::Path<(String, String)>,
+    axum::extract::RawQuery(query): axum::extract::RawQuery,
+) -> Response {
+    let (page, key, value) = match rest.split_once('/') {
+        Some(("edit", p)) => ("/edit", "path", p),
+        Some(("download", p)) => ("/download", "path", p),
+        Some(("search", t)) => ("/search", "q", t),
+        _ => ("", "path", rest.as_str()),
+    };
+    let mut url = format!(
+        "/server/{server}/files{page}?{}",
+        form_urlencoded::Serializer::new(String::new()).append_pair(key, value).finish()
+    );
+    if let Some(extra) = query.filter(|q| !q.is_empty()) {
+        url.push('&');
+        url.push_str(&extra);
+    }
+    Redirect::to(&url).into_response()
 }
 
 #[derive(Deserialize, Default)]

@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use hmac::{Hmac, Mac};
 use pelican_core::state::AppState;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
@@ -199,6 +199,9 @@ pub struct Manifest {
     /// Filament render hooks registered by plugins (`panels::body.end`, `pelican::footer.end`, …).
     #[serde(default)]
     pub render_hooks: Vec<String>,
+    /// A plugin acts when a panel boots (`boot()` sending alert banners, panel render hooks).
+    #[serde(default)]
+    pub boots: bool,
     /// Names of the console header actions plugins added (`Console::registerCustomHeaderActions()`).
     #[serde(default)]
     pub console_actions: Vec<String>,
@@ -665,6 +668,49 @@ pub fn all_subuser_permissions() -> Vec<pelican_plugins::runtime::PermissionGrou
     out
 }
 
+/// `Subuser::allPermissionKeys()`: the core keys, then the plugins' groups (hidden ones too) merged
+/// by group name, as `group.permission`.
+pub fn all_subuser_permission_keys() -> Vec<String> {
+    let mut groups: Vec<(String, Vec<String>)> = Vec::new();
+    let mut add = |group: &str, perms: &[String]| {
+        let i = match groups.iter().position(|(g, _)| g == group) {
+            Some(i) => i,
+            None => {
+                groups.push((group.to_string(), Vec::new()));
+                groups.len() - 1
+            }
+        };
+        for p in perms {
+            if !groups[i].1.contains(p) {
+                groups[i].1.push(p.clone());
+            }
+        }
+    };
+    for key in crate::client::servers::PERMISSIONS {
+        if let Some((group, perm)) = key.split_once('.') {
+            add(group, &[perm.to_string()]);
+        }
+    }
+    for g in pelican_plugins::runtime::subuser_permissions() {
+        add(&g.name, &g.permissions);
+    }
+    if let Some(m) = manifest() {
+        for g in &m.subuser_permissions {
+            add(&g.name, &g.permissions);
+        }
+    }
+    let mut out: Vec<String> = Vec::new();
+    for (group, perms) in groups {
+        for p in perms {
+            let key = format!("{group}.{p}");
+            if !out.contains(&key) {
+                out.push(key);
+            }
+        }
+    }
+    out
+}
+
 /// `ApiKey::registerCustomResourceName()` of WASM and PHP plugins.
 pub fn all_api_resources() -> Vec<String> {
     let mut out = pelican_plugins::runtime::api_resources();
@@ -759,39 +805,60 @@ pub async fn user_navigation(st: &AppState, panel: &str, user: i64, tenant: Opti
     items
 }
 
-type HookCache =
-    std::collections::HashMap<(String, i64, String), (std::time::Instant, Arc<serde_json::Map<String, Value>>)>;
+/// An alert banner a plugin sent (`AlertBanner::make()->send()`), title and body sanitized HTML.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct Banner {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub body: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub closeable: bool,
+}
+
+/// What PHP plugins add to a page: their render hooks' HTML by hook name and the alert banners
+/// their `boot()` sends (shown at the top of the page, `PanelsRenderHook::PAGE_START`).
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct PageExtras {
+    #[serde(default)]
+    pub hooks: serde_json::Map<String, Value>,
+    #[serde(default)]
+    pub banners: Vec<Banner>,
+}
+
+type HookCache = std::collections::HashMap<(String, i64, String), (std::time::Instant, Arc<PageExtras>)>;
 static HOOKS: std::sync::Mutex<Option<HookCache>> = std::sync::Mutex::new(None);
 
-/// The HTML of the PHP plugins' render hooks for a page of `panel` (`admin`, `app`,
-/// `server` with its `tenant`) as `user` (or a guest) sees it: hook name → HTML. Empty when
-/// no plugin registered hooks; cached for 30 s.
-pub async fn render_hooks(
-    st: &AppState,
-    panel: &str,
-    user: Option<i64>,
-    tenant: Option<&str>,
-) -> Arc<serde_json::Map<String, Value>> {
-    let empty = || Arc::new(serde_json::Map::new());
-    if !manifest().is_some_and(|m| !m.render_hooks.is_empty()) || is_down() {
+/// The PHP plugins' additions to a page of `panel` (`admin`, `app`, `server` with its `tenant`)
+/// as `user` (or a guest) sees it. Empty when no plugin registers hooks or acts on panel boot;
+/// cached for 30 s.
+pub async fn render_hooks(st: &AppState, panel: &str, user: Option<i64>, tenant: Option<&str>) -> Arc<PageExtras> {
+    let empty = || Arc::new(PageExtras::default());
+    if !manifest().is_some_and(|m| m.boots || !m.render_hooks.is_empty()) || is_down() {
         return empty();
     }
     let key = (panel.to_string(), user.unwrap_or(0), tenant.unwrap_or_default().to_string());
-    if let Some((at, html)) = HOOKS.lock().ok().and_then(|g| g.as_ref().and_then(|c| c.get(&key).cloned())) {
+    if let Some((at, extras)) = HOOKS.lock().ok().and_then(|g| g.as_ref().and_then(|c| c.get(&key).cloned())) {
         if at.elapsed() < Duration::from_secs(30) {
-            return html;
+            return extras;
         }
     }
     let Some(sc) = get(st) else { return empty() };
     let body = json!({ "panel": panel, "tenant": tenant });
-    let html = match sc.call_as(reqwest::Method::POST, "/_bridge/hooks", user, Some(&body)).await {
-        Ok((200, Value::Object(m))) => Arc::new(m),
+    let extras = match sc.call_as(reqwest::Method::POST, "/_bridge/hooks", user, Some(&body)).await {
+        Ok((200, v)) => Arc::new(serde_json::from_value(v).unwrap_or_default()),
         _ => empty(),
     };
     if let Ok(mut g) = HOOKS.lock() {
-        g.get_or_insert_with(Default::default).insert(key, (std::time::Instant::now(), html.clone()));
+        g.get_or_insert_with(Default::default).insert(key, (std::time::Instant::now(), extras.clone()));
     }
-    html
+    extras
 }
 
 /// An OAuth provider registered by a PHP plugin (its redirect and callback run in the sidecar).
