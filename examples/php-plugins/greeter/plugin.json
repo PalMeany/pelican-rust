@@ -1,0 +1,15 @@
+{
+    "id": "greeter",
+    "name": "Greeter",
+    "author": "pelican-rs",
+    "version": "1.0.0",
+    "description": "Example PHP plugin for the sidecar (ADR-0020): a route, an admin page, a model listener and a task type.",
+    "category": "plugin",
+    "url": null,
+    "update_url": null,
+    "namespace": "Example\\Greeter",
+    "class": "GreeterPlugin",
+    "panels": null,
+    "panel_version": null,
+    "composer_packages": null
+}

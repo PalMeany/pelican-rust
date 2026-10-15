@@ -1,0 +1,20 @@
+{
+    "id": "pelican-rs-bridge",
+    "name": "pelican-rs bridge",
+    "author": "pelican-rs",
+    "version": "1.0.0",
+    "description": "Connects this panel, running as a sidecar for PHP plugins, to pelican-rs (ADR-0020).",
+    "category": "plugin",
+    "url": null,
+    "update_url": null,
+    "namespace": "PelicanRs\\Bridge",
+    "class": "BridgePlugin",
+    "panels": null,
+    "panel_version": null,
+    "composer_packages": null,
+    "meta": {
+        "status": "enabled",
+        "status_message": null,
+        "load_order": -1000
+    }
+}
