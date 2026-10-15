@@ -99,7 +99,14 @@ pub fn scale_rows(fixtures: &Rows, scale: usize) -> Rows {
         let mut s = subj_t.clone();
         set(&mut s, "id", id);
         set(&mut s, "activity_log_id", id);
-        set(&mut s, "subject_id", 10_000 + (i % servers) as i64);
+        // The client key's user's own entries are about the account (`User::activity()` is the
+        // morph on activity_log_subjects), the rest about servers.
+        if i % 10 == 0 {
+            set(&mut s, "subject_type", "user");
+            set(&mut s, "subject_id", 2);
+        } else {
+            set(&mut s, "subject_id", 10_000 + (i % servers) as i64);
+        }
         out.entry("activity_log_subjects".into()).or_default().push(s);
     }
     out
