@@ -24,7 +24,9 @@ wasmtime::component::bindgen!({
     exports: { default: async },
 });
 
-pub use pelican::plugin::types::{AvatarProvider, Header, Level, NavItem, Page, Route, RouteScope, TaskType};
+pub use pelican::plugin::types::{
+    AvatarProvider, Header, Level, NavItem, Page, PermissionGroup, Route, RouteScope, TaskType,
+};
 use pelican::plugin::{host, types};
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -213,6 +215,32 @@ pub fn task_types() -> Vec<(String, pelican::plugin::types::TaskType)> {
         .map(|rt| {
             rt.loaded().iter().flat_map(|l| l.registration.tasks.iter().map(|t| (l.id.clone(), t.clone()))).collect()
         })
+        .unwrap_or_default()
+}
+
+/// `Role::registerCustomPermissions()` of the loaded plugins: `(model, prefixes)`.
+pub fn admin_permissions() -> Vec<(String, Vec<String>)> {
+    global()
+        .map(|rt| {
+            rt.loaded()
+                .iter()
+                .flat_map(|l| l.registration.admin_permissions.iter().map(|p| (p.model.clone(), p.prefixes.clone())))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// `Subuser::registerCustomPermissions()` of the loaded plugins.
+pub fn subuser_permissions() -> Vec<pelican::plugin::types::PermissionGroup> {
+    global()
+        .map(|rt| rt.loaded().iter().flat_map(|l| l.registration.subuser_permissions.clone()).collect())
+        .unwrap_or_default()
+}
+
+/// `ApiKey::registerCustomResourceName()` of the loaded plugins.
+pub fn api_resources() -> Vec<String> {
+    global()
+        .map(|rt| rt.loaded().iter().flat_map(|l| l.registration.api_resources.clone()).collect())
         .unwrap_or_default()
 }
 

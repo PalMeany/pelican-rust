@@ -96,32 +96,56 @@ struct PermOpt {
 
 #[derive(Serialize)]
 struct PermGroup {
-    key: &'static str,
+    key: String,
     icon: &'static str,
     label: String,
     desc: String,
     options: Vec<PermOpt>,
 }
 
+/// Core groups, then the plugins' (`Subuser::registerCustomPermissions`):
+/// `(key, icon, actions)`.
+fn all_groups() -> Vec<(String, &'static str, Vec<String>)> {
+    let mut out: Vec<(String, &'static str, Vec<String>)> = GROUPS
+        .iter()
+        .map(|(k, i, perms)| ((*k).to_string(), *i, perms.iter().map(|p| (*p).to_string()).collect()))
+        .collect();
+    for g in pelican_plugins::runtime::subuser_permissions() {
+        match out.iter_mut().find(|(k, _, _)| *k == g.name) {
+            Some((_, _, perms)) => {
+                perms.extend(g.permissions.into_iter().filter(|p| !perms.contains(p)).collect::<Vec<_>>())
+            }
+            None => out.push((g.name, crate::plugin_pages::icon(g.icon.as_deref()), g.permissions)),
+        }
+    }
+    out
+}
+
+/// A translation, or `fallback` when the key has none.
+fn t_or(p: &ServerPanel, key: &str, fallback: String) -> String {
+    let line = p.t(key);
+    if line == key { fallback } else { line }
+}
+
 /// The tab structure of invite/edit forms: every group with its checkbox list.
 fn perm_groups(p: &ServerPanel, selected: &HashSet<String>) -> Vec<PermGroup> {
-    GROUPS
-        .iter()
+    all_groups()
+        .into_iter()
         .map(|(key, icon, perms)| PermGroup {
-            key,
-            icon,
-            label: p.t(&format!("server/user.permissions.{key}_title")),
-            desc: p.t(&format!("server/user.permissions.{key}_desc")),
+            label: t_or(p, &format!("server/user.permissions.{key}_title"), headline(&key)),
+            desc: t_or(p, &format!("server/user.permissions.{key}_desc"), String::new()),
             options: perms
                 .iter()
                 .map(|v| PermOpt {
-                    value: (*v).into(),
+                    value: v.clone(),
                     label: headline(v),
-                    desc: p.t(&format!("server/user.permissions.{key}_{}", v.replace('-', "_"))),
+                    desc: t_or(p, &format!("server/user.permissions.{key}_{}", v.replace('-', "_")), String::new()),
                     // The stored form is `$group.$action` (`mutateRecordDataUsing`).
                     checked: selected.contains(&format!("{key}.{v}")),
                 })
                 .collect(),
+            key,
+            icon,
         })
         .collect()
 }
@@ -131,8 +155,8 @@ fn perm_groups(p: &ServerPanel, selected: &HashSet<String>) -> Vec<PermGroup> {
 /// (`push(SubuserPermission::WebsocketConnect)->unique()`), first seen order.
 fn collect_perms(form: &Form) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
-    for (key, _, perms) in GROUPS {
-        let valid: HashSet<&str> = perms.iter().copied().collect();
+    for (key, _, perms) in all_groups() {
+        let valid: HashSet<&str> = perms.iter().map(String::as_str).collect();
         for v in form.list(&format!("perm_{key}")) {
             if valid.contains(v.as_str()) {
                 let perm = format!("{key}.{v}");

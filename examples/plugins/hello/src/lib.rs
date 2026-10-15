@@ -3,8 +3,8 @@
 //! settings form (greeting) and a `hello-log` schedule task.
 
 use pelican_plugin_sdk::{
-    AvatarProvider, Field, NavItem, Page, Panel, PelicanPlugin, Registration, Request, Response, Route, RouteScope,
-    TaskType, Value, escape, host, json,
+    AdminPermission, AvatarProvider, Field, NavItem, Page, Panel, PelicanPlugin, PermissionGroup, Registration,
+    Request, Response, Route, RouteScope, TaskType, Value, escape, host, json,
 };
 
 struct Hello;
@@ -32,7 +32,12 @@ impl PelicanPlugin for Hello {
                     title: "hello::hello.title".into(),
                     permission: None,
                 },
-                Page { panel: Panel::Server, id: "info".into(), title: "hello::hello.title".into(), permission: None },
+                Page {
+                    panel: Panel::Server,
+                    id: "info".into(),
+                    title: "hello::hello.title".into(),
+                    permission: Some("hello.view".into()),
+                },
             ],
             navigation: vec![
                 NavItem {
@@ -59,6 +64,16 @@ impl PelicanPlugin for Hello {
                 default_payload: None,
             }],
             avatars: vec![AvatarProvider { id: "robohash".into(), name: "RoboHash".into() }],
+            admin_permissions: vec![AdminPermission {
+                model: "helloGreeting".into(),
+                prefixes: vec!["view".into(), "update".into()],
+            }],
+            subuser_permissions: vec![PermissionGroup {
+                name: "hello".into(),
+                permissions: vec!["view".into(), "count".into()],
+                icon: Some("packages".into()),
+            }],
+            api_resources: vec!["hello".into()],
             settings: true,
             ..Default::default()
         }

@@ -75,12 +75,25 @@ fn special_models() -> [&'static str; 5] {
     ["settings", "health", "activityLog", "panelLog", "plugin"]
 }
 
+/// Core models, special ones, then models registered by plugins
+/// (`Role::registerCustomPermissions`).
+fn all_models() -> Vec<String> {
+    let mut out: Vec<String> = MODELS.iter().copied().chain(special_models()).map(str::to_string).collect();
+    for (model, _) in pelican_plugins::runtime::admin_permissions() {
+        if !out.contains(&model) {
+            out.push(model);
+        }
+    }
+    out
+}
+
 fn all_sections() -> Vec<(String, String)> {
-    MODELS
-        .iter()
-        .copied()
-        .chain(special_models())
-        .map(|m| (m.to_string(), format!("{}_list", m.to_lowercase())))
+    all_models()
+        .into_iter()
+        .map(|m| {
+            let field = format!("{}_list", m.to_lowercase());
+            (m, field)
+        })
         .collect()
 }
 
@@ -88,6 +101,8 @@ fn all_sections() -> Vec<(String, String)> {
 fn section_perms(model: &str) -> Vec<String> {
     let list: Vec<&str> = match special_perms(model) {
         Some(p) => p,
+        // Models only plugins register get just their own prefixes.
+        None if !MODELS.contains(&model) => Vec::new(),
         None => {
             let mut v = PREFIXES.to_vec();
             if model == "egg" {
@@ -96,7 +111,16 @@ fn section_perms(model: &str) -> Vec<String> {
             v
         }
     };
-    list.into_iter().map(|p| format!("{p} {model}")).collect()
+    let mut perms: Vec<String> = list.into_iter().map(|p| format!("{p} {model}")).collect();
+    for (m, prefixes) in pelican_plugins::runtime::admin_permissions() {
+        for p in prefixes.iter().filter(|_| m == model) {
+            let name = format!("{p} {model}");
+            if !perms.contains(&name) {
+                perms.push(name);
+            }
+        }
+    }
+    perms
 }
 
 /// Section icons: `Role::getModelIcon()` (MODEL_ICONS overrides plus the
@@ -311,10 +335,9 @@ impl FormData {
             name: m.name.clone(),
             guard_name: m.guard_name.clone(),
             nodes: Vec::new(),
-            perms: all_sections()
+            perms: all_models()
                 .iter()
-                .zip(MODELS.iter().copied().chain(special_models()))
-                .map(|(_, model)| section_perms(model).into_iter().filter(|v| granted.contains(v)).collect())
+                .map(|model| section_perms(model).into_iter().filter(|v| granted.contains(v)).collect())
                 .collect(),
         }
     }

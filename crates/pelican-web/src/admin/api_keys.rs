@@ -30,6 +30,17 @@ const PREFIX_LEN: usize = 5;
 const RESOURCES: [&str; 11] =
     ["server", "node", "allocation", "user", "egg", "database_host", "database", "mount", "role", "plugin", "webhook"];
 
+/// Core resources, then those plugins register (`ApiKey::registerCustomResourceName`).
+fn resources() -> Vec<String> {
+    let mut out: Vec<String> = RESOURCES.iter().map(|r| (*r).to_string()).collect();
+    for r in pelican_plugins::runtime::api_resources() {
+        if !out.contains(&r) {
+            out.push(r);
+        }
+    }
+    out
+}
+
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/admin/api-keys", get(index))
@@ -200,7 +211,7 @@ impl FormData {
         FormData {
             memo: f.get("memo").trim().into(),
             allowed_ips: f.tags("allowed_ips"),
-            permissions: RESOURCES
+            permissions: resources()
                 .iter()
                 .map(|r| f.opt(&format!("permission_{r}")).unwrap_or("").to_string())
                 .collect(),
@@ -215,7 +226,7 @@ impl FormData {
 
     fn ctx(&self) -> Mj {
         let perms: Map<String, Value> =
-            RESOURCES.iter().zip(&self.permissions).map(|(r, v)| ((*r).to_string(), Value::from(v.clone()))).collect();
+            resources().iter().zip(&self.permissions).map(|(r, v)| (r.clone(), Value::from(v.clone()))).collect();
         Mj::from_serialize(serde_json::json!({
             "memo": self.memo,
             "allowed_ips": self.allowed_ips,
@@ -227,7 +238,7 @@ impl FormData {
 
 async fn render_create(admin: &Admin, data: &FormData, errors: &Errors) -> WebResult {
     let t = t(admin);
-    let resources: Vec<(String, String)> = RESOURCES.iter().map(|r| (r.to_string(), permission_label(r))).collect();
+    let resources: Vec<(String, String)> = resources().iter().map(|r| (r.clone(), permission_label(r))).collect();
     admin
         .page(
             SLUG,
@@ -250,7 +261,7 @@ fn validate(admin: &Admin, data: &FormData) -> Errors {
     let mut input = Map::new();
     input.insert("memo".into(), Value::from(data.memo.clone()));
     input.insert("allowed_ips".into(), Value::Array(data.ips().into_iter().map(Value::from).collect()));
-    for (r, v) in RESOURCES.iter().zip(&data.permissions) {
+    for (r, v) in resources().iter().zip(&data.permissions) {
         input.insert(format!("permission_{r}"), Value::from(v.clone()));
     }
     let input = Value::Object(input);
@@ -260,9 +271,9 @@ fn validate(admin: &Admin, data: &FormData) -> Errors {
     v.rules("memo", &["required", "string", "max:500"]);
     v.rules("allowed_ips", &["array"]);
     v.rules("allowed_ips.*", &["string"]);
-    for r in RESOURCES {
+    for r in resources() {
         let attr = format!("permission_{r}");
-        v.attribute_name(&attr, &permission_label(r).to_lowercase());
+        v.attribute_name(&attr, &permission_label(&r).to_lowercase());
         v.rules(&attr, &["required", "integer", "min:0", "max:3"]);
     }
     v.run();
@@ -275,7 +286,7 @@ async fn create_form(admin: Admin) -> WebResult {
     let data = FormData {
         memo: String::new(),
         allowed_ips: Vec::new(),
-        permissions: vec![String::new(); RESOURCES.len()],
+        permissions: vec![String::new(); resources().len()],
         permissions_all: "0".into(),
     };
     render_create(&admin, &data, &Errors::default()).await
@@ -294,7 +305,7 @@ async fn store(admin: Admin, form: Form) -> WebResult {
     let identifier = format!("papp_{}", pelican_wings::jwt::str_random(IDENTIFIER_LENGTH - PREFIX_LEN));
     let secret = pelican_wings::jwt::str_random(KEY_LENGTH);
     let mut permissions = Map::new();
-    for (r, v) in RESOURCES.iter().zip(&data.permissions) {
+    for (r, v) in resources().iter().zip(&data.permissions) {
         if let Ok(n) = v.parse::<i64>() {
             permissions.insert((*r).to_string(), Value::from(n.clamp(0, 3)));
         }
