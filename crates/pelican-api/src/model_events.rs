@@ -1,14 +1,18 @@
 //! Eloquent model events (`eloquent.created|updated|deleted: App\Models\X`, ADR-0019):
 //! `DispatchWebhooks::handleEloquentEvent()` for global webhooks and `on-event` for
-//! WASM plugins. Call [`fire`] after a model-instance write the original performs with
-//! `create()/save()/update()/delete()` (mass `query()->update()` fires nothing).
+//! WASM plugins. Call [`created`]/[`updated`]/[`deleted`] (or [`fire_id`]) after a
+//! model-instance write the original performs with `create()/save()/update()/delete()`
+//! (mass `query()->update()` fires nothing). Fire after the transaction commits: webhook
+//! delivery is a synchronous HTTP call.
 
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use pelican_core::state::AppState;
 use pelican_db::entities::webhook_configurations;
-use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
+use pelican_db::entities::*;
+use pelican_db::types::Int;
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, PrimaryKeyTrait, QueryFilter};
 use serde_json::{Map, Value, json};
 
 use crate::error::ApiResult;
@@ -33,6 +37,50 @@ impl Action {
 /// `eloquent.<action>: App\Models\<Model>`.
 pub fn event_name(action: Action, model: &str) -> String {
     format!("eloquent.{}: App\\Models\\{model}", action.as_str())
+}
+
+/// An `App\Models\*` model with its `toArray()` ([`crate::model_array`]).
+pub trait Eloquent {
+    const CLASS: &'static str;
+    fn to_array(&self) -> Value;
+}
+
+macro_rules! eloquent {
+    ($($m:ident => $class:literal, $f:ident;)*) => {$(
+        impl Eloquent for $m::Model {
+            const CLASS: &'static str = $class;
+            fn to_array(&self) -> Value {
+                crate::model_array::$f(self)
+            }
+        }
+    )*};
+}
+
+eloquent! {
+    activity_logs => "ActivityLog", activity_log;
+    activity_log_subjects => "ActivityLogSubject", activity_log_subject;
+    allocations => "Allocation", allocation;
+    api_keys => "ApiKey", api_key;
+    backups => "Backup", backup;
+    backup_hosts => "BackupHost", backup_host;
+    databases => "Database", database;
+    database_hosts => "DatabaseHost", database_host;
+    eggs => "Egg", egg;
+    egg_variables => "EggVariable", egg_variable;
+    mounts => "Mount", mount;
+    nodes => "Node", node;
+    roles => "Role", role;
+    schedules => "Schedule", schedule;
+    servers => "Server", server;
+    server_transfers => "ServerTransfer", server_transfer;
+    server_user_settings => "ServerUserSettings", server_user_settings;
+    server_variables => "ServerVariable", server_variable;
+    subusers => "Subuser", subuser;
+    tasks => "Task", task;
+    users => "User", user;
+    user_ssh_keys => "UserSSHKey", user_ssh_key;
+    webhooks => "Webhook", webhook;
+    webhook_configurations => "WebhookConfiguration", webhook_configuration;
 }
 
 /// `WebhookConfiguration::$eventBlacklist`.
@@ -67,9 +115,62 @@ pub fn forget_watched() {
     }
 }
 
+/// Whether a global webhook or a plugin listens to the event.
+pub async fn listening(st: &AppState, action: Action, model: &str) -> ApiResult<bool> {
+    let event = event_name(action, model);
+    if BLACKLIST.contains(&event.as_str()) {
+        return Ok(false);
+    }
+    if pelican_plugins::runtime::global().is_some_and(|rt| rt.wants(&event)) {
+        return Ok(true);
+    }
+    Ok(global_webhooks(&st.db).await?.iter().any(|h| crate::services::listens(h, &event)))
+}
+
+/// `eloquent.created` for a model instance (as stored).
+pub async fn created<M: Eloquent>(st: &AppState, m: &M) -> ApiResult<()> {
+    fire(st, &st.db, Action::Created, M::CLASS, m.to_array()).await
+}
+
+/// `eloquent.updated` for a model instance (as stored after the update).
+pub async fn updated<M: Eloquent>(st: &AppState, m: &M) -> ApiResult<()> {
+    fire(st, &st.db, Action::Updated, M::CLASS, m.to_array()).await
+}
+
+/// `eloquent.deleted` for a model instance (as it was before the delete; soft-deleted
+/// models carry their `deleted_at`).
+pub async fn deleted<M: Eloquent>(st: &AppState, m: &M) -> ApiResult<()> {
+    fire(st, &st.db, Action::Deleted, M::CLASS, m.to_array()).await
+}
+
+/// Re-read the row `id` and fire `action` for it (nothing is read without listeners).
+pub async fn fire_id<E>(st: &AppState, action: Action, id: i64) -> ApiResult<()>
+where
+    E: EntityTrait,
+    E::Model: Eloquent,
+    <E::PrimaryKey as PrimaryKeyTrait>::ValueType: From<Int>,
+{
+    if !listening(st, action, <E::Model as Eloquent>::CLASS).await? {
+        return Ok(());
+    }
+    match E::find_by_id(Int(id)).one(&st.db).await? {
+        Some(m) => fire(st, &st.db, action, <E::Model as Eloquent>::CLASS, m.to_array()).await,
+        None => Ok(()),
+    }
+}
+
 /// Fire `eloquent.<action>: App\Models\<model>` with `data` = the model's `toArray()`
 /// (see `crate::model_array`).
-pub async fn fire<C: ConnectionTrait>(st: &AppState, db: &C, action: Action, model: &str, data: Value) -> ApiResult<()> {
+pub async fn fire<C: ConnectionTrait>(
+    st: &AppState,
+    db: &C,
+    action: Action,
+    model: &str,
+    data: Value,
+) -> ApiResult<()> {
+    if model == "WebhookConfiguration" {
+        forget_watched();
+    }
     let event = event_name(action, model);
     if BLACKLIST.contains(&event.as_str()) {
         return Ok(());

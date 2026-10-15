@@ -91,9 +91,9 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] eggs: экспорт YAML (порт Symfony YAML Dumper — воркер, 528 эталонных векторов)
 - [x] database-hosts, mounts, roles (воркеры + свои)
 - [x] webhooks (воркер)
-- [ ] plugins — привязать к собственной системе плагинов в M7 (оригинальные — PHP/Composer)
+- [x] plugins (M7): list/view/import file+url/hub/install/update/uninstall/enable/disable, диф-тесты app/plugins-*
 - [x] Вебхуки: доставка (ProcessWebhook), диспатч по активности (server scope, ActivityLogged)
-- [ ] Вебхуки на события моделей `eloquent.created/updated/deleted:*`
+- [~] Вебхуки на события моделей `eloquent.created/updated/deleted:*` — шина готова (ADR-0019), точки вызова — M7
 - [x] Фоновые задачи: prune activity/webhooks, prune/clean backups, prune images, почта (уведомления)
 - [x] egg check-updates/update-index (планировщик + UI яиц)
 - [x] Диф-тесты на каждый маршрут (app/*), 4 СУБД
@@ -129,7 +129,7 @@ Application API → UI → плагины → PHP-sidecar.
   - [x] dashboard (виджеты версии/разработчика/первой ноды/поддержки/помощи), health (проверки как в оригинале, раз в 5 мин планировщиком, бейдж в меню), logs (файлы Laravel + просмотрщик, ADR-0015)
   - [x] перечитывание `.env` на лету для страницы настроек (ADR-0014)
   - [x] settings (все вкладки, запись .env + перечитывание на лету)
-  - [ ] plugins (после M7)
+  - [x] plugins (M7): список, импорт, действия с хуками, readme, порядок загрузки, настройки плагина
 - [x] App: список серверов (вкладки my/other/all, таблица/сетка по кастомизации, ресурсы из Wings с кешем 15 с, power-действия, фильтры egg/owner, per_page в кастомизации)
 - [~] Server: каркас (доступ к тенанту, права сабюзера, навигация, баннер конфликта)
   - [x] консоль (xterm.js 5.5 + WebSocket Wings, power через set state, история команд, графики)

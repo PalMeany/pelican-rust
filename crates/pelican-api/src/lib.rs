@@ -11,6 +11,7 @@ pub mod health;
 pub mod input;
 pub mod jobs;
 pub mod json;
+pub mod model_array;
 pub mod model_events;
 pub mod paginate;
 pub mod passwords;
