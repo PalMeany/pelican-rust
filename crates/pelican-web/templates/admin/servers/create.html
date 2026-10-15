@@ -1,15 +1,17 @@
 {% extends "layouts/panel.html" %}
 {% import "components/forms.html" as f %}
+{% import "components/wizard.html" as wiz %}
 {% set S = 'admin/server' %}
 {% block content %}
 <div class="page-head"><h1>{{ title }}</h1>
-  <div class="page-actions"><button class="btn" type="submit" form="create-form">{{ icon('file-plus', 'icon-sm') }}{{ trans('filament-panels::resources/pages/create-record.form.actions.create.label') }}</button></div>
 </div>
 {% set refresh = 'hx-get="/admin/servers/create" hx-trigger="change" hx-include="#create-form" hx-select="#create-form" hx-target="#create-form" hx-swap="outerHTML" hx-push-url="false"' %}
+<div class="wizard" data-wizard>
+{{ wiz.header([[trans(S ~ '.tabs.information'), 'info-circle'], [trans(S ~ '.tabs.egg_configuration'), 'egg'], [trans(S ~ '.tabs.environment_configuration'), 'brand-docker']]) }}
 {% block form %}
-<form id="create-form" method="post" action="/admin/servers/create" class="stack">
+<form id="create-form" method="post" action="/admin/servers/create">
   {{ csrf_field() }}
-  <fieldset class="fieldset"><legend>{{ icon('info-circle', 'icon-sm') }} {{ trans(S ~ '.tabs.information') }}</legend>
+  <section class="stack" data-wizard-panel>
     <div class="grid grid-2">
       {{ f.text('name', trans(S ~ '.name'), v.name, errors, required=true, attrs='maxlength="255"', prefix_icon='server') }}
       {{ f.text('external_id', trans(S ~ '.external_id'), v.external_id, errors, attrs='maxlength="255"') }}
@@ -40,14 +42,14 @@
       {{ f.select('allocation_additional', trans(S ~ '.additional_allocations'), allocations, v.allocation_additional, errors, multiple=true) }}
     </div>
     {{ f.textarea('description', trans(S ~ '.description'), v.description, errors, rows=3) }}
-  </fieldset>
+  </section>
 
-  <fieldset class="fieldset"><legend>{{ icon('egg', 'icon-sm') }} {{ trans(S ~ '.tabs.egg_configuration') }}</legend>
+  <section class="stack" data-wizard-panel hidden>
     <div class="grid grid-3">
       <div class="span-2">{{ f.select('egg_id', trans(S ~ '.egg'), eggs, v.egg_id, errors, required=true, placeholder='', attrs=refresh, prefix_icon='egg') }}</div>
-      {{ f.radios('skip_scripts', trans(S ~ '.install_script'), [['0', trans(S ~ '.yes')], ['1', trans(S ~ '.skip')]], v.skip_scripts, errors, inline=true) }}
+      {{ f.radios('skip_scripts', trans(S ~ '.install_script'), [['0', trans(S ~ '.yes'), 'code', 'primary'], ['1', trans(S ~ '.skip'), 'code-off', 'danger']], v.skip_scripts, errors, inline=true) }}
     </div>
-    {{ f.radios('start_on_completion', trans(S ~ '.start_after'), [['1', trans(S ~ '.yes')], ['0', trans(S ~ '.no')]], v.start_on_completion, errors, inline=true) }}
+    {{ f.radios('start_on_completion', trans(S ~ '.start_after'), [['1', trans(S ~ '.yes'), 'code', 'primary'], ['0', trans(S ~ '.no'), 'code-off', 'danger']], v.start_on_completion, errors, inline=true) }}
     {% if v.egg_id %}
     <div class="field"><label for="f-select_startup">{{ trans(S ~ '.startup_cmd') }}</label>
       <select class="select" id="f-select_startup" onchange="if(this.value!=='custom'){document.getElementById('f-startup').value=this.value}">
@@ -56,19 +58,19 @@
     {{ f.textarea('startup', '', v.startup, errors, required=true, rows=3, code=true) }}
     <div class="grid grid-2">{% for var in variables %}{{ f.variable(var, errors) }}{% endfor %}</div>
     {% else %}<p class="muted">{{ trans(S ~ '.egg') }}…</p>{% endif %}
-  </fieldset>
+  </section>
 
-  <fieldset class="fieldset"><legend>{{ icon('brand-docker', 'icon-sm') }} {{ trans(S ~ '.tabs.environment_configuration') }}</legend>
+  <section class="stack" data-wizard-panel hidden>
     {{ f.limit('cpu', trans(S ~ '.cpu'), v.cpu, errors, suffix='%', limit_label=trans(S ~ '.cpu_limit'), hint=trans(S ~ '.cpu_helper')) }}
     {{ f.limit('memory', trans(S ~ '.memory'), v.memory, errors, suffix='MiB' if binary else 'MB', limit_label=trans(S ~ '.memory_limit'), hint=trans(S ~ '.memory_helper')) }}
     {{ f.limit('disk', trans(S ~ '.disk'), v.disk, errors, suffix='MiB' if binary else 'MB', limit_label=trans(S ~ '.disk_limit')) }}
     <div class="grid grid-2">
-      {{ f.radios('cpu_pinning', trans(S ~ '.cpu_pin'), [['0', trans(S ~ '.disabled')], ['1', trans(S ~ '.enabled')]], v.cpu_pinning, errors, inline=true) }}
+      {{ f.radios('cpu_pinning', trans(S ~ '.cpu_pin'), [['0', trans(S ~ '.disabled'), '', 'success'], ['1', trans(S ~ '.enabled'), '', 'warning']], v.cpu_pinning, errors, inline=true) }}
       <div data-show-if="cpu_pinning=1"{% if v.cpu_pinning != '1' %} hidden{% endif %}>{{ f.text('threads', trans(S ~ '.threads'), v.threads, errors, placeholder=trans(S ~ '.pin_help')) }}</div>
-      {{ f.radios('swap_support', trans(S ~ '.swap'), [['unlimited', trans(S ~ '.unlimited')], ['limited', trans(S ~ '.limited')], ['disabled', trans(S ~ '.disabled')]], v.swap_support, errors, inline=true) }}
+      {{ f.radios('swap_support', trans(S ~ '.swap'), [['unlimited', trans(S ~ '.unlimited'), '', 'primary'], ['limited', trans(S ~ '.limited'), '', 'warning'], ['disabled', trans(S ~ '.disabled'), '', 'danger']], v.swap_support, errors, inline=true) }}
       <div data-show-if="swap_support=limited"{% if v.swap_support != 'limited' %} hidden{% endif %}>{{ f.text('swap', trans(S ~ '.swap'), v.swap if v.swap != '0' else 128, errors, type='number', suffix='MiB' if binary else 'MB') }}</div>
     </div>
-    {{ f.radios('oom_killer', trans(S ~ '.oom'), [['0', trans(S ~ '.disabled')], ['1', trans(S ~ '.enabled')]], v.oom_killer, errors, inline=true) }}
+    {{ f.radios('oom_killer', trans(S ~ '.oom'), [['0', trans(S ~ '.disabled'), '', 'success'], ['1', trans(S ~ '.enabled'), '', 'danger']], v.oom_killer, errors, inline=true) }}
     <div class="grid grid-3">
       {{ f.text('allocation_limit', trans(S ~ '.allocations'), v.allocation_limit, errors, type='number', required=true, attrs='min="0"', suffix_icon='network') }}
       {{ f.text('database_limit', trans(S ~ '.databases'), v.database_limit, errors, type='number', required=true, attrs='min="0"', suffix_icon='database') }}
@@ -86,9 +88,11 @@
       <div><button type="button" class="btn btn-sm btn-gray" data-kv-add>{{ icon('plus', 'icon-sm') }}</button></div></div>
     {% if mounts %}<div class="field"><span class="field-label">{{ trans(S ~ '.mounts') }}</span>
       {% for m in mounts %}<label class="check"><input type="checkbox" name="mounts[]" value="{{ m.id }}"{% if m.checked %} checked{% endif %}><span>{{ m.name }} <span class="muted small mono">{{ m.desc }}</span></span></label>{% endfor %}</div>{% endif %}
-  </fieldset>
+  </section>
 </form>
 {% endblock %}
+{{ wiz.footer(trans(S ~ '.create'), 'create-form') }}
+</div>
 
 {# Create-option modals of owner_id / allocation_id (Filament createOptionForm);
    htmx posts them together with #create-form, errors re-render the fields only. #}

@@ -1,5 +1,6 @@
 {% extends "layouts/panel.html" %}
 {% import "components/forms.html" as f %}
+{% import "components/wizard.html" as wiz %}
 {% set N = 'admin/node' %}
 {% block content %}
 <div data-tabs-root class="stack">
@@ -11,14 +12,16 @@
       {{ csrf_field() }}<input type="hidden" name="op" value="delete">
       <button class="btn btn-danger" type="submit"{% if node.has_servers %} disabled title="{{ trans(N ~ '.node_has_servers') }}"{% endif %}>{{ icon('trash', 'icon-sm') }}</button></form>
     {% endif %}
-    {% if not readonly %}<button class="btn" type="submit" form="node-form">{{ icon('device-floppy' if not creating else 'file-plus', 'icon-sm') }}{{ trans('filament-panels::resources/pages/create-record.form.actions.create.label') if creating else trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}</button>{% endif %}
+    {% if not readonly and not creating %}<button class="btn" type="submit" form="node-form">{{ icon('device-floppy' if not creating else 'file-plus', 'icon-sm') }}{{ trans('filament-panels::resources/pages/create-record.form.actions.create.label') if creating else trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}</button>{% endif %}
   </div>
 </div>
-<div class="tabs-card">
+{% if creating %}<div class="wizard" data-wizard>
+{{ wiz.header([[trans(N ~ '.tabs.basic_settings'), 'server'], [trans(N ~ '.tabs.advanced_settings'), 'server-cog']]) }}
+{% else %}<div class="tabs-card">
 <nav class="tabs">
   {% set tabs = ([] if creating else [['overview', 'chart-area-line-filled']]) + [['basic_settings', 'server'], ['advanced_settings', 'server-cog']] + ([] if creating else [['config_file', 'code']] + ([] if readonly else [['diagnostics', 'heart-search']])) %}
   {% for t in tabs %}<button type="button" data-tab="{{ t[0] }}" class="{{ 'active' if tab == t[0] }}">{{ icon(t[1], 'icon-sm') }}{{ trans(N ~ '.tabs.' ~ t[0]) }}</button>{% endfor %}
-</nav>
+</nav>{% endif %}
 
 {% if not creating %}
 <section class="stack" data-tab-panel="overview"{% if tab != 'overview' %} hidden{% endif %}>
@@ -42,15 +45,15 @@
 <form id="node-form" method="post" action="{{ '/admin/nodes/create' if creating else '/admin/nodes/' ~ node.id ~ '/edit' }}">
 {{ csrf_field() }}<input type="hidden" name="_tab" value="{{ tab }}">
 <fieldset style="border:0;padding:0;margin:0"{% if readonly %} disabled{% endif %}>
-<section class="card card-body grid grid-2" data-tab-panel="basic_settings"{% if tab != 'basic_settings' %} hidden{% endif %}>
-  <div class="span-full">{{ f.text('fqdn', trans(N ~ '.domain'), v.fqdn, errors, required=true, placeholder='node.example.com', hint=trans(N ~ '.fqdn_ssl') if secure else '', attrs='maxlength="255"') }}</div>
+<section class="card card-body grid grid-4" {% if creating %}data-wizard-panel{% else %}data-tab-panel="basic_settings"{% if tab != 'basic_settings' %} hidden{% endif %}{% endif %}>
+  <div class="span-2">{{ f.text('fqdn', trans(N ~ '.domain'), v.fqdn, errors, required=true, placeholder='node.example.com', hint=trans(N ~ '.fqdn_ssl') if secure else '', attrs='maxlength="255"') }}</div>
   {{ f.text('daemon_connect', trans(N ~ '.port'), v.daemon_connect, errors, type='number', required=true, hint=trans(N ~ '.port_help'), attrs='min="1" max="65535"') }}
   <div data-show-if="connection=https_proxy"{% if v.connection != 'https_proxy' %} hidden{% endif %}>{{ f.text('daemon_listen', trans(N ~ '.listen_port'), v.daemon_listen, errors, type='number', required=true, hint=trans(N ~ '.listen_port_help'), attrs='min="1" max="65535"') }}</div>
-  {{ f.text('name', trans(N ~ '.display_name'), v.name, errors, required=true, attrs='maxlength="100"') }}
-  <div class="span-full">{{ f.radios('connection', trans(N ~ '.ssl'), [['http', 'HTTP'], ['https', 'HTTPS (SSL)'], ['https_proxy', 'HTTPS with (reverse) proxy']], v.connection, errors, inline=true, hint=trans(N ~ '.panel_on_ssl') if secure else '') }}</div>
+  <div class="span-2">{{ f.text('name', trans(N ~ '.display_name'), v.name, errors, required=true, attrs='maxlength="100"') }}</div>
+  <div class="span-2">{{ f.radios('connection', trans(N ~ '.ssl'), [['http', 'HTTP', 'lock-open-off', 'warning'], ['https', 'HTTPS (SSL)', 'lock', 'success'], ['https_proxy', 'HTTPS with (reverse) proxy', 'shield-lock', 'success']], v.connection, errors, inline=true, hint=trans(N ~ '.panel_on_ssl') if secure else '') }}</div>
 </section>
 
-<section class="card card-body stack" data-tab-panel="advanced_settings"{% if tab != 'advanced_settings' %} hidden{% endif %}>
+<section class="card card-body stack" {% if creating %}data-wizard-panel hidden{% else %}data-tab-panel="advanced_settings"{% if tab != 'advanced_settings' %} hidden{% endif %}{% endif %}>
   {% if not creating %}<div class="grid grid-3">
     <div class="field"><label>{{ trans(N ~ '.node_id') }}</label><input class="input" disabled value="{{ node.id }}"></div>
     <div class="field span-2"><label>{{ trans(N ~ '.node_uuid') }}</label><input class="input copyable" readonly value="{{ node.uuid }}" data-copy="{{ node.uuid }}"></div>
@@ -61,8 +64,8 @@
     <div class="span-2">{{ f.text('daemon_base', trans(N ~ '.daemon_base'), v.daemon_base, errors, required=true, placeholder='/var/lib/pelican/volumes', hint=trans(N ~ '.daemon_base_help')) }}</div>
     {{ f.text('daemon_sftp', trans(N ~ '.sftp_port'), v.daemon_sftp, errors, type='number', required=true, attrs='min="1" max="65535"') }}
     <div class="span-2">{{ f.text('daemon_sftp_alias', trans(N ~ '.sftp_alias'), v.daemon_sftp_alias, errors, hint=trans(N ~ '.sftp_alias_help')) }}</div>
-    {{ f.radios('public', trans(N ~ '.use_for_deploy'), [['1', trans(N ~ '.yes')], ['0', trans(N ~ '.no')]], v.public, errors, inline=true) }}
-    {{ f.radios('maintenance_mode', trans(N ~ '.maintenance_mode'), [['1', trans(N ~ '.enabled')], ['0', trans(N ~ '.disabled')]], v.maintenance_mode, errors, inline=true, hint=trans(N ~ '.maintenance_mode_help')) }}
+    {{ f.radios('public', trans(N ~ '.use_for_deploy'), [['1', trans(N ~ '.yes'), '', 'success'], ['0', trans(N ~ '.no'), '', 'danger']], v.public, errors, inline=true) }}
+    {{ f.radios('maintenance_mode', trans(N ~ '.maintenance_mode'), [['1', trans(N ~ '.enabled'), '', 'danger'], ['0', trans(N ~ '.disabled'), '', 'success']], v.maintenance_mode, errors, inline=true, hint=trans(N ~ '.maintenance_mode_help')) }}
   </div>
   {{ f.limit('memory', trans(N ~ '.memory'), v.memory, errors, suffix='MiB' if binary else 'MB', limit_label=trans(N ~ '.memory_limit'), with_overallocate=true, over_value=v.memory_overallocate, over_label=trans(N ~ '.overallocate')) }}
   {{ f.limit('disk', trans(N ~ '.disk'), v.disk, errors, suffix='MiB' if binary else 'MB', limit_label=trans(N ~ '.disk_limit'), with_overallocate=true, over_value=v.disk_overallocate, over_label=trans(N ~ '.overallocate')) }}
@@ -71,7 +74,7 @@
 </fieldset>
 </form>
 
-{% if creating %}</div>{% endif %}
+{% if creating %}{{ wiz.footer(trans(N ~ '.create'), 'node-form') }}</div>{% endif %}
 {% if not creating %}
 <section class="card card-body stack" data-tab-panel="config_file"{% if tab != 'config_file' %} hidden{% endif %}>
   <div class="field"><span class="field-label">{{ trans(N ~ '.instructions') }}</span><p class="muted">{{ trans(N ~ '.instructions_help') }}</p></div>

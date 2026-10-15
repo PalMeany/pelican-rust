@@ -164,6 +164,62 @@
       });
   });
 
+  // ----- Filament wizards (create node / server) -----
+  // One step at a time; Next validates the step's fields, earlier steps are reachable from the
+  // header, Create shows the step of the first invalid field. The step survives htmx refreshes
+  // of the form (sessionStorage), a fresh page starts at the first step with an error, else the first.
+  const wizardKey = () => 'wizard:' + location.pathname;
+  function wizardShow(w, i) {
+    const panels = [...w.querySelectorAll('[data-wizard-panel]')];
+    i = Math.max(0, Math.min(i, panels.length - 1));
+    w.dataset.step = String(i);
+    panels.forEach((p, k) => { p.hidden = k !== i; });
+    w.querySelectorAll('[data-wizard-step]').forEach((st, k) => { st.classList.toggle('active', k === i); st.classList.toggle('completed', k < i); });
+    const last = i === panels.length - 1;
+    w.querySelectorAll('[data-wizard-prev]').forEach((b) => { b.hidden = i === 0; });
+    w.querySelectorAll('[data-wizard-next]').forEach((b) => { b.hidden = last; });
+    w.querySelectorAll('[data-wizard-submit]').forEach((b) => { b.hidden = !last; });
+    try { sessionStorage.setItem(wizardKey(), String(i)); } catch (_) { /* ignore */ }
+  }
+  function wizardInit(root, keep) {
+    const list = root.matches && root.matches('[data-wizard]') ? [root] : [...root.querySelectorAll('[data-wizard]')];
+    const ws = list.length ? list : (root.closest ? [root.closest('[data-wizard]')].filter(Boolean) : []);
+    ws.forEach((w) => {
+      const panels = [...w.querySelectorAll('[data-wizard-panel]')];
+      const err = panels.findIndex((p) => p.querySelector('.has-error'));
+      let stored = 0;
+      try { stored = parseInt(sessionStorage.getItem(wizardKey()) || '0', 10) || 0; } catch (_) { /* ignore */ }
+      wizardShow(w, err >= 0 ? err : (keep ? stored : 0));
+    });
+  }
+  wizardInit(document, false);
+  document.addEventListener('htmx:afterSettle', (e) => { if (e.detail.elt?.closest?.('[data-wizard]') || e.detail.elt?.querySelector?.('[data-wizard-panel]')) wizardInit(e.detail.elt.closest('[data-wizard]') || e.detail.elt, true); });
+  // A step's fields that count: not inside something hidden within the step (shown-if fields).
+  const wizardFields = (p) => [...p.querySelectorAll('input, select, textarea')].filter((f) => {
+    if (!f.willValidate) return false;
+    const h = f.parentElement && f.parentElement.closest('[hidden]');
+    return !h || h === p;
+  });
+  document.addEventListener('click', (e) => {
+    const w = e.target.closest('[data-wizard]');
+    if (!w) return;
+    const cur = parseInt(w.dataset.step || '0', 10);
+    const panels = [...w.querySelectorAll('[data-wizard-panel]')];
+    if (e.target.closest('[data-wizard-prev]')) { wizardShow(w, cur - 1); return; }
+    if (e.target.closest('[data-wizard-next]')) {
+      const bad = wizardFields(panels[cur]).find((f) => !f.checkValidity());
+      if (bad) bad.reportValidity(); else wizardShow(w, cur + 1);
+      return;
+    }
+    const goto = e.target.closest('[data-wizard-goto]');
+    if (goto) { const k = parseInt(goto.dataset.wizardGoto, 10); if (k < cur) wizardShow(w, k); return; }
+    const submit = e.target.closest('[data-wizard-submit]');
+    if (submit) {
+      const bad = panels.flatMap(wizardFields).find((f) => !f.checkValidity());
+      if (bad) { e.preventDefault(); wizardShow(w, panels.indexOf(bad.closest('[data-wizard-panel]'))); bad.reportValidity(); }
+    }
+  });
+
   // Random server name (`hint_random`): one of the names the page was rendered with.
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-random-name]');

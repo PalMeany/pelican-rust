@@ -74,12 +74,14 @@
 {% endmacro %}
 
 {# options: list of [value, label] pairs #}
+{# Filament ToggleButtons (the original has no plain radios): options [value, label, icon?, color?],
+   the checked one filled with its colour (primary unless given). #}
 {% macro radios(name, label, options, value='', errors={}, inline=false, hint='') %}
 <div class="field{% if errors[name] %} has-error{% endif %}">
   {% if label %}<span class="field-label">{{ label }}</span>{% endif %}
   <div class="radio-group{% if inline %} inline{% endif %}">
     {% for opt in options %}
-    <label class="check"><input type="radio" name="{{ name }}" value="{{ opt[0] }}"{% if (opt[0] | string) == (value | string) %} checked{% endif %}><span>{{ opt[1] }}</span></label>
+    <label class="check{% if opt[3] %} tb-{{ opt[3] }}{% endif %}"><input type="radio" name="{{ name }}" value="{{ opt[0] }}"{% if (opt[0] | string) == (value | string) %} checked{% endif %}><span>{% if opt[2] %}{{ icon(opt[2], 'icon-sm') }}{% endif %}{{ opt[1] }}</span></label>
     {% endfor %}
   </div>
   {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
@@ -118,7 +120,7 @@
 {% macro limit(name, label, value, errors={}, suffix='', limit_label='', hint='', with_overallocate=false, over_value=0, over_label='') %}
 {% set unlimited = ((value or 0) | int) == 0 %}
 <div class="grid grid-3" style="gap:1rem;align-items:start">
-  {{ radios('unlimited_' ~ name, label, [['1', trans('admin/server.unlimited')], ['0', trans('admin/server.limited')]], '1' if unlimited else '0', errors, inline=true) }}
+  {{ radios('unlimited_' ~ name, label, [['1', trans('admin/server.unlimited'), '', 'primary'], ['0', trans('admin/server.limited'), '', 'warning']], '1' if unlimited else '0', errors, inline=true) }}
   <div data-show-if="unlimited_{{ name }}=0"{% if unlimited %} hidden{% endif %}>{{ text(name, limit_label, value, errors, type='number', suffix=suffix, hint=hint, attrs='min="0"') }}</div>
   {% if with_overallocate %}<div data-show-if="unlimited_{{ name }}=0"{% if unlimited %} hidden{% endif %}>{{ text(name ~ '_overallocate', over_label, over_value, errors, type='number', suffix='%', attrs='min="-1" max="100"') }}</div>{% endif %}
 </div>

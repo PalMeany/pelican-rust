@@ -312,7 +312,21 @@ details.nav-group:not([open]) .nav-group-chevron { transform: rotate(180deg); }
 .toggle input:checked + .track::after { transform: translateX(1.25rem); }
 .toggle input:focus-visible + .track { outline: 2px solid var(--ring); outline-offset: 2px; }
 .radio-group { display: flex; flex-direction: column; gap: 0.5rem; }
-.radio-group.inline { flex-direction: row; flex-wrap: wrap; gap: 1rem; }
+.radio-group.inline { flex-direction: row; flex-wrap: wrap; gap: 0.75rem; }
+/* Filament ToggleButtons: each option a gray button, the checked one filled with its colour. */
+.radio-group .check { position: relative; align-self: flex-start; padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-weight: 600; line-height: 1.25rem;
+  background: var(--surface); color: var(--text); box-shadow: inset 0 0 0 1px var(--border-strong), 0 1px 2px rgb(0 0 0 / 0.05); transition: background-color 75ms;
+  --tb: var(--primary-600); --tb-text: #fff; }
+.radio-group .check > span { display: inline-flex; align-items: center; gap: 0.375rem; }
+.radio-group .check .icon-sm { color: var(--text-3); }
+.radio-group .check:hover { background: var(--hover); }
+.radio-group .check input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+.radio-group .check:has(input:checked) { background: var(--tb); color: var(--tb-text); box-shadow: var(--shadow); }
+.radio-group .check:has(input:checked) .icon-sm { color: inherit; }
+.radio-group .check:has(input:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
+.radio-group .check:has(input:disabled) { opacity: 0.7; cursor: default; }
+.check.tb-success { --tb: var(--success-600); } .check.tb-danger { --tb: var(--danger-600); } .check.tb-info { --tb: var(--info-600); }
+.check.tb-warning { --tb: var(--warning-500); --tb-text: var(--gray-950); } .check.tb-gray { --tb: var(--gray-600); }
 .fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; display: flex; flex-direction: column; gap: 1.25rem; }
 .fieldset > legend { font-weight: 600; padding: 0 0.5rem; }
 .form-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
@@ -363,6 +377,32 @@ table.table { width: 100%; border-collapse: collapse; }
 .tabs-card [data-tab-panel] { padding: 1.5rem; }
 .tabs-card [data-tab-panel].card { border: 0; border-radius: 0; box-shadow: none; background: none; }
 .tabs-card [data-tab-panel].card:not(.card-body) { padding: 0; }
+/* Filament's contained Wizard: steps in a header (icon circles; the active one primary, done ones filled
+   with a check), one step's fields, ← / → and the submit icon button at the bottom. */
+.wizard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); min-width: 0; }
+.wizard-header { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); margin: 0; padding: 0; list-style: none;
+  border-bottom: 1px solid var(--border); overflow-x: auto; }
+.wizard-step { position: relative; display: flex; }
+.wizard-step-btn { display: flex; align-items: center; gap: 1rem; width: 100%; padding: 1rem 1.5rem; border: 0; background: none; color: inherit;
+  font: inherit; text-align: left; cursor: default; }
+.wizard-step.completed .wizard-step-btn { cursor: pointer; }
+.wizard-step-icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 2.5rem; height: 2.5rem; border-radius: 999px;
+  border: 2px solid var(--border-strong); color: var(--text-2); }
+.wizard-step-icon .wizard-done { display: none; }
+.wizard-step-label { font-size: 0.875rem; font-weight: 500; color: var(--text-2); }
+.wizard-step.active .wizard-step-icon { border-color: var(--primary-600); color: var(--primary-600); }
+.wizard-step.active .wizard-step-label { color: var(--nav-accent); }
+.wizard-step.completed .wizard-step-icon { border-color: var(--primary-600); background: var(--primary-600); color: #fff; }
+.wizard-step.completed .wizard-step-icon > .icon:not(.wizard-done) { display: none; }
+.wizard-step.completed .wizard-step-icon .wizard-done { display: block; }
+.wizard-step.completed .wizard-step-label { color: var(--text); }
+.wizard-sep { position: absolute; top: 0; right: 0; width: 1.25rem; height: 100%; color: var(--border); }
+.wizard [data-wizard-panel] { padding: 1.5rem; }
+.wizard [data-wizard-panel].card { border: 0; border-radius: 0; box-shadow: none; background: none; }
+.wizard-footer { display: flex; align-items: center; gap: 0.75rem; padding: 0 1.5rem 1.5rem; }
+.wizard-footer .icon-btn { width: 2.5rem; height: 2.5rem; color: var(--primary-600); }
+.wizard-footer .spacer { flex: 1; }
+@media (max-width: 767px) { .wizard-header { grid-auto-flow: row; } .wizard-step:not(.active) { display: none; } .wizard-sep { display: none; } }
 
 /* ---------- dropdowns (details/summary) ---------- */
 .dropdown { position: relative; }

@@ -1,0 +1,24 @@
+{# Filament's Wizard (contained): a header of steps [label, icon], one step's fields at a time
+   ([data-wizard-panel] in order), ← / → and the submit icon button at the bottom (app.js). #}
+{% macro header(steps) %}
+<ol class="wizard-header">
+  {% for st in steps %}
+  <li class="wizard-step{% if loop.first %} active{% endif %}" data-wizard-step>
+    <button type="button" class="wizard-step-btn" data-wizard-goto="{{ loop.index0 }}">
+      <span class="wizard-step-icon">{{ icon(st[1], 'icon') }}{{ icon('check', 'icon wizard-done') }}</span>
+      <span class="wizard-step-label">{{ st[0] }}</span>
+    </button>
+    {% if not loop.last %}<svg class="wizard-sep" viewBox="0 0 22 80" fill="none" preserveAspectRatio="none" aria-hidden="true"><path d="M0 -2L20 40L0 82" stroke-linejoin="round" stroke="currentColor" vector-effect="non-scaling-stroke"></path></svg>{% endif %}
+  </li>
+  {% endfor %}
+</ol>
+{% endmacro %}
+
+{% macro footer(submit_label, form='') %}
+<div class="wizard-footer">
+  <button type="button" class="icon-btn" data-wizard-prev hidden title="{{ trans('filament-schemas::components.wizard.actions.previous_step.label') }}" aria-label="{{ trans('filament-schemas::components.wizard.actions.previous_step.label') }}">{{ icon('arrow-left', 'icon-lg') }}</button>
+  <span class="spacer"></span>
+  <button type="button" class="icon-btn" data-wizard-next title="{{ trans('filament-schemas::components.wizard.actions.next_step.label') }}" aria-label="{{ trans('filament-schemas::components.wizard.actions.next_step.label') }}">{{ icon('arrow-right', 'icon-lg') }}</button>
+  <button type="submit" class="icon-btn" data-wizard-submit hidden{% if form %} form="{{ form }}"{% endif %} title="{{ submit_label }}" aria-label="{{ submit_label }}">{{ icon('plus', 'icon-lg') }}</button>
+</div>
+{% endmacro %}

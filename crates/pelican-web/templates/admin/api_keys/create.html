@@ -6,7 +6,7 @@
   <span class="field-label">{{ label }}<span class="req">*</span></span>
   <div class="radio-group inline">
     {% for o in options %}
-    <label class="check text-{{ o[3] }}"><input type="radio" name="{{ name }}" value="{{ o[0] }}"{% if (o[0] | string) == (value | string) %} checked{% endif %}><span>{{ icon(o[2], 'icon-sm') }}{{ o[1] }}</span></label>
+    <label class="check tb-{{ o[3] }}"><input type="radio" name="{{ name }}" value="{{ o[0] }}"{% if (o[0] | string) == (value | string) %} checked{% endif %}><span>{{ icon(o[2], 'icon-sm') }}{{ o[1] }}</span></label>
     {% endfor %}
   </div>
   {{ f.error(errors, name) }}
@@ -28,7 +28,7 @@
     <div class="field span-full">
       <div class="radio-group inline">
         {% for o in permission_options %}
-        <label class="check text-{{ o[3] }}"><input type="radio" name="permissions_all" value="{{ o[0] }}"{% if (o[0] | string) == (v.permissions_all | string) %} checked{% endif %} data-set-all><span>{{ icon(o[2], 'icon-sm') }}{{ o[1] }}</span></label>
+        <label class="check tb-{{ o[3] }}"><input type="radio" name="permissions_all" value="{{ o[0] }}"{% if (o[0] | string) == (v.permissions_all | string) %} checked{% endif %} data-set-all><span>{{ icon(o[2], 'icon-sm') }}{{ o[1] }}</span></label>
         {% endfor %}
       </div>
       {{ f.error(errors, 'permissions_all') }}
