@@ -72,17 +72,14 @@
   Dev-панель теперь `pelican-m7-dev` (тот же порт и данные).
 
 ## Где остановился / что дальше
-- main = M6. Ветка `m7` (`.worktrees/m7`): плагины WASM (ADR-0018), события моделей eloquent.* во всех путях
-  записи (ADR-0019, диф-тест `webhooks/model-events` на 4 СУБД), модалки server features на консоли.
-  Полный sqlite-прогон до веб-части событий: 77/0/2. Осталось: полный прогон 4 СУБД → слияние в main.
-- Ветка `m8` (`.worktrees/m8`, включает m7): PHP-sidecar (ADR-0020) — плагин-мост `sidecar/pelican-rs-bridge`,
-  `pelican_api::sidecar`, прокси в pelican-web; пример `examples/php-plugins/greeter`. E2E: контейнер
-  `pelican-sidecar` (образ `pelican-orig:dev`, сеть `pelican-e2e`), dev-панель `pelican-m8-dev` (вместо
-  `pelican-m7-dev`) с `PANEL_PHP_SIDECAR=http://pelican-sidecar`. Не сделано: проверка на реальном плагине из
-  Hub (нужен ключ Hub пользователя или его согласие на загрузку плагинов из GitHub).
-- ADR-0021 (SpacetimeDB) — Proposed: только опциональное зеркало реального времени.
-- Запись в SQLite dev-окружения с хоста не видна контейнеру (кэш ФС VM) — менять данные только через панель
-  (на практике sqlite3 с хоста срабатывал, но после перезапуска контейнера).
+- Репозиторий: https://github.com/PalMeany/pelican-rust (публичный, AGPL-3.0-only как оригинал; автор коммитов —
+  PalMeany, noreply-адрес; `gh` переключён на PalMeany). Пушить `main` и рабочие ветки; оригинал не трогать.
+- `main` = M1–M7 (полный диф-тест 4 СУБД: 77/0/2 на каждой). Ветка `m8` (`.worktrees/m8`) — PHP-sidecar
+  (ADR-0020), проверен на реальных плагинах pelican-dev/plugins (tickets, player-counter, robo-avatars,
+  pirate-language; исходники — `../.plugins-src`). Дальше: полный диф-тест m8 → слияние в main.
+- E2E-окружение: контейнер `pelican-sidecar` (образ `pelican-orig:dev`, сеть `pelican-e2e`), dev-панель
+  `pelican-m8-dev` с `PANEL_PHP_SIDECAR=http://pelican-sidecar`, данные `.worktrees/.difftest/m6dev`.
+- ADR-0021 (SpacetimeDB) — отложено решением пользователя.
 
 ## Диск (просьба пользователя)
 На хосте мало места (~15–30 ГБ свободно). Сборки живут в docker-томах VM (`pelican-rs-target*`).
