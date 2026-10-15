@@ -1,0 +1,6 @@
+{# The panels' footer (resources/views/filament/layouts/footer.blade.php, PanelsRenderHook::FOOTER). #}
+<footer class="app-footer">
+  {{ plugin_hooks['pelican::footer.start'] | safe if plugin_hooks['pelican::footer.start'] }}
+  <a class="app-footer-name" href="https://pelican.dev/docs/#core-team" target="_blank">&copy; {{ year }} {{ footer_name }}</a>
+  {{ plugin_hooks['pelican::footer.end'] | safe if plugin_hooks['pelican::footer.end'] }}
+</footer>

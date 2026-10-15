@@ -9,7 +9,7 @@
   <aside class="sidebar" aria-label="{{ trans('filament-panels::layout.navigation.label') }}">
     <div class="sidebar-head">
       <a class="row" href="{{ home_url or '/' }}" style="color:inherit;gap:0.5rem;font-weight:700;font-size:1.125rem">
-        <img src="{{ asset('img/pelican.svg') }}" alt="" style="height:2rem">{{ app_name }}
+        {% if app_logo %}<img src="{{ app_logo }}" alt="{{ trans('filament-panels::layout.logo.alt', name=app_name) }}" style="height:2rem">{% else %}{{ app_name }}{% endif %}
       </a>
     </div>
     {% block sidebar_top %}{% endblock %}
@@ -31,7 +31,7 @@
   <div class="main">
     <header class="topbar" aria-label="{{ trans('filament-panels::layout.topbar.label') }}">
       {% if nav %}<button type="button" class="icon-btn menu-toggle" data-nav-toggle aria-label="{{ trans('filament-panels::layout.actions.sidebar.expand.label') }}">{{ icon('menu-2') }}</button>{% endif %}
-      {% if not nav %}<a class="brand" href="/"><img src="{{ asset('img/pelican.svg') }}" alt="">{{ app_name }}</a>{% endif %}
+      {% if not nav %}<a class="brand" href="/">{% if app_logo %}<img src="{{ app_logo }}" alt="{{ trans('filament-panels::layout.logo.alt', name=app_name) }}">{% else %}{{ app_name }}{% endif %}</a>{% endif %}
       {% block topbar %}{% endblock %}
       <div class="spacer"></div>
       {% if user %}
@@ -67,9 +67,7 @@
       <div class="banner {{ b.status }}">{{ icon('alert-triangle', 'icon') }}<div><strong>{{ b.title }}</strong>{% if b.body %}<div>{{ b.body }}</div>{% endif %}</div></div>
       {% endfor %}
       {% block content %}{% endblock %}
-      {% if plugin_hooks['pelican::footer.start'] or plugin_hooks['pelican::footer.end'] %}
-      <footer class="plugin-footer">{{ plugin_hooks['pelican::footer.start'] | safe if plugin_hooks['pelican::footer.start'] }}{{ plugin_hooks['pelican::footer.end'] | safe if plugin_hooks['pelican::footer.end'] }}</footer>
-      {% endif %}
+      {% include "components/footer.html" %}
     </main>
   </div>
 </div>

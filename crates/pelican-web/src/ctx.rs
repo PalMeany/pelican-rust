@@ -125,8 +125,19 @@ impl Web {
             })
         });
         let flash = self.session.take_flash();
+        // `->brandLogo(config('app.logo'))`: the logo, else the brand name as text; the footer
+        // (resources/views/filament/layouts/footer.blade.php) names the panel and Pelican.
+        let app_name = self.st.config.app_name.clone();
+        let footer_name = if app_name.eq_ignore_ascii_case("pelican") {
+            app_name.clone()
+        } else {
+            format!("{app_name} - Powered by Pelican")
+        };
         context! {
-            app_name => self.st.config.app_name.clone(),
+            app_name => app_name,
+            app_logo => self.st.config.env.string("APP_LOGO").unwrap_or_default(),
+            footer_name => footer_name,
+            year => chrono::Utc::now().format("%Y").to_string(),
             app_url => self.st.config.app_url.clone(),
             locale => self.locale(),
             timezone => self.timezone(),

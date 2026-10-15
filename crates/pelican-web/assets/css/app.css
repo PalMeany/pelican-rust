@@ -382,7 +382,10 @@ canvas.chart { width: 100%; height: 120px; display: block; }
 .wizard-steps li.current { color: var(--primary-600); border-color: var(--primary-600); font-weight: 600; }
 
 /* Footer content of PHP plugins' render hooks (ADR-0020). */
-.plugin-footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border, #e5e7eb); font-size: .875rem; text-align: center; color: var(--muted, #6b7280); }
+.app-footer { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 1rem; margin-top: 1.5rem; text-align: center; color: var(--text-2); font-size: 0.875rem; }
+.app-footer-name { font-weight: 600; color: inherit; }
+.simple { flex-direction: column; }
+.simple-card .logo .brand-name { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.025em; }
 
 /* Database notifications: topbar bell and slide-over (Filament `DatabaseNotifications`). */
 .notifications-btn { position: relative; }

@@ -2,8 +2,9 @@
 {% block body %}
 <main class="simple">
   <div class="simple-card">
-    <div class="logo"><img src="{{ asset('img/pelican.svg') }}" alt="{{ trans('filament-panels::layout.logo.alt', name=app_name) }}"></div>
+    <div class="logo">{% if app_logo %}<img src="{{ app_logo }}" alt="{{ trans('filament-panels::layout.logo.alt', name=app_name) }}">{% else %}<span class="brand-name">{{ app_name }}</span>{% endif %}</div>
     {% block card %}{% endblock %}
   </div>
+  {% include "components/footer.html" %}
 </main>
 {% endblock %}
