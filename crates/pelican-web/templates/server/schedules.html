@@ -7,17 +7,13 @@
 {% block content %}
 <div class="page-head">
   <h1>{{ title }}</h1>
-  <div class="page-actions">
-    {% if can_import %}
-    <a class="btn" href="{{ base }}/schedules/create" title="{{ trans('server/schedule.new') }}"
-      aria-label="{{ trans('server/schedule.new') }}">{{ icon('calendar-plus', 'icon-sm') }}</a>
-    <button type="button" class="btn btn-success" data-modal-open="import-schedule"
-      title="{{ trans('server/schedule.import') }}" aria-label="{{ trans('server/schedule.import') }}">
-      {{ icon('file-import', 'icon-sm') }}</button>
-    {% endif %}
-  </div>
 </div>
-{{ tbl.render(table, csrf, button_style) }}
+{# toolbarActions: CreateAction (CalendarPlus) and ImportScheduleAction (FileImport, success). #}
+{% set toolbar %}{% if can_import %}<a class="icon-btn action-icon" href="{{ base }}/schedules/create" title="{{ trans('server/schedule.new') }}"
+  aria-label="{{ trans('server/schedule.new') }}">{{ icon('calendar-plus', 'icon-lg') }}</a>
+<button type="button" class="icon-btn action-icon text-success" data-modal-open="import-schedule"
+  title="{{ trans('server/schedule.import') }}" aria-label="{{ trans('server/schedule.import') }}">{{ icon('file-import', 'icon-lg') }}</button>{% endif %}{% endset %}
+{{ tbl.render(table, csrf, button_style, toolbar) }}
 
 {# ImportScheduleAction: tab «file» uploads raw schedule JSON files, tab
    «url» repeats direct-to-.json URLs; sent as multipart with the CSRF token

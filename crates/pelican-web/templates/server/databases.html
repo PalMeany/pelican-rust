@@ -7,21 +7,13 @@
 {% block content %}
 <div class="page-head">
   <h1>{{ title }}</h1>
-  <div class="page-actions">
-    {% if can_create %}
-      {% if at_limit %}
-      <button type="button" class="btn btn-danger" disabled
-        title="{{ trans('server/database.limit') }}"
-        aria-label="{{ trans('server/database.create_database') }}">{{ icon('database-x', 'icon-sm') }}</button>
-      {% else %}
-      <button type="button" class="btn" data-modal-open="create-database"
-        title="{{ trans('server/database.create_database') }}"
-        aria-label="{{ trans('server/database.create_database') }}">{{ icon('database-plus', 'icon-sm') }}</button>
-      {% endif %}
-    {% endif %}
-  </div>
 </div>
-{{ tbl.render(table, csrf, button_style) }}
+{# Toolbar CreateAction (DatabasePlus; DatabaseX, danger and disabled at the limit). #}
+{% set toolbar %}{% if can_create %}{% if at_limit %}<button type="button" class="icon-btn action-icon danger" disabled
+  title="{{ trans('server/database.limit') }}" aria-label="{{ trans('server/database.create_database') }}">{{ icon('database-x', 'icon-lg') }}</button>
+{% else %}<button type="button" class="icon-btn action-icon" data-modal-open="create-database"
+  title="{{ trans('server/database.create_database') }}" aria-label="{{ trans('server/database.create_database') }}">{{ icon('database-plus', 'icon-lg') }}</button>{% endif %}{% endif %}{% endset %}
+{{ tbl.render(table, csrf, button_style, toolbar) }}
 {% if can_create and not at_limit %}
 <dialog id="create-database" class="modal">
   <form method="post" action="{{ base }}/databases">

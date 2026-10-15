@@ -529,3 +529,4 @@ fieldset > legend { padding: 0 0.5rem; margin-left: -0.5rem; font-size: 0.875rem
 .icon-btn.action-icon:hover { color: var(--primary-500); }
 .icon-btn.action-icon.danger { color: var(--danger-600); }
 td.actions .icon-btn.action-icon { width: 2rem; height: 2rem; }
+.icon-btn.action-icon.text-success { color: var(--success-600); }

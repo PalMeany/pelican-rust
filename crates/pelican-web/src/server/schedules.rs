@@ -261,21 +261,22 @@ async fn render_list(p: ServerPanel, lp: ListParams) -> WebResult<Response> {
             .cell("last_run", Cell::text(ago(s.last_run_at)))
             .cell("next_run", next_cell);
 
+        // recordActions: View (when not editable), Edit, Delete, inline.
         if can_update {
-            row.group.push(Action::link(
+            row.actions.push(Action::link(
                 p.t("filament-actions::edit.single.label"),
                 "edit",
                 format!("{url}/{}/edit", s.id.0),
             ));
         } else {
-            row.group.push(Action::link(
+            row.actions.push(Action::link(
                 p.t("filament-actions::view.single.label"),
                 "eye",
                 format!("{url}/{}", s.id.0),
             ));
         }
         if p.can("schedule.delete") {
-            row.group.push(
+            row.actions.push(
                 Action::post(p.t("filament-actions::delete.single.label"), "trash", format!("{url}/{}/delete", s.id.0))
                     .color("danger")
                     .confirm(p.t("filament-actions::modal.confirmation"))

@@ -35,14 +35,14 @@
 {% macro action_button(a, csrf, inline=true, back='', icons=true) %}
 {% set bare = inline and icons and a.icon %}
 {% if a.method == 'get' %}
-  {% if bare %}<a href="{{ a.url }}" class="icon-btn action-icon{{ ' danger' if a.color == 'danger' }}" hx-boost="false" title="{{ a.label }}" aria-label="{{ a.label }}">{{ icon(a.icon, 'icon-lg') }}</a>
+  {% if bare %}<a href="{{ a.url }}" class="icon-btn action-icon{{ ' danger' if a.color == 'danger' }}" hx-boost="false" title="{{ a.label }}" aria-label="{{ a.label }}">{{ icon('pencil' if a.icon == 'edit' else a.icon, 'icon-lg') }}</a>
   {% else %}<a href="{{ a.url }}" class="{% if inline %}btn-link {{ 'danger' if a.color == 'danger' }}{% endif %} {{ 'danger' if a.color == 'danger' and not inline }}" hx-boost="false">{{ icon(a.icon, 'icon-sm') }}{{ a.label }}</a>{% endif %}
 {% else %}
   <form method="post" action="{{ a.url }}" hx-boost="false" style="display:inline"{% if a.confirm %} data-confirm="{{ a.confirm }}" data-confirm-title="{{ a.label }}" data-confirm-ok="{{ a.label }}" data-confirm-color="{{ a.color }}"{% endif %}>
     <input type="hidden" name="_token" value="{{ csrf }}">
     {% if back %}<input type="hidden" name="_back" value="{{ back }}">{% endif %}
     {% for f in a.fields %}<input type="hidden" name="{{ f[0] }}" value="{{ f[1] }}">{% endfor %}
-    {% if bare %}<button type="submit" class="icon-btn action-icon{{ ' danger' if a.color == 'danger' }}" title="{{ a.label }}" aria-label="{{ a.label }}">{{ icon(a.icon, 'icon-lg') }}</button>
+    {% if bare %}<button type="submit" class="icon-btn action-icon{{ ' danger' if a.color == 'danger' }}" title="{{ a.label }}" aria-label="{{ a.label }}">{{ icon('pencil' if a.icon == 'edit' else a.icon, 'icon-lg') }}</button>
     {% else %}<button type="submit" class="{% if inline %}btn-link {{ 'danger' if a.color == 'danger' }}{% else %}{{ 'danger' if a.color == 'danger' }}{% endif %}">{{ icon(a.icon, 'icon-sm') }}{{ a.label }}</button>{% endif %}
   </form>
 {% endif %}
@@ -103,7 +103,7 @@
       {% for a in t.bulk %}<button type="submit" class="btn btn-sm {{ 'btn-danger' if a.color == 'danger' else 'btn-gray' }}" formaction="{{ a.url }}"{% if a.confirm %} data-confirm="{{ a.confirm }}" data-confirm-title="{{ a.label }}" data-confirm-ok="{{ a.label }}" data-confirm-color="{{ a.color }}"{% endif %}>{{ icon(a.icon, 'icon-sm') }}{{ a.label }}</button>{% endfor %}
     </form>
     {% endif %}
-    {% if t.rows %}
+    {% if t.rows or t.columns %}
     <div class="table-wrap">
       <table class="table">
         <thead><tr>
@@ -138,6 +138,13 @@
           {% endfor %}
         </tbody>
       </table>
+      {% if not t.rows %}
+      <div class="empty">
+        <div class="icon-wrap">{{ icon(t.empty_icon, 'icon-lg') }}</div>
+        <h3>{{ t.empty_heading }}</h3>
+        {% if t.empty_description %}<p class="muted">{{ t.empty_description }}</p>{% endif %}
+      </div>
+      {% endif %}
     </div>
     {# paginated(false) tables (a single "All" option) have no footer. #}
     {% if t.pagination.total > 0 and t.pagination.per_page_options | length > 1 %}
