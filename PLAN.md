@@ -145,11 +145,27 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] E2E: бэкапы (создание, скачивание по подписанной ссылке, восстановление), SFTP (пароль, ключ, отказ), перенос между двумя Wings туда и обратно с бэкапом (`scripts/e2e/wings-up <cfg> wings2 /var/lib/pelican2`)
   - найдено и исправлено: уведомление Wings о готовом бэкапе приходило до коммита → 404 → Wings удалял архив; R12 теперь ждёт появления записи до 2 с
 
-### M7 — Плагины (WASM)
-- [ ] WIT-API, покрывающий хуки оригинала (spec plugins.md): события, расширения (avatar, captcha, oauth, backup, tasks, features), UI-регистрация (ресурсы/страницы/виджеты/навигация), роуты, настройки, права, переводы
-- [ ] Хост на wasmtime (component model), изоляция, лимиты
-- [ ] Жизненный цикл: import/install/enable/disable/update/uninstall + Application API `/plugins`
-- [ ] SDK для авторов плагинов + пример плагина
+### M7 — Плагины (WASM) — ветка `m7` (`.worktrees/m7`), ADR-0018
+- [x] Операторская часть как в оригинале (крейт pelican-plugins): `plugins/<id>/plugin.json`, строки-ошибки, статусы,
+  проверка panel_version (caret), безопасный импорт zip/URL (traversal, лимиты, `.import-*`, откат `.<id>.bak`,
+  перенос meta), фид обновлений + sha256, Hub-ключ только своему origin, порядок загрузки, проход статусов
+  loadPlugins/loadPanelPlugins на каждом запросе (PHP-классы без файла → errored)
+- [x] Application API `/plugins` (диф-тесты app/plugins-* совпадают с оригиналом, включая перезаписанные plugin.json)
+- [x] Админка `/admin/plugins` (воркер C4): вкладки, статусы, README, действия, импорт, порядок; настройки плагина
+- [x] WIT-мир `pelican:plugin@1.0.0` (crates/pelican-plugins/wit/plugin.wit): регистрация (события, маршруты,
+  страницы, навигация, типы задач, features, аватары, права, настройки) и хуки
+- [x] Хост wasmtime 49: экземпляр на плагин, epoch-таймаут, лимит памяти, WASI без возможностей, KV-хранилище
+  (`storage/plugins/<id>/`), HTTP по allowlist, trans с `lang/` плагина, активити; кэш компиляции; перезагрузка
+  после изменений; install/uninstall-хуки
+- [x] Интеграция: события активности → on-event; маршруты client/application/web; страницы admin/server/app с
+  пунктами меню; настройки в админке; типы задач в форме расписаний и раннере (client API — 4 типа, как оригинал)
+- [x] SDK `pelican-plugin-sdk` + пример `examples/plugins/hello` (`scripts/build-plugin`), тест рантайма, E2E в dev-панели
+- [ ] Аватары от плагинов (выбор провайдера в настройках, avatar-url)
+- [ ] Права от плагинов: модели ролей, группы прав сабюзеров, ресурсы API-ключей
+- [ ] Server features (listeners в конфиг Wings, модалка на консоли)
+- [ ] Возможность `api` (вызовы Application API от имени плагина с грантами манифеста)
+- [ ] События моделей `eloquent.*` (общая шина с вебхуками — хвост M5)
+- [ ] Документация для авторов плагинов (docs/plugins.md), `p:plugin:make`-аналог
 
 ### M8 (после MVP) — PHP-sidecar для оригинальных плагинов
 - [ ] Дизайн (ADR): процесс PHP с урезанным Laravel, мост событий/рендеринга
