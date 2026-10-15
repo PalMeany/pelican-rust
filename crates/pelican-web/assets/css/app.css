@@ -138,6 +138,24 @@ details.nav-group:not([open]) .nav-group-chevron { transform: rotate(180deg); }
   border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-3); cursor: pointer; }
 .topbar .notifications-btn:hover { background: var(--hover); color: var(--text-2); }
 .topbar .notifications-label { display: none; }
+/* The collapsible admin sidebar: collapse/expand buttons on desktop, a 4.5rem rail of icons when collapsed. */
+.sidebar-collapse, .sidebar-expand { display: none; }
+@media (min-width: 1024px) {
+  .shell.collapsible .sidebar-collapse { display: inline-flex; }
+  :root.sidebar-collapsed .shell.collapsible .sidebar-collapse { display: none; }
+  :root.sidebar-collapsed .shell.collapsible .sidebar-expand { display: inline-flex; }
+  .topbar .topbar-collapse { margin-left: -0.5rem; }
+  .shell.collapsible .sidebar-head { padding-left: 1.25rem; }
+  :root.sidebar-collapsed .shell.collapsible > .sidebar { width: 4.5rem; }
+  :root.sidebar-collapsed .shell.collapsible > .sidebar .sidebar-head { padding: 0; justify-content: center; }
+  :root.sidebar-collapsed .shell.collapsible > .sidebar :is(.brand, .nav-group-label, .nav-item > span, .nav-item > .badge, .tenant-name,
+    .tenant-trigger > .icon-sm, .gs-trigger > span, .notifications-label, .notifications-count, .user-name, .user-trigger > .icon-sm) { display: none; }
+  :root.sidebar-collapsed .shell.collapsible > .sidebar nav { padding: 1rem 0.75rem; gap: 1rem; }
+  :root.sidebar-collapsed .shell.collapsible > .sidebar :is(.nav-item, .gs-trigger, .tenant-trigger, .notifications-btn, .user-trigger) { justify-content: center; }
+  :root.sidebar-collapsed .shell.collapsible > .sidebar .gs-trigger { min-width: 0; width: 2.5rem; padding: 0; }
+  :root.sidebar-collapsed .shell.collapsible > .sidebar :is(.sidebar-search, .tenant-menu) { padding: 0; margin: 0.5rem auto 0; width: max-content; }
+  :root.sidebar-collapsed .shell.collapsible > .sidebar .sidebar-footer { padding: 0.75rem; align-items: center; }
+}
 /* Top navigation (`top_navigation` = topbar): Filament's fi-topbar-nav-groups, groups as dropdowns. */
 .topbar-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 1rem; margin: 0.5rem 1rem; padding: 0; list-style: none; }
 .topbar-nav > li { display: flex; }

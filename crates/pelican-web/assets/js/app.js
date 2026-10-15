@@ -125,6 +125,21 @@
   document.addEventListener('close-modal', (e) => { if (e.detail?.id) window.closeModal(e.detail.id); else document.querySelectorAll('dialog[open]').forEach((d) => d.close()); });
   document.addEventListener('htmx:afterSettle', (e) => { flushFlash(e.detail.elt); });
 
+  // Collapsible admin sidebar (sidebarCollapsibleOnDesktop): icons only, labels as tooltips.
+  function sidebarTitles() {
+    const on = document.documentElement.classList.contains('sidebar-collapsed');
+    document.querySelectorAll('.shell.collapsible .sidebar .nav-item').forEach((a) => {
+      if (on) a.title = a.querySelector('span')?.textContent.trim() || ''; else a.removeAttribute('title');
+    });
+  }
+  sidebarTitles();
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-sidebar-collapse]')) return;
+    const on = document.documentElement.classList.toggle('sidebar-collapsed');
+    try { localStorage.setItem('sidebar-collapsed', on ? '1' : '0'); } catch (_) { /* ignore */ }
+    sidebarTitles();
+  });
+
   // Random server name (`hint_random`): one of the names the page was rendered with.
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-random-name]');

@@ -49,10 +49,14 @@
 {% set mode = nav_mode or 'sidebar' %}
 {% set sidebar_only = nav and user and mode == 'sidebar' %}
 {% set top_nav = nav and user and mode == 'topbar' %}
-<div class="shell{% if sidebar_only %} sidebar-only{% endif %}{% if top_nav %} top-navigation{% endif %}">
+{# The admin panel's sidebar collapses to its icons on desktop (sidebarCollapsibleOnDesktop() without top navigation). #}
+{% set collapsible = sidebar_collapsible and nav and not top_nav %}
+<div class="shell{% if sidebar_only %} sidebar-only{% endif %}{% if top_nav %} top-navigation{% endif %}{% if collapsible %} collapsible{% endif %}">
   {% if nav %}
   <aside class="sidebar" aria-label="{{ trans('filament-panels::layout.navigation.label') }}">
     <div class="sidebar-head">
+      {% if collapsible and sidebar_only %}<button type="button" class="icon-btn sidebar-collapse" data-sidebar-collapse aria-label="{{ trans('filament-panels::layout.actions.sidebar.collapse.label') }}">{{ icon('arrow-left-dashed') }}</button>
+      <button type="button" class="icon-btn sidebar-expand" data-sidebar-collapse aria-label="{{ trans('filament-panels::layout.actions.sidebar.expand.label') }}">{{ icon('arrow-right-dashed') }}</button>{% endif %}
       <a class="brand" href="{{ home_url or '/' }}">{% if app_logo %}<img src="{{ app_logo }}" alt="{{ trans('filament-panels::layout.logo.alt', name=app_name) }}">{% else %}{{ app_name }}{% endif %}</a>
       <button type="button" class="icon-btn sidebar-close" data-nav-toggle aria-label="{{ trans('filament-panels::layout.actions.sidebar.collapse.label') }}">{{ icon('x') }}</button>
     </div>
@@ -94,6 +98,8 @@
     </div>
     {% else %}
     <header class="topbar" aria-label="{{ trans('filament-panels::layout.topbar.label') }}">
+      {% if collapsible %}<button type="button" class="icon-btn sidebar-collapse topbar-collapse" data-sidebar-collapse aria-label="{{ trans('filament-panels::layout.actions.sidebar.collapse.label') }}">{{ icon('arrow-left-dashed') }}</button>
+      <button type="button" class="icon-btn sidebar-expand topbar-collapse" data-sidebar-collapse aria-label="{{ trans('filament-panels::layout.actions.sidebar.expand.label') }}">{{ icon('arrow-right-dashed') }}</button>{% endif %}
       {% if nav %}<button type="button" class="icon-btn menu-toggle" data-nav-toggle aria-label="{{ trans('filament-panels::layout.actions.sidebar.expand.label') }}">{{ icon('menu-2') }}</button>{% endif %}
       {% if not nav or top_nav %}<a class="brand" href="{{ home_url or '/' }}">{% if app_logo %}<img src="{{ app_logo }}" alt="{{ trans('filament-panels::layout.logo.alt', name=app_name) }}">{% else %}{{ app_name }}{% endif %}</a>{% endif %}
       {% if top_nav %}

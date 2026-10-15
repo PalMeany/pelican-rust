@@ -439,7 +439,10 @@ impl Admin {
             template,
             context! {
                 ..ctx,
-                ..context! { nav => Value::from_serialize(&nav), user_menu => user_menu, home_url => "/admin", global_search => true }
+                ..context! {
+                    nav => Value::from_serialize(&nav), user_menu => user_menu, home_url => "/admin",
+                    global_search => true, sidebar_collapsible => true,
+                }
             },
         )
     }
