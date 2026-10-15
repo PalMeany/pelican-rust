@@ -373,17 +373,50 @@ struct SectionView {
     open: bool,
 }
 
+/// Laravel `Str::headline()`: words split on `-`, `_`, spaces and case changes, each
+/// title-cased (`game_query` → `Game Query`, `backupHost` → `Backup Host`).
+fn headline(s: &str) -> String {
+    let mut words: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    for c in s.chars() {
+        if c == '-' || c == '_' || c == ' ' {
+            if !cur.is_empty() {
+                words.push(std::mem::take(&mut cur));
+            }
+        } else {
+            if c.is_uppercase() && !cur.is_empty() {
+                words.push(std::mem::take(&mut cur));
+            }
+            cur.push(c);
+        }
+    }
+    if !cur.is_empty() {
+        words.push(cur);
+    }
+    words
+        .iter()
+        .map(|w| {
+            let mut chars = w.chars();
+            match chars.next() {
+                Some(f) => f.to_uppercase().chain(chars.flat_map(char::to_lowercase)).collect(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<String>>()
+        .join(" ")
+}
+
 fn section_views(admin: &Admin, data: &FormData) -> Vec<SectionView> {
     all_sections()
         .into_iter()
         .enumerate()
         .map(|(i, (model, field))| {
-            // `trans()->has("admin/role.models.$model") ?: Str::headline($model)`
-            // — every model has a key except `backupHost`.
-            let label = if model == "backupHost" {
-                "Backup Host".to_string()
-            } else {
-                admin.t(&format!("admin/role.models.{model}"))
+            // `trans()->has("admin/role.models.$model") ?: Str::headline($model)` (core models
+            // have keys except `backupHost`; plugin models usually none).
+            let key = format!("admin/role.models.{model}");
+            let label = match admin.t(&key) {
+                t if t == key => headline(&model),
+                t => t,
             };
             let selected: Vec<String> =
                 data.perms[i].iter().filter(|v| section_perms(&model).contains(v)).cloned().collect();
@@ -768,5 +801,16 @@ mod tests {
     fn unique_keeps_first_seen_order() {
         let v = unique(vec!["b".into(), "a".into(), "b".into()]);
         assert_eq!(v, ["b", "a"]);
+    }
+}
+
+#[cfg(test)]
+mod headline_tests {
+    #[test]
+    fn laravel_headline() {
+        assert_eq!(super::headline("game_query"), "Game Query");
+        assert_eq!(super::headline("backupHost"), "Backup Host");
+        assert_eq!(super::headline("ticket"), "Ticket");
+        assert_eq!(super::headline("helloGreeting"), "Hello Greeting");
     }
 }

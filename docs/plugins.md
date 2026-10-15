@@ -124,8 +124,10 @@ docker run -d --name pelican-sidecar --network <сеть pelican-rs> \
 админке и панели сервера, маршруты плагинов, слушатели `eloquent.*` и `App\Events\*` (`ActivityLogged` и др.),
 типы задач расписаний, права ролей/сабюзеров, ресурсы API-ключей, провайдеры аватаров, языковые плагины
 (новые языки и переводы поверх встроенных), установка/обновление/
-удаление/включение/выключение (Composer-пакеты, миграции и сидеры плагина — в sidecar). Пример —
-`examples/php-plugins/greeter`.
+удаление/включение/выключение (Composer-пакеты, миграции и сидеры плагина — в sidecar). Пункты меню
+показываются по `canAccess()` страницы для конкретного пользователя и сервера. Пример —
+`examples/php-plugins/greeter`; проверено на плагинах `tickets`, `player-counter`, `robo-avatars`,
+`pirate-language` из [pelican-dev/plugins](https://github.com/pelican-dev/plugins).
 
 Ограничения: server features PHP-плагинов (модалки на консоли — действия Filament), темы и виджеты плагинов на
 страницах ядра, OAuth/captcha-провайдеры из PHP-плагинов. Версии sidecar и панели

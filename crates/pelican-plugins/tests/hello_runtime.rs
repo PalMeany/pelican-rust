@@ -64,6 +64,7 @@ async fn hello_plugin_hooks() {
         panel_version: None,
         panel_version_display: "canary".into(),
         production: true,
+        php_sidecar: false,
         translate: Arc::new(pelican_plugins::english),
     };
     let rt = Runtime::new(Arc::new(Fake), tmp.path().join("storage")).expect("runtime");

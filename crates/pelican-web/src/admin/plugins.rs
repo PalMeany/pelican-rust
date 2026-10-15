@@ -761,6 +761,7 @@ mod tests {
             panel_version: None,
             panel_version_display: "canary".into(),
             production: true,
+            php_sidecar: false,
             translate: std::sync::Arc::new(pelican_plugins::english),
         }
     }

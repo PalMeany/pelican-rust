@@ -58,6 +58,8 @@ pub struct ServerPanel {
     pub transfer: bool,
     /// `WebhookResource::getNavigationBadge()`: this server's webhooks (None when hidden).
     webhooks: Option<u64>,
+    /// PHP plugins' pages of the server panel this user may open (ADR-0020).
+    sidecar_nav: Vec<pelican_api::sidecar::NavEntry>,
 }
 
 impl std::ops::Deref for ServerPanel {
@@ -147,7 +149,9 @@ async fn load(authed: Authed, id: &str) -> Result<ServerPanel, WebError> {
     } else {
         None
     };
-    Ok(ServerPanel { authed, server, node, perms, transfer, webhooks })
+    let sidecar_nav =
+        crate::sidecar_proxy::nav(&authed.st, "server", authed.user.id(), Some(server.uuid_short.as_str())).await;
+    Ok(ServerPanel { authed, server, node, perms, transfer, webhooks, sidecar_nav })
 }
 
 #[derive(Serialize)]
@@ -238,7 +242,7 @@ impl ServerPanel {
             });
         }
         // PHP plugins' pages of the tenant-scoped server panel (ADR-0020): `/server/{tenant}/<slug>`.
-        for n in crate::sidecar_proxy::nav("server") {
+        for n in &self.sidecar_nav {
             let rest = n.path.strip_prefix("/server").unwrap_or(&n.path);
             items.push(NavItem {
                 label: n.label.clone(),

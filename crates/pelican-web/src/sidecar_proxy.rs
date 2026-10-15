@@ -122,10 +122,14 @@ mod tests {
 }
 
 /// Navigation entries of PHP plugins' pages for one Filament panel (`admin`, `server`,
-/// `app`), by sort.
-pub fn nav(panel: &str) -> Vec<sidecar::NavEntry> {
-    let Some(m) = sidecar::manifest() else { return Vec::new() };
-    let mut out: Vec<sidecar::NavEntry> = m.navigation.iter().filter(|n| n.panel == panel).cloned().collect();
+/// `app`) that `user` may open (on server `tenant`), by sort.
+pub async fn nav(
+    st: &pelican_core::state::AppState,
+    panel: &str,
+    user: i64,
+    tenant: Option<&str>,
+) -> Vec<sidecar::NavEntry> {
+    let mut out = sidecar::user_navigation(st, panel, user, tenant).await;
     out.sort_by_key(|n| n.sort.unwrap_or(0));
     out
 }

@@ -127,12 +127,23 @@ impl Sidecar {
 
     /// A signed JSON call to a bridge endpoint.
     async fn call(&self, method: reqwest::Method, path: &str, body: Option<&Value>) -> ApiResult<(u16, Value)> {
+        self.call_as(method, path, None, body).await
+    }
+
+    /// [`Sidecar::call`] on behalf of a user (`X-Pelican-Rs-User`).
+    async fn call_as(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        user: Option<i64>,
+        body: Option<&Value>,
+    ) -> ApiResult<(u16, Value)> {
         let bytes = body.map(|b| serde_json::to_vec(b).unwrap_or_default()).unwrap_or_default();
         let mut req = Self::client()
             .request(method.clone(), format!("{}{path}", self.url))
             .header("accept", "application/json")
             .header("content-type", "application/json");
-        for (k, v) in self.signature(method.as_str(), path, None, &bytes) {
+        for (k, v) in self.signature(method.as_str(), path, user, &bytes) {
             req = req.header(k, v);
         }
         let resp = match req.body(bytes).send().await {
@@ -534,7 +545,9 @@ mod tests {
 pub fn all_task_types() -> Vec<(String, pelican_plugins::runtime::TaskType)> {
     let mut out = pelican_plugins::runtime::task_types();
     if let Some(m) = manifest() {
-        out.extend(m.tasks.iter().map(|t| {
+        // `TaskService::register()` keeps the first schema of an id.
+        let taken: Vec<String> = out.iter().map(|(_, t)| t.id.clone()).collect();
+        out.extend(m.tasks.iter().filter(|t| !taken.contains(&t.id)).map(|t| {
             (
                 t.plugin.clone(),
                 pelican_plugins::runtime::TaskType {
@@ -601,6 +614,9 @@ pub fn all_api_resources() -> Vec<String> {
     if let Some(m) = manifest() {
         out.extend(m.api_resources.iter().cloned());
     }
+    // `array_unique()` in `ApiKey::getPermissionList()`.
+    let mut seen = std::collections::HashSet::new();
+    out.retain(|r| seen.insert(r.clone()));
     out
 }
 
@@ -608,7 +624,9 @@ pub fn all_api_resources() -> Vec<String> {
 pub fn all_avatar_providers() -> Vec<(String, pelican_plugins::runtime::AvatarProvider)> {
     let mut out = pelican_plugins::runtime::avatar_providers();
     if let Some(m) = manifest() {
-        out.extend(m.avatars.iter().map(|a| {
+        // `AvatarService::register()` keeps the first schema of an id.
+        let taken: Vec<String> = out.iter().map(|(_, a)| a.id.clone()).collect();
+        out.extend(m.avatars.iter().filter(|a| !taken.contains(&a.id)).map(|a| {
             (a.plugin.clone(), pelican_plugins::runtime::AvatarProvider { id: a.id.clone(), name: a.name.clone() })
         }));
     }
@@ -646,4 +664,40 @@ pub fn cached_avatar(st: &AppState, provider: &str, user_id: i64) -> Option<Stri
         }
     });
     None
+}
+
+type NavCache = std::collections::HashMap<(String, i64, String), (std::time::Instant, Vec<NavEntry>)>;
+static NAV: std::sync::Mutex<Option<NavCache>> = std::sync::Mutex::new(None);
+
+/// The PHP plugins' navigation of a panel as `user` sees it (on server `tenant`): Filament
+/// hides pages whose `canAccess()` denies. Cached for 30 s per user, panel and server.
+pub async fn user_navigation(st: &AppState, panel: &str, user: i64, tenant: Option<&str>) -> Vec<NavEntry> {
+    let Some(m) = manifest() else { return Vec::new() };
+    if !m.navigation.iter().any(|n| n.panel == panel) {
+        return Vec::new();
+    }
+    let key = (panel.to_string(), user, tenant.unwrap_or_default().to_string());
+    if let Some((at, items)) = NAV.lock().ok().and_then(|g| g.as_ref().and_then(|c| c.get(&key).cloned())) {
+        if at.elapsed() < Duration::from_secs(30) {
+            return items;
+        }
+    }
+    let Some(sc) = get(st) else { return Vec::new() };
+    if is_down() {
+        return Vec::new();
+    }
+    let body = json!({ "panel": panel, "tenant": tenant });
+    let items: Vec<NavEntry> =
+        match sc.call_as(reqwest::Method::POST, "/_bridge/navigation", Some(user), Some(&body)).await {
+            Ok((200, v)) => serde_json::from_value(v).unwrap_or_default(),
+            Ok((status, _)) => {
+                tracing::warn!(status, panel, "sidecar navigation failed");
+                Vec::new()
+            }
+            Err(_) => Vec::new(),
+        };
+    if let Ok(mut g) = NAV.lock() {
+        g.get_or_insert_with(Default::default).insert(key, (std::time::Instant::now(), items.clone()));
+    }
+    items
 }

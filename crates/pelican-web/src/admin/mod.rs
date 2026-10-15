@@ -244,7 +244,7 @@ impl Admin {
             }
         }
         // PHP plugins' Filament pages, served by the sidecar (ADR-0020).
-        for n in crate::sidecar_proxy::nav("admin") {
+        for n in crate::sidecar_proxy::nav(st, "admin", self.user.id(), None).await {
             let entry = NavItem {
                 url: n.path.clone(),
                 icon: crate::sidecar_proxy::icon(n.icon.as_deref()),

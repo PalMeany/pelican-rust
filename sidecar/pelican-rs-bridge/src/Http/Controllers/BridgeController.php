@@ -196,14 +196,47 @@ class BridgeController extends Controller
         return array_values(array_unique($out));
     }
 
-    /** @return array<int, array<string, mixed>> */
-    private function navigation(): array
+    /**
+     * The plugins' navigation of one panel as the signed user sees it there (Filament hides
+     * items whose page/resource denies `canAccess()`), in the user's language.
+     */
+    public function userNavigation(Request $request): JsonResponse
+    {
+        $user = \App\Models\User::query()->find((int) $request->header('X-Pelican-Rs-User', '0'));
+        abort_if(is_null($user), 403);
+        $panel = Filament::getPanel((string) $request->input('panel'));
+        \Illuminate\Support\Facades\Auth::setUser($user);
+        if ($user->language) {
+            app()->setLocale($user->language);
+        }
+        Filament::setCurrentPanel($panel);
+        if ($panel->hasTenancy()) {
+            $tenant = \App\Models\Server::query()->where('uuid_short', (string) $request->input('tenant'))->first();
+            abort_if(is_null($tenant), 404);
+            Filament::setTenant($tenant);
+        }
+
+        return new JsonResponse($this->navigation([$panel], true));
+    }
+
+    /**
+     * @param  \Filament\Panel[]|null  $panels
+     * @return array<int, array<string, mixed>>
+     */
+    private function navigation(?array $panels = null, bool $checkAccess = false): array
     {
         $out = [];
-        foreach (Filament::getPanels() as $panel) {
+        foreach ($panels ?? Filament::getPanels() as $panel) {
             foreach ([...$panel->getPages(), ...$panel->getResources()] as $class) {
                 $plugin = Origin::pluginOfClass($class);
                 if (is_null($plugin) || !$class::shouldRegisterNavigation()) {
+                    continue;
+                }
+                try {
+                    if ($checkAccess && method_exists($class, 'canAccess') && !$class::canAccess()) {
+                        continue;
+                    }
+                } catch (Throwable) {
                     continue;
                 }
                 try {

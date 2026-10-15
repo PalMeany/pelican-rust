@@ -172,7 +172,7 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] Плагин-мост `pelican-rs-bridge` (PHP): manifest (маршруты, навигация, слушатели, реестры, маршруты Livewire), event, task, lifecycle; HMAC; вход пользователя без событий `Login`; расписание ядра отфильтровано
 - [x] pelican-rs: прокси путей sidecar (страницы Filament + Livewire), навигация admin/server, события (eloquent, ActivityLogged), типы задач, права ролей/сабюзеров, ресурсы API-ключей, аватары, проверка версии (features PHP-плагинов — нет, см. docs/plugins.md)
 - [x] Жизненный цикл PHP-плагинов через sidecar (install/update/uninstall/enable/disable, API и админка); языковые плагины — переводы из sidecar поверх встроенных
-- [ ] E2E: реальный плагин из Hub в sidecar (страница, событие, задача расписания)
+- [x] E2E с реальными плагинами из pelican-dev/plugins: tickets (миграции, ресурсы admin/server, создание тикета через Livewire), player-counter (composer-пакеты, доступ к странице по `canAccess`), robo-avatars, pirate-language — импорт и установка через pelican-rs
 
 ## Делегирование
 Механика — `../glm-worker.sh` (одна задача = один модуль/файл, явные входы/выходы).

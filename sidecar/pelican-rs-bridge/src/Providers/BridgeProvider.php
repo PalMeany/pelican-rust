@@ -25,6 +25,7 @@ class BridgeProvider extends ServiceProvider
                 Route::post('artisan', [BridgeController::class, 'artisan']);
                 Route::post('avatar', [BridgeController::class, 'avatar']);
                 Route::get('lang', [BridgeController::class, 'lang']);
+                Route::post('navigation', [BridgeController::class, 'userNavigation']);
             });
 
         // pelican-rs runs the core schedule; the sidecar keeps only what plugins add. The
