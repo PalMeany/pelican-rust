@@ -1,5 +1,7 @@
 //! Bootstrapping shared by the binary and the difftest harness.
 
+pub mod cli;
+pub mod console;
 pub mod logfile;
 pub mod plugins;
 
@@ -18,6 +20,9 @@ pub async fn boot(env: Env, base: &Path) -> Result<AppState> {
     let db = pelican_db::connect(&config.db).await.context("connecting to the database")?;
     match schema_state(&db).await? {
         SchemaState::Ready { unknown } => {
+            // Plugins' own migrations (`plugins/<id>/database/migrations`) are not schema drift.
+            let plugin_migrations = plugin_migration_names(base);
+            let unknown: Vec<String> = unknown.into_iter().filter(|m| !plugin_migrations.contains(m)).collect();
             if !unknown.is_empty() {
                 tracing::warn!("database has migrations unknown to this build: {}", unknown.join(", "));
             }
@@ -33,6 +38,21 @@ pub async fn boot(env: Env, base: &Path) -> Result<AppState> {
         ),
     }
     Ok(AppState::new(config, enc, db))
+}
+
+/// Names of the migrations shipped by plugins (`plugins/*/database/migrations/*.php`).
+fn plugin_migration_names(base: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    for plugin in std::fs::read_dir(base.join("plugins")).into_iter().flatten().flatten() {
+        let dir = plugin.path().join("database").join("migrations");
+        for f in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let name = f.file_name().to_string_lossy().to_string();
+            if let Some(stem) = name.strip_suffix(".php") {
+                out.push(stem.to_string());
+            }
+        }
+    }
+    out
 }
 
 /// Serve the panel on an already bound listener.

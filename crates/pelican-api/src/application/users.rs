@@ -170,31 +170,48 @@ fn str_or_null(v: &Value) -> Option<String> {
     if v.is_null() { None } else { Some(pelican_core::php::string(v)) }
 }
 
-/// `POST /users` (`UserCreationService`).
-pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, In(input): In) -> ApiResult<Response> {
-    ctx.acl("user", WRITE)?;
-    validate_user(&st, &input, None).await?;
-    let data = validated(&input);
-    let get = |k: &str| data.iter().find(|(n, _)| *n == k).map(|(_, v)| v.clone());
-    let password = get("password").filter(|p| !pelican_core::php::empty(p)).map(|p| pelican_core::php::string(&p));
+/// The input of [`create`] (`UserCreationService::handle($data)`).
+#[derive(Debug, Default, Clone)]
+pub struct NewUser {
+    pub email: String,
+    /// Empty: `<email local part><3 random chars>`.
+    pub username: String,
+    /// `None` or empty: a random password plus a reset token in the AccountCreated mail.
+    pub password: Option<String>,
+    pub root_admin: bool,
+    pub external_id: Option<String>,
+    pub is_managed_externally: bool,
+    pub language: String,
+    pub timezone: String,
+}
+
+/// `UserCreationService::handle()`: create the user (lower-cased email/username), assign
+/// Root Admin when asked, issue a password-reset token when no password was given, then
+/// `eloquent.created` and the AccountCreated notification.
+pub async fn create(st: &AppState, data: NewUser) -> ApiResult<users::Model> {
+    let password = data.password.filter(|p| !p.is_empty());
     let now = Timestamp(pelican_core::time::now());
-    let txn = st.db.begin().await?;
     let reset = password.is_none();
     let hashed = match &password {
-        Some(p) => hash(&st, p)?,
-        None => hash(&st, &pelican_wings::jwt::str_random(30))?,
+        Some(p) => hash(st, p)?,
+        None => hash(st, &pelican_wings::jwt::str_random(30))?,
+    };
+    let username = if data.username.is_empty() {
+        format!("{}{}", data.email.split('@').next().unwrap_or_default(), pelican_wings::jwt::str_random(3))
+    } else {
+        data.username
     };
     // The saving hook lowercases username and email.
-    let email = get("email").map(|v| pelican_core::php::string(&v).to_lowercase()).unwrap_or_default();
-    let username = get("username").map(|v| pelican_core::php::string(&v).to_lowercase()).unwrap_or_default();
+    let email = data.email.to_lowercase();
+    let txn = st.db.begin().await?;
     let am = users::ActiveModel {
-        external_id: Set(get("external_id").as_ref().and_then(str_or_null)),
-        is_managed_externally: Set(Bool(get("is_managed_externally").is_some_and(|v| !pelican_core::php::empty(&v)))),
+        external_id: Set(data.external_id),
+        is_managed_externally: Set(Bool(data.is_managed_externally)),
         email: Set(email.clone()),
-        username: Set(username),
+        username: Set(username.to_lowercase()),
         password: Set(hashed),
-        language: Set(get("language").as_ref().and_then(str_or_null).unwrap_or_else(|| "en".into())),
-        timezone: Set(get("timezone").as_ref().and_then(str_or_null).unwrap_or_else(|| "UTC".into())),
+        language: Set(data.language),
+        timezone: Set(data.timezone),
         uuid: Set(uuid::Uuid::new_v4().to_string()),
         mfa_app_secret: Set(None),
         mfa_app_recovery_codes: Set(None),
@@ -205,6 +222,16 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         ..Default::default()
     };
     let user = pelican_db::write::insert(&txn, am).await?;
+    if data.root_admin {
+        // `$user->syncRoles(Role::getRootAdmin())`.
+        let role = root_admin_role(st).await?;
+        txn.execute_raw(raw::stmt(
+            txn.get_database_backend(),
+            "insert into {model_has_roles} ({role_id}, {model_type}, {model_id}) values (?, ?, ?)",
+            vec![role.id.into(), "user".into(), user.id.into()],
+        ))
+        .await?;
+    }
     let mut reset_token = None;
     if reset {
         // Password broker: delete existing tokens for the email, insert a hashed random token.
@@ -213,7 +240,7 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
             .exec(&txn)
             .await?;
         let plain = pelican_wings::jwt::str_random(64);
-        let token = hash(&st, &plain)?;
+        let token = hash(st, &plain)?;
         reset_token = Some(plain);
         txn.execute_raw(raw::stmt(
             st.db.get_database_backend(),
@@ -224,8 +251,43 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
     }
     txn.commit().await?;
     // UserCreationService: User::create() (eloquent.created)
-    crate::model_events::created(&st, &user).await;
-    crate::services::account_created(&st, &user, reset_token.as_deref()).await?;
+    crate::model_events::created(st, &user).await;
+    crate::services::account_created(st, &user, reset_token.as_deref()).await?;
+    Ok(user)
+}
+
+/// `StoreUserRequest` (and the model's validation rules) on plain values, for callers
+/// outside the HTTP pipeline (the CLI).
+pub async fn validate_new_user(st: &AppState, data: &NewUser) -> ApiResult<()> {
+    let mut v = serde_json::Map::new();
+    v.insert("email".into(), json!(data.email));
+    v.insert("username".into(), json!(data.username));
+    if let Some(p) = &data.password {
+        v.insert("password".into(), json!(p));
+    }
+    validate_user(st, &Input::from_value(Value::Object(v)), None).await
+}
+
+/// `POST /users` (`UserCreationService`).
+pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, In(input): In) -> ApiResult<Response> {
+    ctx.acl("user", WRITE)?;
+    validate_user(&st, &input, None).await?;
+    let data = validated(&input);
+    let get = |k: &str| data.iter().find(|(n, _)| *n == k).map(|(_, v)| v.clone());
+    let user = create(
+        &st,
+        NewUser {
+            email: get("email").map(|v| pelican_core::php::string(&v)).unwrap_or_default(),
+            username: get("username").map(|v| pelican_core::php::string(&v)).unwrap_or_default(),
+            password: get("password").filter(|p| !pelican_core::php::empty(p)).map(|p| pelican_core::php::string(&p)),
+            root_admin: false,
+            external_id: get("external_id").as_ref().and_then(str_or_null),
+            is_managed_externally: get("is_managed_externally").is_some_and(|v| !pelican_core::php::empty(&v)),
+            language: get("language").as_ref().and_then(str_or_null).unwrap_or_else(|| "en".into()),
+            timezone: get("timezone").as_ref().and_then(str_or_null).unwrap_or_else(|| "UTC".into()),
+        },
+    )
+    .await?;
     let body = with_meta(
         user_item(&st, &ctx, &user, &Includes::parse(&input)).await?,
         resource_meta(&st, &format!("users/{}", user.id.0)),
@@ -576,7 +638,13 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
     if pelican_core::auth::is_root_admin(&st.db, u.id.0).await? {
         return Ok(PhpJson::with_status(StatusCode::FORBIDDEN, json!([])).into_response());
     }
-    // deleting hook
+    delete_user(&st, &u, Some(ctx.user()?.id())).await?;
+    Ok(no_content())
+}
+
+/// `$user->delete()` with the model's `deleting` hook: no owned servers, not the acting
+/// user, `User\Deleting` (SFTP revocation), then the delete and `eloquent.deleted`.
+pub async fn delete_user(st: &AppState, u: &users::Model, acting: Option<i64>) -> ApiResult<()> {
     let owned = pelican_db::entities::servers::Entity::find()
         .filter(pelican_db::entities::servers::Column::OwnerId.eq(u.id))
         .one(&st.db)
@@ -588,13 +656,13 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
             "Cannot delete a user with active servers attached to their account. Please delete their servers before continuing.",
         ));
     }
-    if ctx.user()?.id() == u.id.0 {
+    if acting == Some(u.id.0) {
         return Err(ApiError::display("DisplayException", 400, "Cannot delete your own user account."));
     }
     // User\Deleting → RevocationListener.
-    crate::jobs::revoke_sftp_access(&st, &u).await?;
+    crate::jobs::revoke_sftp_access(st, u).await?;
     users::Entity::delete_by_id(u.id).exec(&st.db).await?;
-    // UserController::destroy (eloquent.deleted, attributes as before the delete)
-    crate::model_events::deleted(&st, &u).await;
-    Ok(no_content())
+    // eloquent.deleted, attributes as before the delete
+    crate::model_events::deleted(st, u).await;
+    Ok(())
 }

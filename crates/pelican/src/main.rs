@@ -4,6 +4,7 @@
 //!   pelican db:install      create the schema in an empty database
 //!   pelican db:status       show the schema state
 //!   pelican schedule:process  run due schedules once (`p:schedule:process`)
+//!   pelican p:<group>:<command> …  the original's `php artisan p:*` commands
 
 use std::path::PathBuf;
 
@@ -18,6 +19,9 @@ struct Cli {
     /// Directory containing the panel's `.env` (and `database/` for SQLite).
     #[arg(long, global = true, default_value = ".")]
     path: PathBuf,
+    /// Do not ask any interactive question (Laravel's `-n`).
+    #[arg(short = 'n', long = "no-interaction", global = true)]
+    no_interaction: bool,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -32,8 +36,24 @@ enum Cmd {
     DbInstall,
     #[command(name = "db:status")]
     DbStatus,
-    #[command(name = "schedule:process")]
+    #[command(name = "schedule:process", alias = "p:schedule:process")]
     ScheduleProcess,
+    #[command(flatten)]
+    User(pelican::cli::user::Command),
+    #[command(flatten)]
+    Node(pelican::cli::node::Command),
+    #[command(flatten)]
+    Server(pelican::cli::server::Command),
+    #[command(flatten)]
+    Info(pelican::cli::info::Command),
+    #[command(flatten)]
+    Environment(pelican::cli::environment::Command),
+    #[command(flatten)]
+    Egg(pelican::cli::egg::Command),
+    #[command(flatten)]
+    Maintenance(pelican::cli::maintenance::Command),
+    #[command(flatten)]
+    Plugin(pelican::cli::plugin::Command),
 }
 
 #[tokio::main]
@@ -49,7 +69,18 @@ async fn main() -> Result<()> {
         _ => None,
     };
     tracing_subscriber::registry().with(console).with(file).init();
+    let io = pelican::console::Console::new(cli.no_interaction);
+    let (path, cmd_env) = (cli.path.clone(), env.clone());
+    let ctx = move || pelican::cli::Ctx { path: path.clone(), env: cmd_env.clone() };
     match cli.cmd {
+        Cmd::User(c) => exit(pelican::cli::user::run(&ctx(), &io, c).await?),
+        Cmd::Node(c) => exit(pelican::cli::node::run(&ctx(), &io, c).await?),
+        Cmd::Server(c) => exit(pelican::cli::server::run(&ctx(), &io, c).await?),
+        Cmd::Info(c) => exit(pelican::cli::info::run(&ctx(), &io, c).await?),
+        Cmd::Environment(c) => exit(pelican::cli::environment::run(&ctx(), &io, c).await?),
+        Cmd::Egg(c) => exit(pelican::cli::egg::run(&ctx(), &io, c).await?),
+        Cmd::Maintenance(c) => exit(pelican::cli::maintenance::run(&ctx(), &io, c).await?),
+        Cmd::Plugin(c) => exit(pelican::cli::plugin::run(&ctx(), &io, c).await?),
         Cmd::Serve { listen } => {
             let listener = tokio::net::TcpListener::bind(&listen).await?;
             tracing::info!("listening on {listen}");
@@ -77,4 +108,12 @@ async fn main() -> Result<()> {
             Ok(())
         }
     }
+}
+
+/// A command's exit status (Artisan's `return 1`).
+fn exit(code: i32) -> Result<()> {
+    if code != 0 {
+        std::process::exit(code);
+    }
+    Ok(())
 }
