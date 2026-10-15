@@ -176,8 +176,8 @@ Application API → UI → плагины → PHP-sidecar.
 
 ### M9 — полная замена оригинала (порядок согласован с пользователем 2026-10-15)
 1. Слияние и проверки
-   - [ ] Полный диф-тест m8 на 4 СУБД → слияние m8 в main, push
-   - [ ] Включить пропущенные smoke-сценарии (`smoke/client-unauthenticated`, `smoke/application-unauthenticated`)
+   - [x] Полный диф-тест m8 на 4 СУБД (77/0/2 на каждой) → слияние m8 в main, push
+   - [x] Включить пропущенные smoke-сценарии (`smoke/client-unauthenticated`, `smoke/application-unauthenticated`) — проходят на 4 СУБД
 2. Функциональный паритет
    - [~] CLI как `php artisan p:*` (готовы: каркас, p:user:*, p:environment:*, p:redis:setup; воркеры: node/server/info, egg/maintenance/plugin): user (make/delete/disable2fa), node (make/list/configuration), environment
          (setup/database/mail/cache/session/queue/queue-service), redis:setup, info, server:bulk-power,
