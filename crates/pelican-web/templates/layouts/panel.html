@@ -1,64 +1,105 @@
 {% extends "layouts/base.html" %}
 {#
   Panel chrome (Filament panel layout). Optional `nav`: list of groups
-  {label, items: [{label, url, icon, active, badge}]} rendered as a sidebar.
+  {label, items: [{label, url, icon, active, badge}]} rendered as a sidebar. `nav_mode` is the
+  user's navigation customization (`top_navigation`): `sidebar` (no topbar: notifications and
+  the user menu at the bottom of the sidebar), `mixed` (sidebar and topbar) or `topbar`.
+  Server pages pass `tenant` and `tenants` for the server switcher.
 #}
 {% block body %}
-<div class="shell">
+{# Pieces used in the sidebar footer or the topbar (set blocks see the page's variables, macros do not). #}
+{% set user_menu_items %}
+  <div class="head"><div style="font-weight:600">{{ user.username }}</div><div class="muted small truncate">{{ user.email }}</div></div>
+  <a href="/profile">{{ icon('user', 'icon-sm') }}{{ trans('profile.title') }}</a>
+  {% if user.admin and path is not startingwith('/admin') %}<a href="/admin">{{ icon('arrow-forward', 'icon-sm') }}{{ trans('profile.admin') }}</a>{% endif %}
+  {% for item in user_menu or [] %}
+  <a href="{{ item.url }}">{{ icon(item.icon, 'icon-sm') }}{{ item.label }}</a>
+  {% endfor %}
+  <hr>
+  <div class="row" style="justify-content:space-around;padding:0.25rem" role="group" aria-label="{{ trans('filament-panels::layout.actions.theme_switcher.label') }}">
+    <button type="button" class="icon-btn" style="width:2.25rem" onclick="setTheme('light')" title="{{ trans('filament-panels::layout.actions.theme_switcher.light.label') }}">{{ icon('sun', 'icon-sm') }}</button>
+    <button type="button" class="icon-btn" style="width:2.25rem" onclick="setTheme('dark')" title="{{ trans('filament-panels::layout.actions.theme_switcher.dark.label') }}">{{ icon('moon', 'icon-sm') }}</button>
+    <button type="button" class="icon-btn" style="width:2.25rem" onclick="setTheme('system')" title="{{ trans('filament-panels::layout.actions.theme_switcher.system.label') }}">{{ icon('device-desktop', 'icon-sm') }}</button>
+  </div>
+  <hr>
+  <form method="post" action="/logout">{{ csrf_field() }}<button type="submit">{{ icon('logout', 'icon-sm') }}{{ trans('filament-panels::layout.actions.logout.label') }}</button></form>
+{% endset %}
+{% set avatar %}{% if user %}<span class="avatar" title="{{ user.username }}">{{ user.avatar }}{% if user.avatar_url %}<img src="{{ user.avatar_url }}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}</span>{% endif %}{% endset %}
+{% set notifications_trigger %}
+<span id="notifications-trigger" hx-get="/_notifications/trigger" hx-trigger="load, every 30s" hx-swap="outerHTML">
+  <button type="button" class="notifications-btn" data-modal-open="notifications" hx-get="/_notifications" hx-target="#notifications-panel" hx-swap="innerHTML" aria-label="{{ trans('filament-panels::layout.actions.open_database_notifications.label') }}">{{ icon('bell', 'icon') }}<span class="notifications-label">{{ trans('filament-panels::layout.actions.open_database_notifications.label') }}</span></button>
+</span>
+{% endset %}
+{% set mode = nav_mode or 'sidebar' %}
+{% set sidebar_only = nav and user and mode == 'sidebar' %}
+<div class="shell{% if sidebar_only %} sidebar-only{% endif %}">
   {% if nav %}
   <aside class="sidebar" aria-label="{{ trans('filament-panels::layout.navigation.label') }}">
     <div class="sidebar-head">
-      <a class="row" href="{{ home_url or '/' }}" style="color:inherit;gap:0.5rem;font-weight:700;font-size:1.125rem">
-        {% if app_logo %}<img src="{{ app_logo }}" alt="{{ trans('filament-panels::layout.logo.alt', name=app_name) }}" style="height:2rem">{% else %}{{ app_name }}{% endif %}
-      </a>
+      <a class="brand" href="{{ home_url or '/' }}">{% if app_logo %}<img src="{{ app_logo }}" alt="{{ trans('filament-panels::layout.logo.alt', name=app_name) }}">{% else %}{{ app_name }}{% endif %}</a>
+      <button type="button" class="icon-btn sidebar-close" data-nav-toggle aria-label="{{ trans('filament-panels::layout.actions.sidebar.collapse.label') }}">{{ icon('x') }}</button>
     </div>
-    {% block sidebar_top %}{% endblock %}
+    {% block sidebar_top %}
+    {% if tenant %}
+    <details class="dropdown tenant-menu">
+      <summary class="tenant-trigger" aria-label="{{ tenant.name }}"><span class="tenant-avatar">{{ tenant.initials }}</span><span class="tenant-name">{{ tenant.name }}</span>{{ icon('selector', 'icon-sm') }}</summary>
+      <div class="dropdown-menu left tenant-list">
+        {% for t in tenants %}
+        <a href="/server/{{ t.uuid_short }}"{% if t.uuid_short == tenant.uuid_short %} class="active"{% endif %}><span class="tenant-avatar sm">{{ t.initials }}</span><span class="truncate">{{ t.name }}</span></a>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
+    {% endblock %}
     <nav>
       {% for group in nav %}
-      <div>
-        {% if group.label %}<div class="nav-group-label">{{ group.label }}</div>{% endif %}
+      {% if group.label %}
+      <details class="nav-group" open data-persist="nav:{{ group.label }}">
+        <summary class="nav-group-label"><span>{{ group.label }}</span>{{ icon('chevron-up', 'icon-sm nav-group-chevron') }}</summary>
+      {% else %}
+      <div class="nav-group">
+      {% endif %}
         {% for item in group['items'] %}
         <a class="nav-item{% if item.active %} active{% endif %}" href="{{ item.url }}"{% if item.target %} target="{{ item.target }}"{% endif %}>
           {{ icon(item.icon or 'point', 'icon') }}<span>{{ item.label }}</span>
           {% if item.badge is not none and item.badge != '' %}<span class="badge{% if item.badge_color %} badge-{{ item.badge_color }}{% endif %}"{% if item.badge_tooltip %} title="{{ item.badge_tooltip }}"{% endif %}>{{ item.badge }}</span>{% endif %}
         </a>
         {% endfor %}
-      </div>
+      {% if group.label %}</details>{% else %}</div>{% endif %}
       {% endfor %}
     </nav>
+    {% if sidebar_only %}
+    <div class="sidebar-footer">
+      {{ notifications_trigger }}
+      <details class="dropdown user-menu">
+        <summary class="user-trigger" aria-label="{{ trans('filament-panels::layout.actions.open_user_menu.label') }}">{{ avatar }}<span class="user-name">{{ user.username }}</span>{{ icon('chevron-up', 'icon-sm') }}</summary>
+        <div class="dropdown-menu up left">{{ user_menu_items }}</div>
+      </details>
+    </div>
+    {% endif %}
   </aside>
+  <div class="sidebar-backdrop" data-nav-toggle></div>
   {% endif %}
   <div class="main">
+    {% if sidebar_only %}
+    <div class="mobile-bar">
+      <button type="button" class="icon-btn" data-nav-toggle aria-label="{{ trans('filament-panels::layout.actions.sidebar.expand.label') }}">{{ icon('menu-2') }}</button>
+    </div>
+    {% else %}
     <header class="topbar" aria-label="{{ trans('filament-panels::layout.topbar.label') }}">
       {% if nav %}<button type="button" class="icon-btn menu-toggle" data-nav-toggle aria-label="{{ trans('filament-panels::layout.actions.sidebar.expand.label') }}">{{ icon('menu-2') }}</button>{% endif %}
       {% if not nav %}<a class="brand" href="/">{% if app_logo %}<img src="{{ app_logo }}" alt="{{ trans('filament-panels::layout.logo.alt', name=app_name) }}">{% else %}{{ app_name }}{% endif %}</a>{% endif %}
       {% block topbar %}{% endblock %}
       <div class="spacer"></div>
       {% if user %}
-      <span id="notifications-trigger" hx-get="/_notifications/trigger" hx-trigger="load, every 30s" hx-swap="outerHTML">
-        <button type="button" class="icon-btn notifications-btn" data-modal-open="notifications" hx-get="/_notifications" hx-target="#notifications-panel" hx-swap="innerHTML" aria-label="{{ trans('filament-panels::layout.actions.open_database_notifications.label') }}">{{ icon('bell', 'icon') }}</button>
-      </span>
+      {{ notifications_trigger }}
       <details class="dropdown">
-        <summary aria-label="{{ trans('filament-panels::layout.actions.open_user_menu.label') }}"><span class="avatar" title="{{ user.username }}">{{ user.avatar }}{% if user.avatar_url %}<img src="{{ user.avatar_url }}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}</span></summary>
-        <div class="dropdown-menu">
-          <div class="head"><div style="font-weight:600">{{ user.username }}</div><div class="muted small truncate">{{ user.email }}</div></div>
-          <a href="/profile">{{ icon('user', 'icon-sm') }}{{ trans('profile.title') }}</a>
-          {% if user.admin and path is not startingwith('/admin') %}<a href="/admin">{{ icon('arrow-forward', 'icon-sm') }}{{ trans('profile.admin') }}</a>{% endif %}
-          {% for item in user_menu or [] %}
-          <a href="{{ item.url }}">{{ icon(item.icon, 'icon-sm') }}{{ item.label }}</a>
-          {% endfor %}
-          <hr>
-          <div class="row" style="justify-content:space-around;padding:0.25rem" role="group" aria-label="{{ trans('filament-panels::layout.actions.theme_switcher.label') }}">
-            <button type="button" class="icon-btn" style="width:2.25rem" onclick="setTheme('light')" title="{{ trans('filament-panels::layout.actions.theme_switcher.light.label') }}">{{ icon('sun', 'icon-sm') }}</button>
-            <button type="button" class="icon-btn" style="width:2.25rem" onclick="setTheme('dark')" title="{{ trans('filament-panels::layout.actions.theme_switcher.dark.label') }}">{{ icon('moon', 'icon-sm') }}</button>
-            <button type="button" class="icon-btn" style="width:2.25rem" onclick="setTheme('system')" title="{{ trans('filament-panels::layout.actions.theme_switcher.system.label') }}">{{ icon('device-desktop', 'icon-sm') }}</button>
-          </div>
-          <hr>
-          <form method="post" action="/logout">{{ csrf_field() }}<button type="submit">{{ icon('logout', 'icon-sm') }}{{ trans('filament-panels::layout.actions.logout.label') }}</button></form>
-        </div>
+        <summary aria-label="{{ trans('filament-panels::layout.actions.open_user_menu.label') }}">{{ avatar }}</summary>
+        <div class="dropdown-menu">{{ user_menu_items }}</div>
       </details>
       {% endif %}
     </header>
+    {% endif %}
     <main class="content" id="content">
       {% for b in plugin_banners or [] %}
       <div class="banner {{ b.status }}" data-banner="{{ b.id }}">{{ icon(b.icon, 'icon') }}<div>{% if b.title %}<strong>{{ b.title | safe }}</strong>{% endif %}{% if b.body %}<div>{{ b.body | safe }}</div>{% endif %}</div>{% if b.closeable %}<button type="button" class="icon-btn banner-close" onclick="this.parentElement.remove()" aria-label="Close">{{ icon('x', 'icon-sm') }}</button>{% endif %}</div>

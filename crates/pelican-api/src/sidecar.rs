@@ -328,6 +328,10 @@ pub async fn refresh(st: &AppState) -> ApiResult<()> {
     if status != 200 {
         return Err(fail(format!("sidecar manifest: HTTP {status}")));
     }
+    // Cached per-user answers are dropped when the plugins changed (not on every minute's refresh).
+    static LAST: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+    let raw = body.to_string();
+    let changed = LAST.lock().map(|mut l| l.replace(raw.clone()).as_deref() != Some(raw.as_str())).unwrap_or(true);
     let manifest: Manifest = serde_json::from_value(body).map_err(|e| fail(format!("sidecar manifest: {e}")))?;
     // The sidecar must be the original of the same version as the schema (ADR-0020).
     let ours = crate::application::plugins::config(st).panel_version_display;
@@ -339,6 +343,9 @@ pub async fn refresh(st: &AppState) -> ApiResult<()> {
     }
     if let Ok(mut m) = MANIFEST.write() {
         *m = accepted.then(|| Arc::new(manifest));
+    }
+    if changed {
+        clear_user_caches();
     }
     let lang = if accepted {
         match sc.call(reqwest::Method::GET, "/_bridge/lang", None).await? {
@@ -769,40 +776,96 @@ pub fn cached_avatar(st: &AppState, provider: &str, user_id: i64) -> Option<Stri
     None
 }
 
-type NavCache = std::collections::HashMap<(String, i64, String), (std::time::Instant, Vec<NavEntry>)>;
-static NAV: std::sync::Mutex<Option<NavCache>> = std::sync::Mutex::new(None);
+/// A cache of per-user sidecar answers (menus, render hooks, console actions) that never makes a
+/// page wait twice: a cached answer is returned at once and, once older than [`FRESH`],
+/// refreshed in the background; only the first request for a key waits for PHP.
+type SwrMap<K, V> = std::collections::HashMap<K, (std::time::Instant, V, bool)>;
+const FRESH: Duration = Duration::from_secs(30);
+
+async fn swr<K, V, Fut>(
+    cache: &'static std::sync::Mutex<Option<SwrMap<K, V>>>,
+    key: K,
+    fetch: impl FnOnce() -> Fut,
+) -> V
+where
+    K: std::hash::Hash + Eq + Clone + Send + 'static,
+    V: Clone + Default + Send + 'static,
+    Fut: std::future::Future<Output = Option<V>> + Send + 'static,
+{
+    let hit = cache.lock().ok().and_then(|g| g.as_ref().and_then(|c| c.get(&key).cloned()));
+    if let Some((at, value, refreshing)) = hit {
+        if at.elapsed() >= FRESH && !refreshing {
+            if let Ok(mut g) = cache.lock() {
+                if let Some(e) = g.get_or_insert_with(Default::default).get_mut(&key) {
+                    e.2 = true;
+                }
+            }
+            let fut = fetch();
+            tokio::spawn(async move {
+                let fresh = fut.await;
+                if let Ok(mut g) = cache.lock() {
+                    let map = g.get_or_insert_with(Default::default);
+                    match fresh {
+                        Some(v) => {
+                            map.insert(key, (std::time::Instant::now(), v, false));
+                        }
+                        // Keep what we had; the next page view tries again.
+                        None => {
+                            if let Some(e) = map.get_mut(&key) {
+                                e.2 = false;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        return value;
+    }
+    // First request: wait. A failed call is remembered as empty for a while too.
+    let value = fetch().await.unwrap_or_default();
+    if let Ok(mut g) = cache.lock() {
+        g.get_or_insert_with(Default::default).insert(key, (std::time::Instant::now(), value.clone(), false));
+    }
+    value
+}
+
+/// Forget cached per-user answers (the plugins changed: a new manifest).
+fn clear_user_caches() {
+    if let Ok(mut g) = NAV.lock() {
+        *g = None;
+    }
+    if let Ok(mut g) = HOOKS.lock() {
+        *g = None;
+    }
+    if let Ok(mut g) = ACTIONS.lock() {
+        *g = None;
+    }
+}
+
+static NAV: std::sync::Mutex<Option<SwrMap<(String, i64, String), Vec<NavEntry>>>> = std::sync::Mutex::new(None);
 
 /// The PHP plugins' navigation of a panel as `user` sees it (on server `tenant`): Filament
-/// hides pages whose `canAccess()` denies. Cached for 30 s per user, panel and server.
+/// hides pages whose `canAccess()` denies. Per user, panel and server ([`swr`]).
 pub async fn user_navigation(st: &AppState, panel: &str, user: i64, tenant: Option<&str>) -> Vec<NavEntry> {
     let Some(m) = manifest() else { return Vec::new() };
-    if !m.navigation.iter().any(|n| n.panel == panel) {
+    if !m.navigation.iter().any(|n| n.panel == panel) || is_down() {
         return Vec::new();
-    }
-    let key = (panel.to_string(), user, tenant.unwrap_or_default().to_string());
-    if let Some((at, items)) = NAV.lock().ok().and_then(|g| g.as_ref().and_then(|c| c.get(&key).cloned())) {
-        if at.elapsed() < Duration::from_secs(30) {
-            return items;
-        }
     }
     let Some(sc) = get(st) else { return Vec::new() };
-    if is_down() {
-        return Vec::new();
-    }
+    let key = (panel.to_string(), user, tenant.unwrap_or_default().to_string());
     let body = json!({ "panel": panel, "tenant": tenant });
-    let items: Vec<NavEntry> =
+    let panel = panel.to_string();
+    swr(&NAV, key, move || async move {
         match sc.call_as(reqwest::Method::POST, "/_bridge/navigation", Some(user), Some(&body)).await {
-            Ok((200, v)) => serde_json::from_value(v).unwrap_or_default(),
+            Ok((200, v)) => Some(serde_json::from_value(v).unwrap_or_default()),
             Ok((status, _)) => {
                 tracing::warn!(status, panel, "sidecar navigation failed");
-                Vec::new()
+                None
             }
-            Err(_) => Vec::new(),
-        };
-    if let Ok(mut g) = NAV.lock() {
-        g.get_or_insert_with(Default::default).insert(key, (std::time::Instant::now(), items.clone()));
-    }
-    items
+            Err(_) => None,
+        }
+    })
+    .await
 }
 
 /// An alert banner a plugin sent (`AlertBanner::make()->send()`), title and body sanitized HTML.
@@ -832,33 +895,25 @@ pub struct PageExtras {
     pub banners: Vec<Banner>,
 }
 
-type HookCache = std::collections::HashMap<(String, i64, String), (std::time::Instant, Arc<PageExtras>)>;
-static HOOKS: std::sync::Mutex<Option<HookCache>> = std::sync::Mutex::new(None);
+static HOOKS: std::sync::Mutex<Option<SwrMap<(String, i64, String), Arc<PageExtras>>>> = std::sync::Mutex::new(None);
 
 /// The PHP plugins' additions to a page of `panel` (`admin`, `app`, `server` with its `tenant`)
 /// as `user` (or a guest) sees it. Empty when no plugin registers hooks or acts on panel boot;
-/// cached for 30 s.
+/// per user, panel and server ([`swr`]).
 pub async fn render_hooks(st: &AppState, panel: &str, user: Option<i64>, tenant: Option<&str>) -> Arc<PageExtras> {
-    let empty = || Arc::new(PageExtras::default());
     if !manifest().is_some_and(|m| m.boots || !m.render_hooks.is_empty()) || is_down() {
-        return empty();
+        return Arc::default();
     }
+    let Some(sc) = get(st) else { return Arc::default() };
     let key = (panel.to_string(), user.unwrap_or(0), tenant.unwrap_or_default().to_string());
-    if let Some((at, extras)) = HOOKS.lock().ok().and_then(|g| g.as_ref().and_then(|c| c.get(&key).cloned())) {
-        if at.elapsed() < Duration::from_secs(30) {
-            return extras;
-        }
-    }
-    let Some(sc) = get(st) else { return empty() };
     let body = json!({ "panel": panel, "tenant": tenant });
-    let extras = match sc.call_as(reqwest::Method::POST, "/_bridge/hooks", user, Some(&body)).await {
-        Ok((200, v)) => Arc::new(serde_json::from_value(v).unwrap_or_default()),
-        _ => empty(),
-    };
-    if let Ok(mut g) = HOOKS.lock() {
-        g.get_or_insert_with(Default::default).insert(key, (std::time::Instant::now(), extras.clone()));
-    }
-    extras
+    swr(&HOOKS, key, move || async move {
+        match sc.call_as(reqwest::Method::POST, "/_bridge/hooks", user, Some(&body)).await {
+            Ok((200, v)) => Some(Arc::new(serde_json::from_value(v).unwrap_or_default())),
+            _ => None,
+        }
+    })
+    .await
 }
 
 /// An OAuth provider registered by a PHP plugin (its redirect and callback run in the sidecar).
@@ -892,33 +947,23 @@ pub struct ConsoleAction {
     pub color: Option<String>,
 }
 
-type ActionCache = std::collections::HashMap<(i64, String), (std::time::Instant, Vec<ConsoleAction>)>;
-static ACTIONS: std::sync::Mutex<Option<ActionCache>> = std::sync::Mutex::new(None);
+static ACTIONS: std::sync::Mutex<Option<SwrMap<(i64, String), Vec<ConsoleAction>>>> = std::sync::Mutex::new(None);
 
 /// The PHP plugins' console actions `user` can use on server `tenant` (run on the bridge's
-/// host page `/server/<tenant>/rs-console-action?action=<name>`); cached for 30 s.
+/// host page `/server/<tenant>/rs-console-action?action=<name>`); per user and server ([`swr`]).
 pub async fn console_actions(st: &AppState, user: i64, tenant: &str) -> Vec<ConsoleAction> {
     if !manifest().is_some_and(|m| !m.console_actions.is_empty()) || is_down() {
         return Vec::new();
     }
-    let key = (user, tenant.to_string());
-    if let Some((at, list)) = ACTIONS.lock().ok().and_then(|g| g.as_ref().and_then(|c| c.get(&key).cloned())) {
-        if at.elapsed() < Duration::from_secs(30) {
-            return list;
-        }
-    }
     let Some(sc) = get(st) else { return Vec::new() };
-    let list: Vec<ConsoleAction> = match sc
-        .call_as(reqwest::Method::POST, "/_bridge/console-actions", Some(user), Some(&json!({ "tenant": tenant })))
-        .await
-    {
-        Ok((200, v)) => serde_json::from_value(v).unwrap_or_default(),
-        _ => Vec::new(),
-    };
-    if let Ok(mut g) = ACTIONS.lock() {
-        g.get_or_insert_with(Default::default).insert(key, (std::time::Instant::now(), list.clone()));
-    }
-    list
+    let body = json!({ "tenant": tenant });
+    swr(&ACTIONS, (user, tenant.to_string()), move || async move {
+        match sc.call_as(reqwest::Method::POST, "/_bridge/console-actions", Some(user), Some(&body)).await {
+            Ok((200, v)) => Some(serde_json::from_value(v).unwrap_or_default()),
+            _ => None,
+        }
+    })
+    .await
 }
 
 /// Server features (Wings console listeners) of WASM and PHP plugins: `(id, listeners)`.

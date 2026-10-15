@@ -40,19 +40,171 @@ fn client() -> &'static reqwest::Client {
     })
 }
 
-/// The web router's fallback: proxy to the sidecar or answer 404.
+/// The web router's fallback: proxy to the sidecar or answer 404. A plugin's Filament page is
+/// shown inside pelican-rs's own panel layout ([`transplant`]).
 pub async fn fallback(web: Web, req: Request) -> Response {
     let path = req.uri().path().to_string();
     let Some(sc) = sidecar::get(&web.st).filter(|_| sidecar::owns(&path)) else {
         return WebError::NotFound.into_response();
     };
-    match forward(&sc, &web, req).await {
+    let h = req.headers();
+    let page_request = req.method() == axum::http::Method::GET
+        && !h.contains_key("x-livewire")
+        && !h.contains_key("hx-request")
+        && h.get(header::ACCEPT).and_then(|v| v.to_str().ok()).is_some_and(|a| a.contains("text/html"));
+    let resp = match forward(&sc, &web, req).await {
         Ok(resp) => resp,
         Err(e) => {
             tracing::warn!(error = %e, path, "sidecar proxy failed");
-            (StatusCode::SERVICE_UNAVAILABLE, "The plugin service is unavailable.").into_response()
+            return (StatusCode::SERVICE_UNAVAILABLE, "The plugin service is unavailable.").into_response();
         }
+    };
+    let html = resp.status() == StatusCode::OK
+        && resp
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|c| c.starts_with("text/html"));
+    if !(page_request && html && web.user.is_some()) {
+        return resp;
     }
+    let (parts, body) = resp.into_parts();
+    let Ok(bytes) = axum::body::to_bytes(body, 32 * 1024 * 1024).await else {
+        return (StatusCode::BAD_GATEWAY, "The plugin service sent an unreadable page.").into_response();
+    };
+    let page = String::from_utf8_lossy(&bytes);
+    let Some(t) = transplant(&page) else {
+        return Response::from_parts(parts, Body::from(bytes));
+    };
+    let mut out = match in_panel(web, &path, t).await {
+        Some(r) => r,
+        None => return Response::from_parts(parts, Body::from(bytes)),
+    };
+    // The sidecar's session and XSRF cookies (Livewire needs them on the next request).
+    for c in parts.headers.get_all(header::SET_COOKIE) {
+        out.headers_mut().append(header::SET_COOKIE, c.clone());
+    }
+    out
+}
+
+/// A plugin's Filament page cut out of the sidecar's layout: its head (styles, scripts), the
+/// page (`main.fi-main`, as a `div`) and what follows the layout in `body` (Livewire, Filament's
+/// scripts and notifications). Cut along marker comments so the markup stays as sent.
+#[derive(Debug, PartialEq)]
+pub struct Transplant {
+    pub title: Option<String>,
+    pub head: String,
+    pub main: String,
+    pub tail: String,
+}
+
+const HEAD_START: &str = "<!--pelican-rs:head-->";
+const HEAD_END: &str = "<!--/pelican-rs:head-->";
+const MAIN_START: &str = "<!--pelican-rs:main-->";
+const MAIN_END: &str = "<!--/pelican-rs:main-->";
+const TAIL_START: &str = "<!--pelican-rs:tail-->";
+
+pub fn transplant(html: &str) -> Option<Transplant> {
+    use lol_html::html_content::ContentType;
+    use lol_html::{RewriteStrSettings, element, rewrite_str, text};
+    if !html.contains("fi-layout") {
+        return None;
+    }
+    let title = std::cell::RefCell::new(String::new());
+    let out = rewrite_str(
+        html,
+        RewriteStrSettings {
+            element_content_handlers: vec![
+                element!("head", |el| {
+                    el.prepend(HEAD_START, ContentType::Html);
+                    el.append(HEAD_END, ContentType::Html);
+                    Ok(())
+                }),
+                text!("head > title", |t| {
+                    title.borrow_mut().push_str(t.as_str());
+                    Ok(())
+                }),
+                // pelican-rs's page has its own; the sidecar's CSRF token is on Livewire's script tag.
+                element!(
+                    "head > title, head > meta[charset], head > meta[name=viewport], head > meta[name=csrf-token], head > link[rel=icon], head > link[rel=\"shortcut icon\"]",
+                    |el| {
+                        el.remove();
+                        Ok(())
+                    }
+                ),
+                element!("main.fi-main", |el| {
+                    el.before(MAIN_START, ContentType::Html);
+                    el.after(MAIN_END, ContentType::Html);
+                    el.set_tag_name("div")?;
+                    Ok(())
+                }),
+                element!("body > .fi-layout", |el| {
+                    el.after(TAIL_START, ContentType::Html);
+                    Ok(())
+                }),
+                // The sidebar's notification slide-over (pelican-rs has its own bell).
+                element!("#database-notifications", |el| {
+                    el.remove();
+                    Ok(())
+                }),
+            ],
+            ..RewriteStrSettings::new()
+        },
+    )
+    .ok()?;
+    let between = |a: &str, b: &str| -> Option<String> {
+        let start = out.find(a)? + a.len();
+        let end = start + out[start..].find(b)?;
+        Some(out[start..end].to_string())
+    };
+    let tail_start = out.find(TAIL_START)? + TAIL_START.len();
+    let tail_end = out.rfind("</body>").filter(|e| *e >= tail_start).unwrap_or(out.len());
+    // Blade indents the title over several lines.
+    let title = title.into_inner().split_whitespace().collect::<Vec<_>>().join(" ");
+    Some(Transplant {
+        title: (!title.is_empty()).then(|| html_unescape(&title)),
+        head: between(HEAD_START, HEAD_END)?,
+        main: between(MAIN_START, MAIN_END)?,
+        tail: out[tail_start..tail_end].to_string(),
+    })
+}
+
+/// The entities Blade's `{{ }}` produces (`htmlspecialchars`).
+fn html_unescape(s: &str) -> String {
+    s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#039;", "'").replace("&amp;", "&")
+}
+
+/// Render a transplanted page in the layout of its panel: the server panel (`/server/{id}/…`),
+/// the admin panel (`/admin/…`), else the app panel. None when the user may not see that panel.
+async fn in_panel(web: Web, path: &str, t: Transplant) -> Option<Response> {
+    const TPL: &str = "plugins/sidecar_page.html";
+    let user = web.user.clone()?;
+    let authed = crate::ctx::Authed { web, user };
+    let app_name = authed.st.config.app_name.clone();
+    let title = t.title.map(|s| s.strip_suffix(&format!(" - {app_name}")).map(str::to_string).unwrap_or(s));
+    let ctx = minijinja::context! {
+        title => title,
+        sidecar_head => t.head,
+        sidecar_main => t.main,
+        sidecar_tail => t.tail,
+        // The page shows the plugins' alert banners itself (PanelsRenderHook::PAGE_START).
+        plugin_banners => Vec::<String>::new(),
+    };
+    let mut segs = path.trim_start_matches('/').split('/');
+    let rendered = match segs.next() {
+        Some("server") => {
+            let panel = crate::server::load(authed, segs.next()?).await.ok()?;
+            panel.page(path, TPL, ctx)
+        }
+        Some("admin") => {
+            if !authed.user.is_admin() {
+                return None;
+            }
+            crate::admin::Admin(authed).page(path, TPL, ctx).await
+        }
+        _ => authed.render(TPL, ctx),
+    };
+    Some(rendered.unwrap_or_else(IntoResponse::into_response))
 }
 
 /// Proxy a request a pelican-rs route handler gives up to the sidecar (plugin OAuth
@@ -142,6 +294,23 @@ async fn forward(sc: &sidecar::Sidecar, web: &Web, req: Request) -> Result<Respo
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn transplant_cuts_the_page_out_of_the_layout() {
+        let html = r#"<!DOCTYPE html><html class="fi"><head><meta charset="utf-8"><meta name="csrf-token" content="x"><title>Players - Nuvira panel</title><link rel="stylesheet" href="/css/filament/filament/app.css"><style>.a{}</style></head><body class="fi-body"><a class="fi-skip-link">skip</a><div class="fi-layout"><aside class="fi-sidebar">nav</aside><div class="fi-main-ctn"><main id="fi-main-content" class="fi-main"><div wire:id="1" wire:snapshot="{&quot;a&quot;:1}"><template x-if="open"><b>x</b></template></div></main><footer>f</footer></div></div><div wire:id="2">toasts</div><div id="database-notifications">bell</div><script src="/livewire/livewire.min.js" data-csrf="t"></script></body></html>"#;
+        let t = super::transplant(html).expect("a Filament page");
+        assert_eq!(t.title.as_deref(), Some("Players - Nuvira panel"));
+        assert_eq!(t.head, r#"<link rel="stylesheet" href="/css/filament/filament/app.css"><style>.a{}</style>"#);
+        assert_eq!(
+            t.main,
+            r#"<div id="fi-main-content" class="fi-main"><div wire:id="1" wire:snapshot="{&quot;a&quot;:1}"><template x-if="open"><b>x</b></template></div></div>"#
+        );
+        assert_eq!(
+            t.tail,
+            r#"<div wire:id="2">toasts</div><script src="/livewire/livewire.min.js" data-csrf="t"></script>"#
+        );
+        assert!(super::transplant("<html><body>plain plugin route</body></html>").is_none());
+    }
+
     #[test]
     fn own_session_cookie_stays() {
         assert_eq!(

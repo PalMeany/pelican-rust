@@ -1,0 +1,8 @@
+{#
+  A PHP plugin's Filament page (sidecar_proxy::transplant): its styles and scripts, the page
+  itself and Livewire/Filament's trailing scripts, inside pelican-rs's panel layout.
+#}
+{% extends "layouts/panel.html" %}
+{% block head %}{{ sidecar_head | safe }}{% endblock %}
+{% block content %}<div class="sidecar-page">{{ sidecar_main | safe }}</div>{% endblock %}
+{% block body_end %}{{ sidecar_tail | safe }}{% endblock %}

@@ -6,7 +6,10 @@
 <meta name="csrf-token" content="{{ csrf }}">
 <title>{% block title %}{{ title }}{% endblock %} - {{ app_name }}</title>
 <link rel="icon" href="{{ asset('pelican.ico') }}">
-<link rel="stylesheet" href="{{ asset('css/app.css') }}">
+{% if sidecar_head %}{# A plugin page of the PHP sidecar: pelican-rs's styles sit between Tailwind's reset (`base`) and
+   Filament's components, so the layout keeps its look and the page keeps Filament's. #}
+<style>@layer properties, theme, base, pelican-rs, components, utilities; @import url("{{ asset('css/app.css') | safe }}") layer(pelican-rs);</style>
+{% else %}<link rel="stylesheet" href="{{ asset('css/app.css') }}">{% endif %}
 <script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 <script src="{{ asset('vendor/htmx/htmx.min.js') }}" defer></script>
 <script src="{{ asset('js/app.js') }}" defer></script>
@@ -18,6 +21,8 @@
   "too_many": "Too Many Requests",
   "error": "Error",
 } | tojson }};</script>
+{# Pages are fetched ahead when the pointer rests on a link (Chromium), so they open at once. #}
+<script type="speculationrules">{"prefetch":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":["/logout","/auth/*","/installer/*","/*download*","/*/rs-console-action*","/_notifications/*"]}},{"not":{"selector_matches":"[target=_blank],[download],[data-no-prefetch]"}}]},"eagerness":"moderate"}]}</script>
 {% block head %}{% endblock %}
 {% for h in ['panels::head.start', 'panels::styles.before', 'panels::styles.after', 'panels::head.end'] %}{{ plugin_hooks[h] | safe if plugin_hooks[h] }}{% endfor %}
 </head>
@@ -36,5 +41,6 @@
     <button type="button" class="btn btn-danger" data-confirm-ok>{{ trans('filament-actions::modal.actions.confirm.label') }}</button>
   </div>
 </dialog>
+{% block body_end %}{% endblock %}
 </body>
 </html>

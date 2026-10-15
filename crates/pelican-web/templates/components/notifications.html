@@ -4,9 +4,9 @@
 #}
 {% block trigger %}
 <span id="notifications-trigger" hx-get="/_notifications/trigger" hx-trigger="every 30s" hx-swap="outerHTML"{% if oob %} hx-swap-oob="true"{% endif %}>
-  <button type="button" class="icon-btn notifications-btn" data-modal-open="notifications" hx-get="/_notifications" hx-target="#notifications-panel" hx-swap="innerHTML"
+  <button type="button" class="notifications-btn" data-modal-open="notifications" hx-get="/_notifications" hx-target="#notifications-panel" hx-swap="innerHTML"
     aria-label="{% if unread %}{{ trans_choice('filament-panels::layout.actions.open_database_notifications.label_with_unread_count', unread, count=unread) }}{% else %}{{ trans('filament-panels::layout.actions.open_database_notifications.label') }}{% endif %}">
-    {{ icon('bell', 'icon') }}{% if unread %}<span class="notifications-count">{{ unread }}</span>{% endif %}
+    {{ icon('bell', 'icon') }}<span class="notifications-label">{{ trans('filament-panels::layout.actions.open_database_notifications.label') }}</span>{% if unread %}<span class="notifications-count">{{ unread }}</span>{% endif %}
   </button>
 </span>
 {% endblock %}

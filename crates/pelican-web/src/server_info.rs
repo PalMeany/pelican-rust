@@ -173,9 +173,10 @@ pub async fn details(st: &AppState, server: &servers::Model, node: &nodes::Model
         return json!({ "state": "missing", "utilization": {} });
     }
     let key = format!("servers.{}.details", server.uuid);
-    crate::cache::remember(&key, Duration::from_secs(15), || async {
-        let Ok(conn) = st.node_conn(node) else { return json!({ "state": "missing" }) };
-        let path = format!("/api/servers/{}", server.uuid);
+    let (st, node, uuid) = (st.clone(), node.clone(), server.uuid.clone());
+    crate::cache::remember_swr(&key, Duration::from_secs(15), move || async move {
+        let Ok(conn) = st.node_conn(&node) else { return json!({ "state": "missing" }) };
+        let path = format!("/api/servers/{uuid}");
         let mut call = pelican_wings::client::Call::new(pelican_wings::client::Method::GET, &path);
         call.timeout = Some(Duration::from_secs(1));
         call.connect_timeout = Some(Duration::from_secs(1));
@@ -198,8 +199,9 @@ async fn wings_get(st: &AppState, node: &nodes::Model, path: &str, timeout: u64,
 /// `Node::statistics()` (`/api/system/utilization`, zeros when unreachable).
 pub async fn node_statistics(st: &AppState, node: &nodes::Model) -> Value {
     let key = format!("nodes.{}.statistics", node.id.0);
-    crate::cache::remember(&key, Duration::from_secs(5), || async {
-        match wings_get(st, node, "/api/system/utilization", 1, 1).await {
+    let (st, node) = (st.clone(), node.clone());
+    crate::cache::remember_swr(&key, Duration::from_secs(5), move || async move {
+        match wings_get(&st, &node, "/api/system/utilization", 1, 1).await {
             Some(v) if v.get("memory_total").is_some_and(|m| m.as_f64().unwrap_or(0.0) > 0.0) => v,
             _ => json!({
                 "memory_total": 0, "memory_used": 0, "swap_total": 0, "swap_used": 0,
@@ -214,8 +216,9 @@ pub async fn node_statistics(st: &AppState, node: &nodes::Model) -> Value {
 /// `Node::systemInformation()` (`/api/system`; `{exception}` when unreachable).
 pub async fn node_system_information(st: &AppState, node: &nodes::Model) -> Value {
     let key = format!("nodes.{}.system_information", node.id.0);
-    crate::cache::remember(&key, Duration::from_secs(30), || async {
-        match wings_get(st, node, "/api/system", 15, 3).await {
+    let (st, node) = (st.clone(), node.clone());
+    crate::cache::remember_swr(&key, Duration::from_secs(30), move || async move {
+        match wings_get(&st, &node, "/api/system", 15, 3).await {
             Some(v) if v.get("cpu_count").is_some() => v,
             _ => json!({ "exception": "Could not connect" }),
         }

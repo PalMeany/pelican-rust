@@ -29,7 +29,10 @@
   --radius-sm: 0.5rem;
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  --sidebar-w: 16rem;
+  --sidebar-w: 20rem;
+  --nav-text: var(--gray-700);
+  --nav-active: var(--gray-100);
+  --nav-accent: var(--primary-700);
   color-scheme: light;
 }
 
@@ -40,6 +43,7 @@
     --text: #fff; --text-2: var(--gray-400); --text-3: var(--gray-500);
     --input-bg: rgb(255 255 255 / 0.05); --hover: rgb(255 255 255 / 0.05); --muted-bg: var(--gray-700);
     --ring: var(--primary-500); --shadow: none; --shadow-lg: 0 10px 30px -5px rgb(0 0 0 / 0.6);
+    --nav-text: var(--gray-200); --nav-active: rgb(255 255 255 / 0.05); --nav-accent: var(--primary-400);
     color-scheme: dark;
   }
 }
@@ -49,6 +53,7 @@
   --text: #fff; --text-2: var(--gray-400); --text-3: var(--gray-500);
   --input-bg: rgb(255 255 255 / 0.05); --hover: rgb(255 255 255 / 0.05); --muted-bg: var(--gray-700);
   --ring: var(--primary-500); --shadow: none; --shadow-lg: 0 10px 30px -5px rgb(0 0 0 / 0.6);
+  --nav-text: var(--gray-200); --nav-active: rgb(255 255 255 / 0.05); --nav-accent: var(--primary-400);
   color-scheme: dark;
 }
 
@@ -69,37 +74,82 @@ img { max-width: 100%; }
 .icon-lg { width: 1.5rem; height: 1.5rem; flex-shrink: 0; }
 .icon-xl { width: 3rem; height: 3rem; flex-shrink: 0; }
 
-/* ---------- layout ---------- */
+/* ---------- layout (Filament's panel layout: sidebar 20rem on the page background) ---------- */
 .shell { display: flex; min-height: 100vh; }
-.sidebar { width: var(--sidebar-w); flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border);
-  position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; }
-.sidebar-head { height: 4rem; display: flex; align-items: center; gap: 0.75rem; padding: 0 1.5rem; border-bottom: 1px solid var(--border); }
-.sidebar nav { padding: 1rem 0.75rem; display: flex; flex-direction: column; gap: 1.25rem; }
-.nav-group-label { font-size: 0.75rem; font-weight: 600; color: var(--text-2); padding: 0 0.75rem 0.25rem; }
-.nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border-radius: var(--radius-sm);
-  color: var(--text); font-weight: 500; }
-.nav-item .icon { color: var(--text-3); }
-.nav-item:hover { background: var(--hover); text-decoration: none; }
-.nav-item.active { background: var(--hover); color: var(--primary-600); }
-.nav-item.active .icon { color: var(--primary-600); }
+.sidebar { width: var(--sidebar-w); flex-shrink: 0; background: var(--bg); position: sticky; top: 0; height: 100vh;
+  overflow-y: auto; display: flex; flex-direction: column; }
+.shell:not(.sidebar-only) .sidebar { border-right: 1px solid var(--border); background: var(--surface); }
+.sidebar-head { height: 4rem; flex-shrink: 0; display: flex; align-items: center; gap: 0.75rem; padding: 0 1.75rem; }
+.sidebar-head .brand { display: flex; align-items: center; font-weight: 700; font-size: 1.25rem; line-height: 1.25rem; color: var(--text); letter-spacing: -0.025em; }
+.sidebar-head .brand:hover { text-decoration: none; }
+.sidebar-head .brand img { height: 2rem; }
+.sidebar-head .sidebar-close { display: none; margin-left: auto; }
+.sidebar nav { flex: 1; padding: 2rem 1rem 1rem; display: flex; flex-direction: column; gap: 1.75rem; }
+.nav-group { display: flex; flex-direction: column; gap: 0.25rem; }
+details.nav-group > summary { list-style: none; cursor: pointer; }
+details.nav-group > summary::-webkit-details-marker { display: none; }
+.nav-group-label { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; font-size: 0.875rem; font-weight: 500; color: var(--text-2); }
+.nav-group-label > span { flex: 1; }
+.nav-group-chevron { color: var(--text-3); transition: transform 0.15s; }
+details.nav-group:not([open]) .nav-group-chevron { transform: rotate(180deg); }
+.nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; border-radius: 0.5rem; min-height: 2.5rem;
+  color: var(--nav-text); font-size: 0.875rem; font-weight: 500; }
+.nav-item .icon { width: 1.5rem; height: 1.5rem; color: var(--text-3); }
+.nav-item > span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-item:hover { background: var(--nav-active); text-decoration: none; }
+.nav-item.active { background: var(--nav-active); color: var(--nav-accent); }
+.nav-item.active .icon { color: var(--nav-accent); }
 .nav-item .badge { margin-left: auto; }
+/* The server switcher (Filament's tenant menu). */
+.tenant-menu { margin: 0 1rem; }
+.tenant-trigger { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 500; color: var(--nav-text); }
+.tenant-trigger:hover, .tenant-menu[open] .tenant-trigger { background: var(--nav-active); }
+.tenant-trigger .icon-sm { color: var(--text-3); margin-left: auto; }
+.tenant-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tenant-avatar { width: 2rem; height: 2rem; flex-shrink: 0; border-radius: 0.375rem; background: var(--gray-950); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; }
+.tenant-avatar.sm { width: 1.5rem; height: 1.5rem; font-size: 0.625rem; }
+.tenant-list { width: 100%; max-height: 60vh; overflow-y: auto; }
+.tenant-list a.active { color: var(--nav-accent); }
+/* The bottom of the sidebar without a topbar: notifications and the user menu. */
+.sidebar-footer { position: sticky; bottom: 0; background: inherit; display: flex; flex-direction: column; gap: 0.75rem; padding: 0.75rem 1rem 1.5rem; }
+.sidebar-footer .notifications-btn, .user-trigger { display: flex; align-items: center; gap: 0.75rem; width: 100%; padding: 0.5rem; border: 0;
+  border-radius: 0.5rem; background: none; color: var(--nav-text); font: inherit; font-size: 0.875rem; font-weight: 500; cursor: pointer; text-align: left; }
+.sidebar-footer .notifications-btn:hover, .user-trigger:hover, .user-menu[open] .user-trigger { background: var(--nav-active); }
+.sidebar-footer .notifications-btn .icon { width: 1.5rem; height: 1.5rem; color: var(--text-3); }
+.sidebar-footer .notifications-label, .user-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-footer .notifications-count { position: static; min-width: 1.5rem; height: 1.25rem; line-height: 1.25rem; border-radius: 0.375rem;
+  background: rgb(59 130 246 / 0.1); color: var(--primary-600); font-size: 0.75rem; }
+.user-trigger .icon-sm { color: var(--text-3); }
+.dropdown-menu.up { top: auto; bottom: calc(100% + 0.5rem); }
+.user-menu .dropdown-menu { width: 100%; }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .topbar { height: 4rem; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center;
   gap: 1rem; padding: 0 1.5rem; position: sticky; top: 0; z-index: 20; }
 .topbar .brand { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; font-size: 1.125rem; color: var(--text); }
 .topbar .brand img { height: 2rem; }
 .topbar .spacer { flex: 1; }
+.topbar .notifications-btn { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem;
+  border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-3); cursor: pointer; }
+.topbar .notifications-btn:hover { background: var(--hover); color: var(--text-2); }
+.topbar .notifications-label { display: none; }
 .topnav { display: flex; gap: 0.25rem; overflow-x: auto; }
-.content { width: 100%; max-width: 96rem; margin: 0 auto; padding: 2rem 1.5rem 4rem; display: flex; flex-direction: column; gap: 1.5rem; }
+.mobile-bar { display: none; }
+.content { width: 100%; max-width: 96rem; margin: 0 auto; padding: 2rem 2rem 4rem; display: flex; flex-direction: column; gap: 1.5rem; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-.page-head h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
-.page-head .sub { color: var(--text-2); margin-top: 0.25rem; }
+.page-head h1 { font-size: 1.875rem; line-height: 2.25rem; font-weight: 700; letter-spacing: -0.025em; }
+.page-head .sub { color: var(--text-2); margin-top: 0.5rem; font-size: 1.125rem; }
 .page-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
 .topbar .menu-toggle { display: none; }
+.sidebar-backdrop { display: none; }
 @media (max-width: 1023px) {
-  .sidebar { position: fixed; z-index: 40; left: 0; transform: translateX(-100%); transition: transform 0.2s; box-shadow: var(--shadow-lg); }
+  .sidebar { position: fixed; z-index: 40; left: 0; transform: translateX(-100%); transition: transform 0.2s; box-shadow: var(--shadow-lg);
+    background: var(--surface); }
   .shell.nav-open .sidebar { transform: none; }
+  .shell.nav-open .sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 39; background: rgb(9 9 11 / 0.5); }
+  .sidebar-head .sidebar-close { display: inline-flex; }
   .topbar .menu-toggle { display: inline-flex; }
+  .mobile-bar { display: flex; align-items: center; height: 4rem; padding: 0 1rem; position: sticky; top: 0; z-index: 20; background: var(--bg); }
   .content { padding: 1.5rem 1rem 3rem; }
 }
 
@@ -411,3 +461,11 @@ dialog.modal.slide-over { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; 
 .notifications-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; padding: 3rem 1.5rem; text-align: center; }
 .notifications-empty-icon { width: 3rem; height: 3rem; border-radius: 50%; background: var(--muted-bg); color: var(--text-2); display: flex; align-items: center; justify-content: center; }
 .notifications-empty h2 { font-size: 1.125rem; font-weight: 600; }
+
+/* Page loads: a bar along the top from the click until the next page shows. */
+html.nav-loading::before { content: ""; position: fixed; inset: 0 0 auto 0; height: 3px; z-index: 10000; background: var(--primary-600);
+  transform-origin: left; animation: nav-progress 6s cubic-bezier(0.1, 0.7, 0.2, 1) forwards; }
+@keyframes nav-progress { from { transform: scaleX(0.05); } to { transform: scaleX(0.95); } }
+
+/* A PHP plugin's Filament page inside our layout: our content area already pads and centers it. */
+.sidecar-page > .fi-main { padding: 0; margin: 0; max-width: none; width: 100%; }

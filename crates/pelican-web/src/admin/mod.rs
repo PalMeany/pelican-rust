@@ -248,7 +248,7 @@ impl Admin {
             let entry = NavItem {
                 url: n.path.clone(),
                 icon: crate::sidecar_proxy::icon(n.icon.as_deref()),
-                active: false,
+                active: active == n.path || active.starts_with(&format!("{}/", n.path)),
                 label: n.label.clone(),
                 badge: None,
                 badge_color: None,

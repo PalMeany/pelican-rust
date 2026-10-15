@@ -22,7 +22,7 @@ use crate::server_info::{self, ContainerStatus};
 use crate::table::{Action, Cell, Column, Filter, ListParams, Row, Tab, Table, threshold_color};
 
 /// `User::accessibleServers()` as a `where` fragment over `servers`.
-fn accessible(user: &AuthUser) -> (String, Vec<Value>) {
+pub(crate) fn accessible(user: &AuthUser) -> (String, Vec<Value>) {
     let me = user.id();
     let direct = "({servers.owner_id} = ? or exists (select 1 from {subusers} where {subusers.server_id} = {servers.id} and {subusers.user_id} = ?))";
     if user.gate_before("viewList server") {

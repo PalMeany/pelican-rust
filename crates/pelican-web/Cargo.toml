@@ -7,6 +7,7 @@ description = "Web UI of pelican-rs: SSR (minijinja) + htmx (ADR-0005, ADR-0013)
 
 [dependencies]
 ammonia = "4"
+lol_html = "2"
 pelican-core = { path = "../pelican-core" }
 pelican-api = { path = "../pelican-api" }
 pelican-plugins = { path = "../pelican-plugins" }

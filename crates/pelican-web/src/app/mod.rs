@@ -2,7 +2,7 @@
 
 mod profile;
 pub(crate) use profile::languages;
-mod servers;
+pub(crate) mod servers;
 
 use axum::Router;
 use axum::routing::{get, post};

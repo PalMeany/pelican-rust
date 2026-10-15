@@ -60,6 +60,8 @@ pub struct ServerPanel {
     webhooks: Option<u64>,
     /// PHP plugins' pages of the server panel this user may open (ADR-0020).
     sidecar_nav: Vec<pelican_api::sidecar::NavEntry>,
+    /// The servers of the sidebar's server switcher.
+    tenants: Vec<TenantView>,
 }
 
 impl std::ops::Deref for ServerPanel {
@@ -109,7 +111,7 @@ impl<S: Send + Sync> FromRequestParts<S> for RecordId {
 const CONFLICT_BLOCKED: &[&str] =
     &["files", "backups", "schedules", "users", "databases", "network", "startup", "settings", "mounts"];
 
-async fn load(authed: Authed, id: &str) -> Result<ServerPanel, WebError> {
+pub(crate) async fn load(authed: Authed, id: &str) -> Result<ServerPanel, WebError> {
     let db = &authed.st.db;
     let server =
         servers::Entity::find().filter(servers::Column::UuidShort.eq(id)).one(db).await?.ok_or(WebError::NotFound)?;
@@ -151,7 +153,32 @@ async fn load(authed: Authed, id: &str) -> Result<ServerPanel, WebError> {
     };
     let sidecar_nav =
         crate::sidecar_proxy::nav(&authed.st, "server", authed.user.id(), Some(server.uuid_short.as_str())).await;
-    Ok(ServerPanel { authed, server, node, perms, transfer, webhooks, sidecar_nav })
+    let tenants = tenants(&authed).await?;
+    Ok(ServerPanel { authed, server, node, perms, transfer, webhooks, sidecar_nav, tenants })
+}
+
+/// A server in the sidebar's server switcher (Filament's tenant menu).
+#[derive(Serialize, Clone)]
+pub struct TenantView {
+    name: String,
+    uuid_short: String,
+    initials: String,
+}
+
+impl TenantView {
+    fn of(s: &servers::Model) -> Self {
+        TenantView { name: s.name.clone(), uuid_short: s.uuid_short.clone(), initials: crate::ctx::avatar(&s.name) }
+    }
+}
+
+/// `User::getTenants()`: `accessibleServers()`, in id order.
+async fn tenants(authed: &Authed) -> Result<Vec<TenantView>, WebError> {
+    use sea_orm::FromQueryResult;
+    let (acc, vals) = crate::app::servers::accessible(&authed.user);
+    let b = authed.st.db.get_database_backend();
+    let sql = format!("select * from {{servers}} where {acc} order by {{servers.id}}");
+    let rows = servers::Model::find_by_statement(pelican_db::raw::stmt(b, &sql, vals)).all(&authed.st.db).await?;
+    Ok(rows.iter().map(TenantView::of).collect())
 }
 
 #[derive(Serialize)]
@@ -241,18 +268,28 @@ impl ServerPanel {
                 badge_tooltip: None,
             });
         }
-        // PHP plugins' pages of the tenant-scoped server panel (ADR-0020): `/server/{tenant}/<slug>`.
+        // PHP plugins' pages of the tenant-scoped server panel (ADR-0020): `/server/{tenant}/<slug>`,
+        // in their navigation groups after the core's items. `active` is the page's path there.
+        let mut groups: Vec<NavGroup> = Vec::new();
         for n in &self.sidecar_nav {
             let rest = n.path.strip_prefix("/server").unwrap_or(&n.path);
-            items.push(NavItem {
+            let url = format!("{base}{rest}");
+            let item = NavItem {
                 label: n.label.clone(),
-                url: format!("{base}{rest}"),
+                active: active == url || active.starts_with(&format!("{url}/")),
+                url,
                 icon: crate::sidecar_proxy::icon(n.icon.as_deref()),
-                active: false,
                 badge: None,
                 badge_color: None,
                 badge_tooltip: None,
-            });
+            };
+            match n.group.as_deref().filter(|g| !g.is_empty()) {
+                None => items.push(item),
+                Some(g) => match groups.iter_mut().find(|grp| grp.label.as_deref() == Some(g)) {
+                    Some(grp) => grp.items.push(item),
+                    None => groups.push(NavGroup { label: Some(g.to_string()), items: vec![item] }),
+                },
+            }
         }
         if self.user.is_admin() && self.user.can_view_server(self.node.id.0) {
             items.push(NavItem {
@@ -265,7 +302,9 @@ impl ServerPanel {
                 badge_tooltip: None,
             });
         }
-        vec![NavGroup { label: None, items }]
+        let mut nav = vec![NavGroup { label: None, items }];
+        nav.extend(groups);
+        nav
     }
 
     /// Render a server panel page (sidebar, conflict banner, user menu).
@@ -293,6 +332,8 @@ impl ServerPanel {
                     home_url => "/",
                     server => Value::from_serialize(&view),
                     server_base => self.base_url(),
+                    tenant => Value::from_serialize(TenantView::of(&self.server)),
+                    tenants => Value::from_serialize(&self.tenants),
                 }
             },
         )

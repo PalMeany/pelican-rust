@@ -400,4 +400,20 @@
   });
 
   document.addEventListener('DOMContentLoaded', () => flushFlash(document));
+
+  // ----- page loads: a progress bar as soon as a link or form starts one -----
+  const loading = (on) => document.documentElement.classList.toggle('nav-loading', on);
+  document.addEventListener('click', (e) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target.closest('a[href]');
+    if (!a || a.target === '_blank' || a.hasAttribute('download') || a.hasAttribute('hx-get')) return;
+    const url = new URL(a.href, location.href);
+    if (url.origin !== location.origin || (url.pathname === location.pathname && url.search === location.search)) return;
+    loading(true);
+  });
+  document.addEventListener('submit', (e) => {
+    const f = e.target;
+    if (!e.defaultPrevented && !f.matches('[hx-post],[hx-get],[hx-put],[hx-delete],[target=_blank]')) loading(true);
+  });
+  window.addEventListener('pageshow', () => loading(false));
 })();

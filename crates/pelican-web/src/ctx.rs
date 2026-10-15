@@ -68,7 +68,7 @@ struct UserView<'a> {
 }
 
 /// Gravatar-like initials avatar (Filament's default `ui-avatars` provider, inlined).
-fn avatar(name: &str) -> String {
+pub(crate) fn avatar(name: &str) -> String {
     let initials: String = name
         .split([' ', '_', '-', '.'])
         .filter_map(|p| p.chars().next())
@@ -124,6 +124,13 @@ impl Web {
                 avatar_url: crate::models::avatar_url(&self.st, &u.user),
             })
         });
+        // `top_navigation` customization: `sidebar`, `topbar` or `mixed` (old values: true = topbar).
+        let nav_mode =
+            self.user.as_ref().map(|u| match crate::models::customization(&self.st, &u.user).get("top_navigation") {
+                Some(serde_json::Value::Bool(true)) => "topbar".to_string(),
+                Some(serde_json::Value::String(s)) if s == "topbar" || s == "mixed" => s.clone(),
+                _ => "sidebar".to_string(),
+            });
         let flash = self.session.take_flash();
         // `->brandLogo(config('app.logo'))`: the logo, else the brand name as text; the footer
         // (resources/views/filament/layouts/footer.blade.php) names the panel and Pelican.
@@ -135,6 +142,7 @@ impl Web {
         };
         context! {
             app_name => app_name,
+            nav_mode => nav_mode,
             app_logo => self.st.config.env.string("APP_LOGO").unwrap_or_default(),
             footer_name => footer_name,
             year => chrono::Utc::now().format("%Y").to_string(),

@@ -19,6 +19,10 @@ class AuthenticateFromPelicanRs
     {
         abort_unless(Signature::validProxy($request), 403);
 
+        // pelican-rs shows the plugins' pages inside its own layout: links load whole pages
+        // through it instead of Livewire's SPA navigation swapping the sidecar's layout in.
+        \Filament\Support\Facades\FilamentView::spa(false);
+
         // Per request, without `Login` events (the original logs those as activity;
         // pelican-rs already did when the user signed in).
         $id = (int) $request->header('X-Pelican-Rs-User', '0');
