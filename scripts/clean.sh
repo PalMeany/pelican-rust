@@ -9,7 +9,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ALL="${1:-}"
 limactl shell pelican -- sh -c '
 set -e
-busy=$(docker ps --format "{{.Mounts}}" | tr "," "\n" | grep pelican-rs-target || true)
+busy=$(docker ps --no-trunc --format "{{.Mounts}}" | tr "," "\n" | grep pelican-rs-target || true)
 for v in $(docker volume ls --format "{{.Name}}" | grep "^pelican-rs-target"); do
   env=${v#pelican-rs-target-}
   if [ "$v" != "pelican-rs-target" ] && [ "$v" != "pelican-rs-target-main" ] && [ ! -d "'"$REPO"'/.worktrees/$env" ]; then
