@@ -71,7 +71,7 @@
 - M6 (`.worktrees/m6`, dev-панель — контейнер `pelican-m6-dev` на :8088, SQLite из `.worktrees/.difftest/m6dev`):
   готовы admin dashboard/settings/health/logs, перенос сервера, server users/backups/schedules, сброс пароля,
   OAuth/капча/аватары, веб-инсталлятор (ADR-0016). Интегрированы B3 (webhooks сервера, backup hosts) и C3
-  (массовые действия), passkeys (ADR-0017). Дальше — inline-создание владельца/аллокации в мастере, E2E бэкапов/переноса/SFTP,
+  (массовые действия), passkeys (ADR-0017). Inline-создание владельца/аллокации в мастере. Дальше — E2E бэкапов/переноса/SFTP,
   слияние m6 в main.
 - Запись в SQLite dev-окружения с хоста не видна контейнеру (кэш ФС VM) — менять данные только через панель.
 

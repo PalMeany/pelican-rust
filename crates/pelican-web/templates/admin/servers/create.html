@@ -6,6 +6,7 @@
   <div class="page-actions"><button class="btn" type="submit" form="create-form">{{ icon('file-plus', 'icon-sm') }}{{ trans('filament-panels::resources/pages/create-record.form.actions.create.label') }}</button></div>
 </div>
 {% set refresh = 'hx-get="/admin/servers/create" hx-trigger="change" hx-include="#create-form" hx-select="#create-form" hx-target="#create-form" hx-swap="outerHTML" hx-push-url="false"' %}
+{% block form %}
 <form id="create-form" method="post" action="/admin/servers/create" class="stack">
   {{ csrf_field() }}
   <fieldset class="fieldset"><legend>{{ icon('info-circle', 'icon-sm') }} {{ trans(S ~ '.tabs.information') }}</legend>
@@ -13,8 +14,29 @@
       {{ f.text('name', trans(S ~ '.name'), v.name, errors, required=true, attrs='maxlength="255"') }}
       {{ f.text('external_id', trans(S ~ '.external_id'), v.external_id, errors, attrs='maxlength="255"') }}
       {{ f.select('node_id', trans(S ~ '.node'), nodes, v.node_id, errors, required=true, attrs=refresh) }}
-      {{ f.select('owner_id', trans(S ~ '.owner'), owners, v.owner_id, errors, required=true) }}
-      {{ f.select('allocation_id', trans(S ~ '.primary_allocation'), allocations, v.allocation_id, errors, placeholder=trans(S ~ '.select_allocation')) }}
+      {# owner_id + its create-option action (CreateServer.php, `createOptionForm`) #}
+      <div class="field{% if errors.owner_id %} has-error{% endif %}">
+        <label for="f-owner_id">{{ trans(S ~ '.owner') }}<span class="req">*</span></label>
+        <div class="row">
+          <select class="select" id="f-owner_id" name="owner_id" required style="flex:1;min-width:0">
+            {% for o in owners %}<option value="{{ o[0] }}"{% if o[0] == v.owner_id %} selected{% endif %}>{{ o[1] }}</option>{% endfor %}
+          </select>
+          {% if can_create_user %}<button type="button" class="btn btn-gray btn-sm" data-modal-open="owner-modal" title="{{ create_option_label }}" aria-label="{{ create_option_label }}">{{ icon('plus', 'icon-sm') }}</button>{% endif %}
+        </div>
+        {{ f.error(errors, 'owner_id') }}
+      </div>
+      {# allocation_id + its create-option action; hidden until a node is picked #}
+      <div class="field{% if errors.allocation_id %} has-error{% endif %}">
+        <label for="f-allocation_id">{{ trans(S ~ '.primary_allocation') }}</label>
+        <div class="row">
+          <select class="select" id="f-allocation_id" name="allocation_id" style="flex:1;min-width:0">
+            <option value="">{{ trans(S ~ '.select_allocation') }}</option>
+            {% for a in allocations %}<option value="{{ a[0] }}"{% if a[0] == v.allocation_id %} selected{% endif %}>{{ a[1] }}</option>{% endfor %}
+          </select>
+          {% if can_create_allocation and v.node_id %}<button type="button" class="btn btn-gray btn-sm" data-modal-open="allocation-modal" title="{{ create_option_label }}" aria-label="{{ create_option_label }}">{{ icon('plus', 'icon-sm') }}</button>{% endif %}
+        </div>
+        {{ f.error(errors, 'allocation_id') }}
+      </div>
       {{ f.select('allocation_additional', trans(S ~ '.additional_allocations'), allocations, v.allocation_additional, errors, multiple=true) }}
     </div>
     {{ f.textarea('description', trans(S ~ '.description'), v.description, errors, rows=3) }}
@@ -66,4 +88,33 @@
       {% for m in mounts %}<label class="check"><input type="checkbox" name="mounts[]" value="{{ m.id }}"{% if m.checked %} checked{% endif %}><span>{{ m.name }} <span class="muted small mono">{{ m.desc }}</span></span></label>{% endfor %}</div>{% endif %}
   </fieldset>
 </form>
+{% endblock %}
+
+{# Create-option modals of owner_id / allocation_id (Filament createOptionForm);
+   htmx posts them together with #create-form, errors re-render the fields only. #}
+{% set MC = 'filament-forms::components.select.actions.create_option' %}
+<dialog id="owner-modal" class="modal">
+  <div class="modal-head"><h2>{{ trans(MC ~ '.modal.heading') }}</h2><button type="button" class="icon-btn" data-modal-close>{{ icon('x', 'icon-sm') }}</button></div>
+  <form novalidate hx-post="/admin/servers/create/owner" hx-include="#create-form" hx-target="#owner-fields" hx-swap="innerHTML">{{ csrf_field() }}
+    <div class="modal-body" id="owner-fields">{% block owner_fields %}
+      {{ f.text('username', trans('admin/user.username'), m.username, o_errors, required=true, attrs='minlength="3" maxlength="255"', autocomplete='off') }}
+      {{ f.text('email', trans('admin/user.email'), m.email, o_errors, type='email', required=true, attrs='maxlength="255"', autocomplete='email') }}
+      {{ f.password('password', trans('admin/user.password'), autocomplete='new-password', hint=trans('admin/user.password_help')) }}
+    {% endblock %}</div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button><button type="submit" class="btn">{{ trans('filament-actions::create.single.modal.actions.create.label') }}</button></div>
+  </form>
+</dialog>
+<dialog id="allocation-modal" class="modal">
+  <div class="modal-head"><h2>{{ trans(MC ~ '.modal.heading') }}</h2><button type="button" class="icon-btn" data-modal-close>{{ icon('x', 'icon-sm') }}</button></div>
+  <form novalidate hx-post="/admin/servers/create/allocation" hx-include="#create-form" hx-target="#allocation-fields" hx-swap="innerHTML">{{ csrf_field() }}
+    <div class="modal-body" id="allocation-fields">{% block allocation_fields %}
+      {% if a_service_error %}<p class="error">{{ a_service_error }}</p>{% endif %}
+      {{ f.select('allocation_ip', trans(S ~ '.ip_address'), node_ips, a_ip, a_errors, required=true, hint=trans(S ~ '.ip_address_helper')) }}
+      <datalist id="alias-datalist">{% for s in alias_suggestions %}<option value="{{ s }}">{% endfor %}</datalist>
+      {{ f.text('allocation_alias', trans(S ~ '.alias'), a_alias, a_errors, hint=trans(S ~ '.alias_helper'), attrs='list="alias-datalist"') }}
+      {{ f.tags('allocation_ports', trans(S ~ '.port'), a_ports, a_errors, placeholder='27015, 27017-27019') }}
+    {% endblock %}</div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button><button type="submit" class="btn">{{ trans('filament-actions::create.single.modal.actions.create.label') }}</button></div>
+  </form>
+</dialog>
 {% endblock %}

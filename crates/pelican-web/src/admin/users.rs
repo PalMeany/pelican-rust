@@ -379,7 +379,7 @@ async fn index(admin: Admin) -> WebResult {
 
 // ----- form data -------------------------------------------------------------
 
-struct FormData {
+pub(crate) struct FormData {
     username: String,
     email: String,
     /// Plain password as typed; hashed on save when non-empty.
@@ -415,6 +415,22 @@ impl FormData {
             timezone: f.get("timezone").trim().into(),
             language: f.get("language").trim().into(),
             roles: f.list("roles"),
+        }
+    }
+
+    /// Owner create-option of the server wizard (`CreateServer`): only
+    /// username/email/password are submitted, the rest uses the defaults above.
+    pub(crate) fn owner_option(username: String, email: String, password: String) -> FormData {
+        FormData {
+            username,
+            email,
+            password,
+            external_id: String::new(),
+            is_managed_externally: false,
+            // Model default attribute (the creating hook only fills a null).
+            timezone: "UTC".into(),
+            language: "en".into(),
+            roles: Vec::new(),
         }
     }
 
@@ -928,18 +944,10 @@ async fn edit_form(admin: Admin, Path(id): Path<i64>) -> WebResult {
     .await
 }
 
-/// `POST /admin/users/create` (`CreateUser::handleRecordCreation` +
-/// `UserCreationService::handle`).
-async fn create(admin: Admin, form: Form) -> WebResult {
-    admin.authorize("create user")?;
-    let data = FormData::from_form(&form);
-    let errors = validate(&admin, &data, None).await?;
-    if !errors.is_empty() {
-        return render_form(&admin, FormPage { record: None, data: &data, errors: &errors }).await;
-    }
-    let st = &admin.st;
-    // CreateUser::prepareForValidation lowercases the submitted email; the
-    // saving hook also lowercases username/email.
+/// Inserts the user (`UserCreationService::handle`): hashes the submitted
+/// password (or generates one plus a reset token), mails AccountCreated.
+pub(crate) async fn store_new_user(st: &AppState, data: &FormData) -> Result<users::Model, WebError> {
+    // The saving hook lowercases username/email.
     let email = data.email.to_lowercase();
     let username = data.username.to_lowercase();
     let now_ts = ts();
@@ -958,7 +966,11 @@ async fn create(admin: Admin, form: Form) -> WebResult {
         email: Set(email.clone()),
         password: Set(hashed),
         language: Set(data.language.clone()),
-        timezone: Set(data.timezone.clone()), // creating hook fills from config
+        timezone: Set(if data.timezone.is_empty() {
+            st.config.env.string_or("APP_TIMEZONE", "UTC")
+        } else {
+            data.timezone.clone()
+        }),
         oauth: Set(Some(Json(json!([])))),
         customization: Set(None),
         mfa_app_secret: Set(None),
@@ -991,6 +1003,19 @@ async fn create(admin: Admin, form: Form) -> WebResult {
     pelican_api::services::account_created(st, &user, reset_token.as_deref())
         .await
         .map_err(|e| WebError::internal(format!("{e:?}")))?;
+    Ok(user)
+}
+
+/// `POST /admin/users/create` (`CreateUser::handleRecordCreation` +
+/// `UserCreationService::handle`).
+async fn create(admin: Admin, form: Form) -> WebResult {
+    admin.authorize("create user")?;
+    let data = FormData::from_form(&form);
+    let errors = validate(&admin, &data, None).await?;
+    if !errors.is_empty() {
+        return render_form(&admin, FormPage { record: None, data: &data, errors: &errors }).await;
+    }
+    let user = store_new_user(&admin.st, &data).await?;
     admin.flash_success(admin.t("filament-panels::resources/pages/create-record.notifications.created.title"));
     Ok(admin.redirect(&format!("/admin/users/{}/edit", user.id.0)))
 }
