@@ -11,11 +11,12 @@
     <button class="btn" type="submit" form="profile-form" title="{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}">{{ icon('device-floppy', 'icon-sm') }}{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}</button>
   </div>
 </div>
-<div><nav class="tabs">
+<div class="tabs-card">
+<nav class="tabs">
   {% for t in [['account', 'user-cog']] + ([['oauth', 'brand-oauth']] if oauth else []) + [['2fa', 'shield-lock']] + ([['passkeys', 'fingerprint']] if passkeys_enabled else []) + [['api_keys', 'key'], ['ssh_keys', 'lock-code'], ['activity', 'history'], ['customization', 'adjustments']] %}
   <button type="button" data-tab="{{ t[0] }}" class="{{ 'active' if tab == t[0] }}">{{ icon(t[1], 'icon-sm') }}{{ trans('profile.tabs.' ~ t[0]) }}</button>
   {% endfor %}
-</nav></div>
+</nav>
 
 <form id="profile-form" method="post" action="/profile">
   {{ csrf_field() }}
@@ -177,6 +178,7 @@
     {% for a in activity %}{% include "components/activity_entry.html" %}{% endfor %}
   </div>
 </section>
+</div>
 </div>
 
 {% if mfa.app %}

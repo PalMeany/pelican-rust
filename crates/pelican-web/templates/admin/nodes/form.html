@@ -14,10 +14,11 @@
     {% if not readonly %}<button class="btn" type="submit" form="node-form">{{ icon('device-floppy' if not creating else 'file-plus', 'icon-sm') }}{{ trans('filament-panels::resources/pages/create-record.form.actions.create.label') if creating else trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}</button>{% endif %}
   </div>
 </div>
-<div><nav class="tabs">
+<div class="tabs-card">
+<nav class="tabs">
   {% set tabs = ([] if creating else [['overview', 'chart-area-line-filled']]) + [['basic_settings', 'server'], ['advanced_settings', 'server-cog']] + ([] if creating else [['config_file', 'code']] + ([] if readonly else [['diagnostics', 'heart-search']])) %}
   {% for t in tabs %}<button type="button" data-tab="{{ t[0] }}" class="{{ 'active' if tab == t[0] }}">{{ icon(t[1], 'icon-sm') }}{{ trans(N ~ '.tabs.' ~ t[0]) }}</button>{% endfor %}
-</nav></div>
+</nav>
 
 {% if not creating %}
 <section class="stack" data-tab-panel="overview"{% if tab != 'overview' %} hidden{% endif %}>
@@ -70,6 +71,7 @@
 </fieldset>
 </form>
 
+{% if creating %}</div>{% endif %}
 {% if not creating %}
 <section class="card card-body stack" data-tab-panel="config_file"{% if tab != 'config_file' %} hidden{% endif %}>
   <div class="field"><span class="field-label">{{ trans(N ~ '.instructions') }}</span><p class="muted">{{ trans(N ~ '.instructions_help') }}</p></div>
@@ -119,6 +121,7 @@ window.pelicanDeploy = async function (docker) {
 document.querySelector('[data-modal-open="auto-deploy"]')?.addEventListener('click', () => window.pelicanDeploy(0));
 </script>
 {% endif %}
+</div>
 
 <div id="relations" class="stack" data-tabs-root>
   <div><nav class="tabs">

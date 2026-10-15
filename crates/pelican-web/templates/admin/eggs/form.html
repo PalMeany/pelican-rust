@@ -64,9 +64,10 @@
     {% endif %}
   </div>
 </div>
-<div><nav class="tabs">
+<div class="tabs-card">
+<nav class="tabs">
   {% for t in [['configuration', 'egg'], ['process_management', 'server-cog'], ['egg_variables', 'variable'], ['install_script', 'file-download']] %}<button type="button" data-tab="{{ t[0] }}" class="{{ 'active' if tab == t[0] }}">{{ icon(t[1], 'icon-sm') }}{{ trans(N ~ '.tabs.' ~ t[0]) }}</button>{% endfor %}
-</nav></div>
+</nav>
 
 <form id="egg-form" method="post" action="{{ action }}" data-egg-form>
 {{ csrf_field() }}<input type="hidden" name="_tab" value="{{ tab }}">
@@ -133,6 +134,7 @@
 </section>
 </fieldset>
 </form>
+</div>
 
 {% if egg %}
 <section class="card">

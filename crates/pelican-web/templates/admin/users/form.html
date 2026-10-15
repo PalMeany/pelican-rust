@@ -19,11 +19,12 @@
   </div>
 </div>
 
-<div><nav class="tabs">
+<div class="tabs-card">
+<nav class="tabs">
   {% for tt in [['account', 'user-cog'], ['roles', 'users-group']] + ([['keys', 'key'], ['activity', 'history']] if record else []) %}
   <button type="button" data-tab="{{ tt[0] }}" class="{{ 'active' if tab == tt[0] }}">{{ icon(tt[1], 'icon-sm') }}{{ trans('admin/user.roles' if tt[0] == 'roles' else 'profile.tabs.' ~ tt[0]) }}</button>
   {% endfor %}
-</nav></div>
+</nav>
 
 <form id="record-form" method="post" action="{{ action }}">
   {{ csrf_field() }}
@@ -96,6 +97,7 @@
 </form>
 
 {# --- Keys + Activity tabs (view/edit only) --- #}
+{% if not record %}</div>{% endif %}
 {% if record %}
 <section class="grid grid-3" data-tab-panel="keys"{% if tab != 'keys' %} hidden{% endif %}>
   <fieldset class="card card-body span-2 form" style="margin:0;align-content:start">
@@ -140,6 +142,8 @@
     {% for a in activity %}{% include "components/activity_entry.html" %}{% endfor %}
   </div>
 </section>
+
+</div>
 
 {# --- ServersRelationManager --- #}
 <section class="stack" id="user-servers-section">

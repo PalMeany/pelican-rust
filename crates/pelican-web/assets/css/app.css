@@ -323,6 +323,15 @@ table.table { width: 100%; border-collapse: collapse; }
   font-weight: 500; font-size: 0.875rem; background: none; border: none; cursor: pointer; white-space: nowrap; font-family: inherit; }
 .tabs a:hover, .tabs button:hover { background: var(--hover); text-decoration: none; color: var(--text); }
 .tabs .active { background: var(--hover); color: var(--primary-600); }
+/* Filament's contained tabs (`Tabs::make()`): the tab bar and the active tab's content in one card,
+   the tab panels without frames of their own. */
+.tabs-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); min-width: 0; }
+.tabs-card > .tabs { display: flex; width: 100%; border: 0; border-bottom: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: none; padding: 0.625rem 0.75rem; background: none; }
+.tabs-card .tabs .active { color: var(--nav-accent); }
+.tabs-card [data-tab-panel] { padding: 1.5rem; }
+.tabs-card [data-tab-panel].card { border: 0; border-radius: 0; box-shadow: none; background: none; }
+.tabs-card [data-tab-panel].card:not(.card-body) { padding: 0; }
 
 /* ---------- dropdowns (details/summary) ---------- */
 .dropdown { position: relative; }

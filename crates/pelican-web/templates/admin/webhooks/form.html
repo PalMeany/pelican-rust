@@ -27,6 +27,7 @@
     {% endif %}
   </div>
 </div>
+<div class="tabs-card">
 <nav class="tabs">
   {% for t in [['information', 'info-circle', trans(S ~ '.information')], ['payload', 'file-code', trans(S ~ '.payload')], ['events', 'star', trans(S ~ '.events')]] %}
   <button type="button" data-tab="{{ t[0] }}" class="{{ 'active' if tab == t[0] }}">{{ icon(t[1], 'icon-sm') }}{{ t[2] }}</button>
@@ -68,5 +69,6 @@
 
 </fieldset>
 </form>
+</div>
 </div>
 {% endblock %}

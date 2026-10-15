@@ -11,6 +11,7 @@
   {% endif %}
 </div>
 
+<div class="tabs-card">
 <nav class="tabs">
   {%- for t in [['general', 'home', 'admin/setting.navigation.general'], ['captcha', 'shield', 'admin/setting.navigation.captcha'], ['mail', 'mail', 'admin/setting.navigation.mail'], ['backup', 'box', 'admin/setting.navigation.backup'], ['oauth', 'brand-oauth', 'admin/setting.navigation.oauth'], ['misc', 'tool', 'admin/setting.navigation.misc']] -%}
   <button type="button" data-tab="{{ t[0] }}" class="{{ 'active' if tab == t[0] }}">{{ icon(t[1], 'icon-sm') }}{{ trans(t[2]) }}</button>
@@ -206,4 +207,5 @@
 
 </fieldset>
 </form>
+</div>
 {% endblock %}
