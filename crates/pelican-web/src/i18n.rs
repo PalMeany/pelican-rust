@@ -8,14 +8,21 @@ use serde_json::Value;
 static LANG: LazyLock<Value> =
     LazyLock::new(|| serde_json::from_str(include_str!("../data/lang.json")).unwrap_or(Value::Null));
 
-/// Locales shipped by the original panel.
+/// Locales shipped by the original panel, plus those of PHP language plugins (sidecar).
 pub fn locales() -> Vec<String> {
-    LANG.as_object().map(|m| m.keys().cloned().collect()).unwrap_or_default()
+    let mut out: Vec<String> = LANG.as_object().map(|m| m.keys().cloned().collect()).unwrap_or_default();
+    if let Some(extra) = pelican_api::sidecar::translations() {
+        for code in extra.as_object().map(|m| m.keys().cloned().collect::<Vec<_>>()).unwrap_or_default() {
+            if !out.contains(&code) {
+                out.push(code);
+            }
+        }
+    }
+    out
 }
 
-/// Resolve `ns::group.item.path` (group may contain `/`) to its raw value.
-fn lookup<'a>(locale: &str, key: &str) -> Option<&'a Value> {
-    let root = LANG.get(locale)?;
+/// Resolve `ns::group.item.path` (group may contain `/`) to its raw value in one tree.
+fn lookup_in(root: &Value, key: &str) -> Option<Value> {
     let (ns, rest) = match key.split_once("::") {
         Some((ns, rest)) => (Some(ns), rest),
         None => (None, key),
@@ -31,14 +38,24 @@ fn lookup<'a>(locale: &str, key: &str) -> Option<&'a Value> {
     let mut cur = root.get(group_key.as_str());
     if cur.is_none() && ns.is_none() {
         // JSON translations (`__('Some text')`).
-        return root.get("*").and_then(|j| j.get(key));
+        return root.get("*").and_then(|j| j.get(key)).cloned();
     }
     if let Some(item) = item {
         for seg in item.split('.') {
             cur = cur?.get(seg);
         }
     }
-    cur
+    cur.cloned()
+}
+
+/// Language plugins' lines (`$translator->addPath()`) override the panel's.
+fn lookup(locale: &str, key: &str) -> Option<Value> {
+    if let Some(extra) = pelican_api::sidecar::translations() {
+        if let Some(v) = extra.get(locale).and_then(|root| lookup_in(root, key)) {
+            return Some(v);
+        }
+    }
+    lookup_in(LANG.get(locale)?, key)
 }
 
 fn line(locale: &str, key: &str) -> Option<String> {

@@ -220,6 +220,12 @@ pub struct SubuserGroup {
 }
 
 static MANIFEST: RwLock<Option<Arc<Manifest>>> = RwLock::new(None);
+static TRANSLATIONS: RwLock<Option<Arc<Value>>> = RwLock::new(None);
+
+/// Translations of the PHP language plugins: locale → group → lines (`*` = JSON lines).
+pub fn translations() -> Option<Arc<Value>> {
+    TRANSLATIONS.read().ok().and_then(|t| t.clone())
+}
 
 /// The last manifest fetched from the sidecar.
 pub fn manifest() -> Option<Arc<Manifest>> {
@@ -250,6 +256,17 @@ pub async fn refresh(st: &AppState) -> ApiResult<()> {
     }
     if let Ok(mut m) = MANIFEST.write() {
         *m = accepted.then(|| Arc::new(manifest));
+    }
+    let lang = if accepted {
+        match sc.call(reqwest::Method::GET, "/_bridge/lang", None).await? {
+            (200, v @ Value::Object(_)) => Some(Arc::new(v)),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    if let Ok(mut t) = TRANSLATIONS.write() {
+        *t = lang;
     }
     Ok(())
 }

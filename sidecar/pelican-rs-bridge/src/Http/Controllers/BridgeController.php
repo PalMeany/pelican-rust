@@ -89,6 +89,40 @@ class BridgeController extends Controller
         return new JsonResponse(['ok' => true]);
     }
 
+    /**
+     * Translations of enabled language plugins (`$translator->addPath()`): locale => group
+     * (`server/feature`, `*` for JSON files) => lines.
+     */
+    public function lang(): JsonResponse
+    {
+        $out = [];
+        foreach (Plugin::query()->orderBy('load_order')->get() as $plugin) {
+            if ($plugin->status !== \App\Enums\PluginStatus::Enabled || !$plugin->isLanguage()) {
+                continue;
+            }
+            $root = plugin_path($plugin->id, 'lang');
+            foreach (\Illuminate\Support\Facades\File::directories($root) as $dir) {
+                $locale = basename($dir);
+                foreach (\Illuminate\Support\Facades\File::allFiles($dir) as $file) {
+                    if ($file->getExtension() !== 'php') {
+                        continue;
+                    }
+                    $group = str_replace('\\', '/', substr($file->getRelativePathname(), 0, -4));
+                    $lines = require $file->getPathname();
+                    if (is_array($lines)) {
+                        $out[$locale][$group] = array_replace_recursive($out[$locale][$group] ?? [], $lines);
+                    }
+                }
+                $json = "$root/$locale.json";
+                if (is_file($json)) {
+                    $out[$locale]['*'] = array_replace($out[$locale]['*'] ?? [], (array) json_decode((string) file_get_contents($json), true));
+                }
+            }
+        }
+
+        return new JsonResponse((object) $out);
+    }
+
     /** A PHP plugin's avatar URL for a user. */
     public function avatar(Request $request, AvatarService $avatars): JsonResponse
     {

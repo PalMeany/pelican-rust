@@ -170,8 +170,8 @@ Application API → UI → плагины → PHP-sidecar.
 ### M8 (после MVP) — PHP-sidecar для оригинальных плагинов
 - [x] Дизайн (ADR-0020, Proposed): sidecar = оригинал той же версии (общие БД/APP_KEY/plugins), мост-пакет, прокси путей плагинов
 - [x] Плагин-мост `pelican-rs-bridge` (PHP): manifest (маршруты, навигация, слушатели, реестры, маршруты Livewire), event, task, lifecycle; HMAC; вход пользователя без событий `Login`; расписание ядра отфильтровано
-- [~] pelican-rs: прокси путей sidecar (страницы Filament + Livewire), навигация admin/server, события (eloquent, ActivityLogged), типы задач — готово; проверка версии, features/аватары/права из манифеста — нет
-- [~] Жизненный цикл PHP-плагинов через sidecar (install/update/uninstall/enable/disable, API и админка) — готово; языковые плагины без PHP — нет
+- [x] pelican-rs: прокси путей sidecar (страницы Filament + Livewire), навигация admin/server, события (eloquent, ActivityLogged), типы задач, права ролей/сабюзеров, ресурсы API-ключей, аватары, проверка версии (features PHP-плагинов — нет, см. docs/plugins.md)
+- [x] Жизненный цикл PHP-плагинов через sidecar (install/update/uninstall/enable/disable, API и админка); языковые плагины — переводы из sidecar поверх встроенных
 - [ ] E2E: реальный плагин из Hub в sidecar (страница, событие, задача расписания)
 
 ## Делегирование
