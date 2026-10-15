@@ -14,7 +14,7 @@ jobs:
       # tests against the original panel need the Docker stand (scripts/difftest).
       TEST_DB_DRIVERS: sqlite
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt

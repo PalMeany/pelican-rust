@@ -174,7 +174,7 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] Жизненный цикл PHP-плагинов через sidecar (install/update/uninstall/enable/disable, API и админка); языковые плагины — переводы из sidecar поверх встроенных
 - [x] E2E с реальными плагинами из pelican-dev/plugins: tickets (миграции, ресурсы admin/server, создание тикета через Livewire), player-counter (composer-пакеты, доступ к странице по `canAccess`), robo-avatars, pirate-language — импорт и установка через pelican-rs
 
-### M9 — полная замена оригинала (порядок согласован с пользователем 2026-10-15)
+### M9 — полная замена оригинала (порядок согласован с пользователем 2026-10-15) — ГОТОВО, в main
 1. Слияние и проверки
    - [x] Полный диф-тест m8 на 4 СУБД (77/0/2 на каждой) → слияние m8 в main, push
    - [x] Включить пропущенные smoke-сценарии (`smoke/client-unauthenticated`, `smoke/application-unauthenticated`) — проходят на 4 СУБД

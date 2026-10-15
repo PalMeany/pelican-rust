@@ -34,11 +34,12 @@ most scenarios end up limited by the database. Numbers and method: `bench/result
 
 ## Status
 
-Milestones M1–M8 (database layer, auth, Remote/Client/Application APIs, web UI, WASM plugins, model events,
-original PHP plugins through a sidecar) are on `main`, verified by the full differential run on all four
-databases. M9 (CLI, API docs, packaging, load tests and optimization, remaining PHP plugin extension points) is
-in progress on the `m9` branch. See `PLAN.md` and `PROGRESS.md` (in Russian), and the architecture decision
-records in `docs/decisions/`.
+Milestones M1–M9 are on `main`: database layer, auth, Remote/Client/Application APIs, web UI, WASM plugins,
+model events, the original PHP plugins through a sidecar, the console commands, API docs, packaging, load
+tests and optimization. Each is verified by the full differential run on all four databases (79 scenarios).
+Not planned unless asked: Filament themes for the pelican-rust UI and Redis drivers (several panel
+instances). See `PLAN.md` and `PROGRESS.md` (in Russian), and the architecture decision records in
+`docs/decisions/`.
 
 ## Layout
 
