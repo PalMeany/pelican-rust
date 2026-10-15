@@ -10,7 +10,9 @@ permissions:
 
 jobs:
   binary:
-    runs-on: ubuntu-latest
+    # The oldest supported runner: the binary needs the glibc it was linked against or newer
+    # (2.35: Ubuntu 22.04, Debian 12 and later).
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
