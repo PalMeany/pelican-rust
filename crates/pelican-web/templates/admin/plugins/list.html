@@ -13,7 +13,7 @@
     <button type="button" class="btn btn-gray" data-reorder>{{ icon('arrows-sort', 'icon-sm') }}<span data-reorder-off>{{ change_load_order }}</span><span data-reorder-on hidden>{{ apply_load_order }}</span></button>
   </div>
 </div>
-{{ tbl.render(table, csrf) }}
+{{ tbl.render(table, csrf, button_style) }}
 {% if can_import %}
 <dialog id="plugin-import-file" class="modal">
   <form method="post" action="/admin/plugins/import/file" enctype="multipart/form-data"

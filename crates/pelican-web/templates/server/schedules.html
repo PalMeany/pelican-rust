@@ -17,7 +17,7 @@
     {% endif %}
   </div>
 </div>
-{{ tbl.render(table, csrf) }}
+{{ tbl.render(table, csrf, button_style) }}
 
 {# ImportScheduleAction: tab «file» uploads raw schedule JSON files, tab
    «url» repeats direct-to-.json URLs; sent as multipart with the CSRF token

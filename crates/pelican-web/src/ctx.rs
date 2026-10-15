@@ -131,6 +131,15 @@ impl Web {
                 Some(serde_json::Value::String(s)) if s == "topbar" || s == "mixed" => s.clone(),
                 _ => "sidebar".to_string(),
             });
+        // `button_style` customization: truthy (the default) shows most actions as bare icon buttons.
+        let button_style = self.user.as_ref().is_none_or(|u| {
+            match crate::models::customization(&self.st, &u.user).get("button_style") {
+                Some(serde_json::Value::Bool(b)) => *b,
+                Some(serde_json::Value::String(s)) => !s.is_empty() && s != "0" && s != "false",
+                Some(serde_json::Value::Number(n)) => n.as_i64() != Some(0),
+                _ => true,
+            }
+        });
         let flash = self.session.take_flash();
         // `->brandLogo(config('app.logo'))`: the logo, else the brand name as text; the footer
         // (resources/views/filament/layouts/footer.blade.php) names the panel and Pelican.
@@ -143,6 +152,7 @@ impl Web {
         context! {
             app_name => app_name,
             nav_mode => nav_mode,
+            button_style => button_style,
             app_logo => self.st.config.env.string("APP_LOGO").unwrap_or_default(),
             footer_name => footer_name,
             year => chrono::Utc::now().format("%Y").to_string(),

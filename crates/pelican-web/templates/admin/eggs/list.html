@@ -10,6 +10,6 @@
     {% if create %}<a class="btn" href="{{ create.url }}">{{ create.label }}</a>{% endif %}
   </div>
 </div>
-{{ tbl.render(table, csrf) }}
+{{ tbl.render(table, csrf, button_style) }}
 {% if can_import %}{{ imp.modal(true, '', egg_index) }}{% endif %}
 {% endblock %}

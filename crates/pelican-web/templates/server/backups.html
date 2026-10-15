@@ -25,7 +25,7 @@
     {% endif %}
   </div>
 </div>
-{{ tbl.render(table, csrf) }}
+{{ tbl.render(table, csrf, button_style) }}
 
 {# Toolbar CreateAction: name, ignored files, lock (with `backup.delete`). #}
 {% if can_create and not at_limit %}

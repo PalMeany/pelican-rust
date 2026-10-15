@@ -4,9 +4,10 @@
 <div class="page-head">
   <h1>{{ title }}</h1>
   <div class="page-actions">
-    {% for a in header_actions or [] %}<a class="btn {{ a.class or 'btn-gray' }}" href="{{ a.url }}">{% if a.icon %}{{ icon(a.icon, 'icon-sm') }}{% endif %}{{ a.label }}</a>{% endfor %}
-    {% if create %}<a class="btn" href="{{ create.url }}">{{ create.label }}</a>{% endif %}
+    {# Header actions: bare icon buttons with a tooltip under `button_style` (CreateAction: Plus). #}
+    {% for a in header_actions or [] %}{% if button_style and a.icon %}<a class="icon-btn action-icon" href="{{ a.url }}" title="{{ a.label }}" aria-label="{{ a.label }}">{{ icon(a.icon, 'icon-lg') }}</a>{% else %}<a class="btn {{ a.class or 'btn-gray' }}" href="{{ a.url }}">{% if a.icon %}{{ icon(a.icon, 'icon-sm') }}{% endif %}{{ a.label }}</a>{% endif %}{% endfor %}
+    {% if create %}{% if button_style %}<a class="icon-btn action-icon text-primary" href="{{ create.url }}" title="{{ create.label }}" aria-label="{{ create.label }}">{{ icon('plus', 'icon-lg') }}</a>{% else %}<a class="btn" href="{{ create.url }}">{{ create.label }}</a>{% endif %}{% endif %}
   </div>
 </div>
-{{ tbl.render(table, csrf) }}
+{{ tbl.render(table, csrf, button_style) }}
 {% endblock %}

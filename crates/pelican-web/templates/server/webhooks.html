@@ -14,7 +14,7 @@
     {% endif %}
   </div>
 </div>
-{{ tbl.render(table, csrf) }}
+{{ tbl.render(table, csrf, button_style) }}
 {# emptyStateActions: a create action under the empty-state heading #}
 {% if can_create_empty %}
 <div class="stack" style="align-items:center;margin-top:0.5rem">

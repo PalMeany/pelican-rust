@@ -20,7 +20,7 @@
     {% endif %}
   </div>
 </div>
-{{ tbl.render(table, csrf) }}
+{{ tbl.render(table, csrf, button_style) }}
 {# js/network.js turns the notes cells into inputs for rows with the
    make-primary action (rendered exactly when `allocation.update` is granted). #}
 {% endblock %}

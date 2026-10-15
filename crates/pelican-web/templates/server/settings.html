@@ -18,7 +18,7 @@
 
   <fieldset>
     <legend>{{ information_label }}</legend>
-    <div class="grid grid-2">
+    <div class="grid info-grid">
       <div class="stack">
         {# TextInput 'name': live(onBlur) → Settings::updateName() #}
         <form method="post" action="{{ base }}/settings/rename" data-live hx-boost="false">
@@ -34,29 +34,31 @@
         </form>
         {% endif %}
       </div>
-      {% if icon_img %}
       {# Image + UploadIcon/DeleteIcon actions (settings.change-icon). #}
-      <div class="row" style="justify-content:center;align-items:flex-start">
+      <div class="server-icon-cell">
+        {% if icon_img %}
         <img src="{{ icon_img }}" alt="" width="150" height="150"
           style="object-fit:contain"{% if egg_icon_hint %} title="{{ icon_tooltip }}"{% endif %}>
+        {% endif %}
         {% if can_icon %}
         <div class="row" style="gap:.25rem">
-          <button type="button" class="btn btn-sm btn-gray" data-modal-open="upload-icon" title="{{ import_icon_label }}">
-            {{ icon('photo-up', 'icon-sm') }}</button>
+          <button type="button" class="icon-btn text-primary" data-modal-open="upload-icon" title="{{ import_icon_label }}" aria-label="{{ import_icon_label }}">
+            {{ icon('photo-up', 'icon-lg') }}</button>
+          {% if icon_img %}
           <form method="post" action="{{ base }}/settings/icon/delete" hx-boost="false">
             {{ csrf_field() }}
-            <button type="submit" class="btn btn-sm btn-danger" title="{{ delete_icon_label }}">{{ icon('trash', 'icon-sm') }}</button>
+            <button type="submit" class="icon-btn danger" title="{{ delete_icon_label }}" aria-label="{{ delete_icon_label }}">{{ icon('trash', 'icon-lg') }}</button>
           </form>
+          {% endif %}
         </div>
         {% endif %}
       </div>
-      {% endif %}
     </div>
-    <div class="grid grid-3">
-      {# readonly uuid / uuid_short / node name inputs #}
-      <div class="field span-2"><label for="f-uuid">{{ trans(SI ~ '.uuid') }}</label><input class="input copyable" id="f-uuid" readonly value="{{ s_uuid }}" data-copy="{{ s_uuid }}"></div>
-      <div class="field"><label for="f-uuid-short">{{ trans(SI ~ '.uuid_short') }}</label><input class="input copyable" id="f-uuid-short" readonly value="{{ s_uuid_short }}" data-copy="{{ s_uuid_short }}"></div>
-      <div class="field span-2"><label for="f-node-name">{{ trans(SI ~ '.node_name') }}</label><input class="input" id="f-node-name" readonly value="{{ s_node }}"></div>
+    <div class="grid grid-4">
+      {# disabled uuid / uuid_short / node name inputs #}
+      <div class="field span-2"><label for="f-uuid">{{ trans(SI ~ '.uuid') }}</label><input class="input copyable is-disabled" id="f-uuid" readonly value="{{ s_uuid }}" data-copy="{{ s_uuid }}"></div>
+      <div class="field"><label for="f-uuid-short">{{ trans(SI ~ '.uuid_short') }}</label><input class="input copyable is-disabled" id="f-uuid-short" readonly value="{{ s_uuid_short }}" data-copy="{{ s_uuid_short }}"></div>
+      <div class="field"><label for="f-node-name">{{ trans(SI ~ '.node_name') }}</label><input class="input is-disabled" id="f-node-name" readonly value="{{ s_node }}"></div>
     </div>
   </fieldset>
 
@@ -65,7 +67,7 @@
     <div class="grid grid-3">
       {% for l in limits %}
       <div class="field"><div class="input-group"><span class="addon">{{ icon(l.icon, 'icon-sm') }}&nbsp;{{ l.label }}</span>
-        <input class="input" readonly value="{{ l.value }}"></div></div>
+        <input class="input is-disabled" readonly value="{{ l.value }}"></div></div>
       {% endfor %}
     </div>
   </fieldset>

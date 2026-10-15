@@ -21,7 +21,7 @@
     {% endif %}
   </div>
 </div>
-{{ tbl.render(table, csrf) }}
+{{ tbl.render(table, csrf, button_style) }}
 {% if can_create and not at_limit %}
 <dialog id="create-database" class="modal">
   <form method="post" action="{{ base }}/databases">

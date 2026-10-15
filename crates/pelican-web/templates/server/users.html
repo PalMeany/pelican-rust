@@ -18,7 +18,7 @@
     {% endif %}
   </div>
 </div>
-{{ tbl.render(table, csrf) }}
+{{ tbl.render(table, csrf, button_style) }}
 
 {# Invite: CreateAction `invite` — email + permission tabs, submit label `action`. #}
 {% if can_create %}

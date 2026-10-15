@@ -30,15 +30,20 @@
 {%- endif -%}
 {% endmacro %}
 
-{% macro action_button(a, csrf, inline=true, back='') %}
+{# Row actions: inline ones are bare icon buttons with a tooltip under the `button_style`
+   customization (the default), labelled links otherwise; `inline=false` is a menu entry. #}
+{% macro action_button(a, csrf, inline=true, back='', icons=true) %}
+{% set bare = inline and icons and a.icon %}
 {% if a.method == 'get' %}
-  <a href="{{ a.url }}" class="{% if inline %}btn-link {{ 'danger' if a.color == 'danger' }}{% endif %} {{ 'danger' if a.color == 'danger' and not inline }}" hx-boost="false">{{ icon(a.icon, 'icon-sm') }}{{ a.label }}</a>
+  {% if bare %}<a href="{{ a.url }}" class="icon-btn action-icon{{ ' danger' if a.color == 'danger' }}" hx-boost="false" title="{{ a.label }}" aria-label="{{ a.label }}">{{ icon(a.icon, 'icon-lg') }}</a>
+  {% else %}<a href="{{ a.url }}" class="{% if inline %}btn-link {{ 'danger' if a.color == 'danger' }}{% endif %} {{ 'danger' if a.color == 'danger' and not inline }}" hx-boost="false">{{ icon(a.icon, 'icon-sm') }}{{ a.label }}</a>{% endif %}
 {% else %}
   <form method="post" action="{{ a.url }}" hx-boost="false" style="display:inline"{% if a.confirm %} data-confirm="{{ a.confirm }}" data-confirm-title="{{ a.label }}" data-confirm-ok="{{ a.label }}" data-confirm-color="{{ a.color }}"{% endif %}>
     <input type="hidden" name="_token" value="{{ csrf }}">
     {% if back %}<input type="hidden" name="_back" value="{{ back }}">{% endif %}
     {% for f in a.fields %}<input type="hidden" name="{{ f[0] }}" value="{{ f[1] }}">{% endfor %}
-    <button type="submit" class="{% if inline %}btn-link {{ 'danger' if a.color == 'danger' }}{% else %}{{ 'danger' if a.color == 'danger' }}{% endif %}">{{ icon(a.icon, 'icon-sm') }}{{ a.label }}</button>
+    {% if bare %}<button type="submit" class="icon-btn action-icon{{ ' danger' if a.color == 'danger' }}" title="{{ a.label }}" aria-label="{{ a.label }}">{{ icon(a.icon, 'icon-lg') }}</button>
+    {% else %}<button type="submit" class="{% if inline %}btn-link {{ 'danger' if a.color == 'danger' }}{% else %}{{ 'danger' if a.color == 'danger' }}{% endif %}">{{ icon(a.icon, 'icon-sm') }}{{ a.label }}</button>{% endif %}
   </form>
 {% endif %}
 {% endmacro %}
@@ -71,7 +76,7 @@
 </nav></div>
 {% endmacro %}
 
-{% macro render(t, csrf) %}
+{% macro render(t, csrf, icons=true) %}
 <div id="{{ t.id }}" class="stack" hx-boost="true" hx-target="#{{ t.id }}" hx-select="#{{ t.id }}" hx-swap="outerHTML"
   {%- if t.poll %} hx-get="{{ t.current_url }}" hx-trigger="every {{ t.poll }}"{% endif %}>
   {% if t.tabs %}{{ tabs(t.tabs) }}{% endif %}
@@ -118,7 +123,7 @@
             {% endfor %}
             {% if t.has_actions %}
             <td class="actions">
-              {% for a in r.actions %}{{ action_button(a, csrf, true, t.current_url) }}{% endfor %}
+              {% for a in r.actions %}{{ action_button(a, csrf, true, t.current_url, icons) }}{% endfor %}
               {% if r.group %}
               <details class="dropdown" style="display:inline-block">
                 <summary class="icon-btn" aria-label="{{ t.actions_label }}">{{ icon(r.group_icon or 'dots-vertical', 'icon') }}</summary>

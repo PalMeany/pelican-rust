@@ -499,3 +499,33 @@ html.nav-loading::before { content: ""; position: fixed; inset: 0 0 auto 0; heig
 .banner.danger > .icon { color: var(--danger-500); }
 .banner.success > .icon { color: var(--success-500); }
 .banner.info > .icon { color: var(--info-500); }
+
+/* Filament page forms: labels with hint actions/icons, grid repeaters. */
+.col-span-full { grid-column: 1 / -1; }
+.label-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.label-row label { margin: 0; }
+.field .label-row { margin-bottom: 0.25rem; }
+.hint-action { background: none; border: 0; padding: 0; color: var(--primary-600); font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+.hint-action:hover { text-decoration: underline; }
+.hint-icon { color: var(--text-3); display: inline-flex; }
+.repeater-item { display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.repeater-item .field { margin: 0; }
+.textarea.autosize { field-sizing: content; min-height: 4.5rem; resize: none; }
+.repeater-item .hint { color: var(--text-2); font-size: 0.875rem; margin: 0; }
+.label-row .req { color: var(--danger-600); margin-left: 0.125rem; }
+
+/* Filament fieldsets: a rounded frame with the legend on its top edge. */
+fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin: 0; min-width: 0;
+  display: flex; flex-direction: column; gap: 1.5rem; }
+fieldset > legend { padding: 0 0.5rem; margin-left: -0.5rem; font-size: 0.875rem; font-weight: 500; }
+/* Filament's disabled() fields shown read-only: gray, muted. */
+.input.is-disabled { background: var(--surface-2); color: var(--text-2); }
+.info-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 1fr); }
+.server-icon-cell { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding-top: 1.75rem; }
+.text-primary { color: var(--primary-600); }
+@media (max-width: 767px) { .info-grid { grid-template-columns: minmax(0, 1fr); } }
+/* Bare icon actions (`button_style`): Filament's XL icon buttons. */
+.icon-btn.action-icon { width: 2.25rem; height: 2.25rem; color: var(--primary-600); }
+.icon-btn.action-icon:hover { color: var(--primary-500); }
+.icon-btn.action-icon.danger { color: var(--danger-600); }
+td.actions .icon-btn.action-icon { width: 2rem; height: 2rem; }
