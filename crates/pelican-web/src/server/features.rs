@@ -396,8 +396,9 @@ async fn plugin_modal(
         .unwrap_or_else(|| p.t_with("filament-actions::modal.heading", &[("title", key)]));
     let html = match rt.render_page(plugin_id, pelican_plugins::runtime::Panel::Server, &page_id, req).await {
         Ok(Ok(html)) => html,
-        Ok(Err(e)) => format!("<div class=\"banner danger\"><p>{}</p></div>", e),
-        Err(e) => format!("<div class=\"banner danger\"><p>{}</p></div>", e.to_string()),
+        // Plugin error text is not markup.
+        Ok(Err(e)) => format!("<div class=\"banner danger\"><p>{}</p></div>", crate::views::escape(&e)),
+        Err(e) => format!("<div class=\"banner danger\"><p>{}</p></div>", crate::views::escape(&e.to_string())),
     };
     p.render("plugins/feature.html", context! { heading => title, html })
 }
