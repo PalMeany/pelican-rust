@@ -90,4 +90,42 @@ pelican_plugin_sdk::plugin!(Ping);
 - Время одного вызова ~30 с, память 128 МиБ; зависание или паника плагина возвращают ошибку, плагин при
   повторной загрузке с ошибкой получает статус `errored`.
 - `PANEL_PLUGIN_SAFE_MODE=true` отключает загрузку всех плагинов.
-- PHP-плагины оригинала видны и управляются (импорт, статусы), но не исполняются (PHP-sidecar — M8).
+- Без sidecar PHP-плагины оригинала видны и управляются (импорт, статусы), но не исполняются (см. ниже).
+
+## PHP-плагины оригинала: sidecar (ADR-0020)
+
+PHP-плагины исполняет сам оригинал Pelican **той же версии**, что и схема БД, запущенный рядом с pelican-rs
+(например, прежняя установка или образ `ghcr.io/pelican-dev/panel`). pelican-rs проксирует ему страницы и
+маршруты плагинов и пересылает события; ядро панели остаётся в pelican-rs.
+
+Настройка pelican-rs (`.env`):
+
+```
+PANEL_PHP_SIDECAR=http://127.0.0.1:8090     # адрес sidecar, доступный только pelican-rs
+PANEL_PHP_SIDECAR_DATA=/pelican-rs-data     # каталог данных pelican-rs, как его видит sidecar (если отличается)
+```
+
+Sidecar (оригинал) запускается с тем же `APP_KEY` и БД, `APP_URL` = публичный адрес pelican-rs,
+`SESSION_DRIVER=file`, `SESSION_COOKIE=pelican_sidecar_session`, `QUEUE_CONNECTION=sync`, без cron/воркеров
+ядра. Его каталог `plugins/` — это `storage/sidecar/plugins` pelican-rs: туда pelican-rs кладёт плагин-мост
+`pelican-rs-bridge` и ссылки на PHP-плагины (WASM-плагины оригинал не видит). Пример для Docker:
+
+```bash
+docker run -d --name pelican-sidecar --network <сеть pelican-rs> \
+  -e APP_KEY=<как у pelican-rs> -e APP_URL=https://panel.example.com -e APP_INSTALLED=true \
+  -e DB_CONNECTION=... -e DB_HOST=... -e DB_DATABASE=... -e DB_USERNAME=... -e DB_PASSWORD=... \
+  -e SESSION_DRIVER=file -e SESSION_COOKIE=pelican_sidecar_session -e CACHE_STORE=file \
+  -e QUEUE_CONNECTION=sync -e CADDY_APP_URL=:80 -e TRUSTED_PROXIES=<адрес pelican-rs> \
+  -v /var/lib/pelican-rs:/pelican-rs-data -v /var/lib/pelican-rs/storage/sidecar/plugins:/var/www/html/plugins \
+  --entrypoint sh ghcr.io/pelican-dev/panel:<версия> -c "php-fpm -D && exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"
+```
+
+Что работает: страницы и ресурсы Filament из плагинов (в оформлении оригинала, с Livewire), их пункты меню в
+админке и панели сервера, маршруты плагинов, слушатели `eloquent.*` и `App\Events\*` (`ActivityLogged` и др.),
+типы задач расписаний, права ролей/сабюзеров, ресурсы API-ключей, провайдеры аватаров, установка/обновление/
+удаление/включение/выключение (Composer-пакеты, миграции и сидеры плагина — в sidecar). Пример —
+`examples/php-plugins/greeter`.
+
+Ограничения: server features PHP-плагинов (модалки на консоли — действия Filament), темы и виджеты плагинов на
+страницах ядра, OAuth/captcha-провайдеры из PHP-плагинов, языковые плагины без sidecar. Версии sidecar и панели
+сверяются: при расхождении PHP-плагины отключаются (ошибка в логе).
