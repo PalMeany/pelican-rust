@@ -41,6 +41,46 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/servers/{id}/edit", get(edit).post(save))
         .route("/admin/servers/{id}/primary", post(set_primary))
         .route("/admin/servers/{id}/action", post(action))
+        .route("/admin/servers/{id}/icon/url", post(icon_url))
+        .route("/admin/servers/{id}/icon/file", post(icon_file))
+        .route("/admin/servers/{id}/icon/delete", post(icon_delete))
+}
+
+// UploadIcon / DeleteIcon on the edit page (the server panel's actions, `update server`).
+
+async fn icon_url(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
+    let (s, _) = find(&admin, id).await?;
+    if !admin.user.can_update_server(s.node_id.0) {
+        return Err(WebError::Forbidden);
+    }
+    let url = form.get("icon_url").trim().to_string();
+    if url.is_empty() {
+        admin.session.flash("warning", admin.t("admin/egg.import.no_icon"), None);
+    } else {
+        match crate::server::settings::fetch_icon_from_url(&admin.st, &admin.locale(), &url, &s.uuid).await {
+            Ok(()) => admin.flash_success(admin.t("admin/egg.import.icon_updated")),
+            Err(msg) => admin.flash_danger(msg, None),
+        }
+    }
+    Ok(admin.redirect(&format!("/admin/servers/{id}/edit")))
+}
+
+async fn icon_file(admin: Admin, Path(id): Path<i64>, req: axum::extract::Request) -> WebResult {
+    let (s, _) = find(&admin, id).await?;
+    if !admin.user.can_update_server(s.node_id.0) {
+        return Err(WebError::Forbidden);
+    }
+    Ok(crate::server::settings::upload_icon_file(&admin.st, &admin.locale(), req, &s.uuid).await)
+}
+
+async fn icon_delete(admin: Admin, Path(id): Path<i64>) -> WebResult {
+    let (s, _) = find(&admin, id).await?;
+    if !admin.user.can_update_server(s.node_id.0) {
+        return Err(WebError::Forbidden);
+    }
+    crate::server::settings::delete_icon(&admin.st, &s.uuid).await;
+    admin.flash_success(admin.t("admin/egg.import.icon_deleted"));
+    Ok(admin.redirect(&format!("/admin/servers/{id}/edit")))
 }
 
 #[derive(FromQueryResult)]
@@ -463,8 +503,9 @@ async fn render_edit(
         .unwrap_or_else(|| "information".into());
     let accessible_nodes =
         nodes::Entity::find().all(&st.db).await?.into_iter().filter(|n| admin.user.can_target_node(n.id.0)).count();
-    let icon = crate::models::icon_url(st, "server", &s.uuid)
-        .or_else(|| egg.uuid.as_deref().and_then(|u| crate::models::icon_url(st, "egg", u)));
+    let own_icon = crate::models::icon_url(st, "server", &s.uuid);
+    let has_own_icon = own_icon.is_some();
+    let icon = own_icon.or_else(|| egg.uuid.as_deref().and_then(|u| crate::models::icon_url(st, "egg", u)));
     // Relation managers PHP plugins add to servers (`ServerResource::registerCustomRelations()`).
     let (plugin_rel, cookies) = match headers {
         Some(h) => super::plugin_relations(admin, h, "servers", s.id.0).await,
@@ -501,6 +542,7 @@ async fn render_edit(
                     failed_install => matches!(ServerState::parse(s.status.as_deref()), Some(ServerState::InstallFailed | ServerState::ReinstallFailed)),
                     conflict => server_info::in_conflict_state(s, c.node, pelican_core::server_state::active_transfer(&st.db, s.id.0).await?.is_some()),
                     icon => icon,
+                    own_icon => has_own_icon,
                 },
                 condition => context! { label => cond_label, icon => cond_icon, color => cond_color },
                 // The name's `hint_random` action: "{egg name, kebab}-{random word}" (a few to pick from).

@@ -33,7 +33,14 @@
 
 <section class="card card-body" data-tab-panel="information"{% if tab != 'information' %} hidden{% endif %}>
   <div class="grid" style="grid-template-columns: 10rem 1fr; gap:1.5rem">
-    <div>{% if s.icon %}<img src="{{ s.icon }}" alt="" style="width:150px;border-radius:var(--radius)">{% endif %}</div>
+    {# Image + UploadIcon/DeleteIcon (the server's own icon, else its egg's). #}
+    <div class="stack" style="align-items:center;gap:0.5rem">
+      {% if s.icon %}<img src="{{ s.icon }}" alt="" width="150" height="150" style="object-fit:contain;border-radius:var(--radius)"{% if not s.own_icon %} title="{{ trans('server/setting.server_info.icon.tooltip') }}"{% endif %}>{% endif %}
+      {% if not readonly %}<div class="row" style="gap:0.25rem">
+        <button type="button" class="icon-btn text-primary" data-modal-open="upload-icon" title="{{ trans('admin/egg.import.import_icon') }}" aria-label="{{ trans('admin/egg.import.import_icon') }}">{{ icon('photo-up', 'icon-lg') }}</button>
+        {% if s.own_icon %}<button type="submit" form="icon-delete" class="icon-btn danger" title="{{ trans('admin/egg.import.delete_icon') }}" aria-label="{{ trans('admin/egg.import.delete_icon') }}">{{ icon('trash', 'icon-lg') }}</button>{% endif %}
+      </div>{% endif %}
+    </div>
     <div class="grid grid-3">
       {% set dice %}{% if not readonly %}<button type="button" class="icon-btn" data-random-name='{{ random_names | tojson }}' data-target="f-name" title="{{ trans(S ~ '.random') }}" aria-label="{{ trans(S ~ '.random') }}">{{ icon('dice-' ~ dice_face, 'icon-sm') }}</button>{% endif %}{% endset %}
       <div class="span-2">{{ f.text('name', trans(S ~ '.name'), s.name, errors, required=true, attrs='maxlength="255"', prefix_icon='server', actions=dice) }}</div>
@@ -239,6 +246,32 @@
 </div>
 
 {% if not readonly %}
+<form id="icon-delete" method="post" action="/admin/servers/{{ s.id }}/icon/delete" hidden>{{ csrf_field() }}</form>
+{% set EI = 'admin/egg.import' %}
+<dialog id="upload-icon" class="modal">
+  <div class="modal-body stack" data-tabs-root>
+    <nav class="tabs">
+      <button type="button" data-tab="icon-url" class="active">{{ icon('world-upload', 'icon-sm') }}{{ trans(EI ~ '.url') }}</button>
+      <button type="button" data-tab="icon-file">{{ icon('photo-up', 'icon-sm') }}{{ trans(EI ~ '.file') }}</button>
+    </nav>
+    <section class="stack" data-tab-panel="icon-url">
+      <form method="post" action="/admin/servers/{{ s.id }}/icon/url" hx-boost="false">
+        {{ csrf_field() }}
+        {{ f.text('icon_url', trans(EI ~ '.icon_url'), '', {}, type='url', placeholder='https://…', autocomplete='off') }}
+        <div class="row" style="justify-content:flex-end"><button type="submit" class="btn">{{ trans(EI ~ '.import_icon') }}</button></div>
+      </form>
+    </section>
+    <section class="stack" data-tab-panel="icon-file" hidden>
+      <form method="post" action="/admin/servers/{{ s.id }}/icon/file" enctype="multipart/form-data" data-icon-upload>
+        {{ csrf_field() }}
+        <div class="field"><input class="input" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" name="icon"></div>
+        <p class="error" data-upload-error hidden></p>
+        <div class="row" style="justify-content:flex-end"><button type="submit" class="btn">{{ trans(EI ~ '.import_icon') }}</button></div>
+      </form>
+    </section>
+  </div>
+  <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button></div>
+</dialog>
 <dialog id="alloc-create" class="modal"><form method="post" action="/admin/servers/{{ s.id }}/allocations/create">{{ csrf_field() }}
   <div class="modal-head"><h2>{{ trans('admin/server.create_allocation') }}</h2></div>
   <div class="modal-body">

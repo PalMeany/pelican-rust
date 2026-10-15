@@ -10,7 +10,7 @@ mod files;
 mod mounts;
 mod network;
 mod schedules;
-mod settings;
+pub(crate) mod settings;
 mod startup;
 mod users;
 mod webhooks;

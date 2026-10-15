@@ -140,6 +140,30 @@
     sidebarTitles();
   });
 
+  // UploadIcon's file tab (server settings, admin server edit): the multipart form posts with an
+  // X-CSRF-TOKEN header (the CSRF middleware only buffers urlencoded bodies).
+  document.addEventListener('submit', function (e) {
+    var form = e.target.closest('form[data-icon-upload]');
+    if (!form) return;
+    e.preventDefault();
+    var token = form.querySelector('[name="_token"]');
+    var errorEl = form.querySelector('[data-upload-error]');
+    fetch(form.action, {
+      method: 'POST',
+      body: new FormData(form),
+      credentials: 'same-origin',
+      headers: { 'X-CSRF-TOKEN': token ? token.value : '' },
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j.ok) { window.location.reload(); return; }
+        if (errorEl) { errorEl.hidden = false; errorEl.textContent = j.message || 'Upload failed'; }
+      })
+      .catch(function () {
+        if (errorEl) { errorEl.hidden = false; errorEl.textContent = 'Upload failed'; }
+      });
+  });
+
   // Random server name (`hint_random`): one of the names the page was rendered with.
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-random-name]');

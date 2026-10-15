@@ -520,7 +520,7 @@ async fn icon_url(p: ServerPanel, form: Form) -> WebResult<Response> {
 
 /// `validateIconUrl` + `Http::…()->body()` + extension check + writeIcon.
 /// Fetch errors surface exactly like Filament's exception notifications.
-async fn fetch_icon_from_url(st: &AppState, locale: &str, url: &str, uuid: &str) -> Result<(), String> {
+pub(crate) async fn fetch_icon_from_url(st: &AppState, locale: &str, url: &str, uuid: &str) -> Result<(), String> {
     let msg = |key: &str, params: &[(&str, &str)]| -> String {
         let owned: Vec<(String, String)> = params.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
         crate::i18n::trans(locale, key, &owned)
@@ -593,6 +593,16 @@ fn is_public_ip(ip: IpAddr) -> bool {
                 || s[0] & 0xffc0 == 0xfe80 // link-local fe80::/10
                 || s[0] & 0xfe00 == 0xfc00 // unique-local fc00::/7
                 || s[0] == 0x2001 && s[1] == 0xdb8) // documentation 2001:db8::/32
+        }
+    }
+}
+
+/// DeleteIcon: every stored format of the server's icon.
+pub(crate) async fn delete_icon(st: &AppState, uuid: &str) {
+    for ext in ICON_FORMATS {
+        let path = crate::models::public_disk(st).join(ICON_DIR).join(format!("{uuid}.{ext}"));
+        if tokio::fs::try_exists(&path).await.unwrap_or(false) {
+            tokio::fs::remove_file(&path).await.ok();
         }
     }
 }
@@ -692,17 +702,22 @@ fn boundary_of(content_type: &str) -> Option<&str> {
 /// by js/settings.js; the CSRF middleware only buffers urlencoded bodies).
 /// Answers JSON; the page reloads on success, shows `message` otherwise.
 async fn icon_file(p: ServerPanel, req: Request) -> Response {
-    let locale = p.locale();
     if !p.can("settings.change-icon") {
         return (axum::http::StatusCode::FORBIDDEN, axum::Json(json!({"ok": false}))).into_response();
     }
+    upload_icon_file(&p.st, &p.locale(), req, &p.server.uuid).await
+}
+
+/// The multipart icon upload of a server (UploadIcon's file tab), answered as JSON; shared
+/// with the admin's server edit page.
+pub(crate) async fn upload_icon_file(st: &AppState, locale: &str, req: Request, uuid: &str) -> Response {
     let too_large = || {
         (
             StatusCode::UNPROCESSABLE_ENTITY,
             axum::Json(json!({
                 "ok": false,
                 "message": crate::i18n::trans(
-                    &locale,
+                    locale,
                     "validation.max.file",
                     &[("attribute".to_string(), "icon".to_string()), ("max".to_string(), "256".to_string())],
                 ),
@@ -725,11 +740,11 @@ async fn icon_file(p: ServerPanel, req: Request) -> Response {
         return (StatusCode::UNPROCESSABLE_ENTITY, axum::Json(json!({"ok": false}))).into_response();
     };
     let ext = file.filename.rsplit_once('.').map(|(_, e)| e.to_lowercase()).unwrap_or_default();
-    let result = write_icon(&p.st, &ext, &file.bytes, &p.server.uuid).await.map_err(|e| match e {
+    let result = write_icon(st, &ext, &file.bytes, uuid).await.map_err(|e| match e {
         WriteErr::UnknownExtension(ext) => {
-            crate::i18n::trans(&locale, "admin/egg.import.unknown_extension", &[("extension".to_string(), ext)])
+            crate::i18n::trans(locale, "admin/egg.import.unknown_extension", &[("extension".to_string(), ext)])
         }
-        WriteErr::Io => crate::i18n::trans(&locale, "admin/egg.import.could_not_write", &[]),
+        WriteErr::Io => crate::i18n::trans(locale, "admin/egg.import.could_not_write", &[]),
     });
     match result {
         Ok(()) => axum::Json(json!({"ok": true})).into_response(),
@@ -743,12 +758,7 @@ async fn icon_file(p: ServerPanel, req: Request) -> Response {
 async fn icon_delete(p: ServerPanel, form: Form) -> WebResult<Response> {
     p.authorize("settings.change-icon")?;
     let back = back_url(&form, &p);
-    for ext in ICON_FORMATS {
-        let path = crate::models::public_disk(&p.st).join(ICON_DIR).join(format!("{}.{}", p.server.uuid, ext));
-        if tokio::fs::try_exists(&path).await.unwrap_or(false) {
-            tokio::fs::remove_file(&path).await.ok();
-        }
-    }
+    delete_icon(&p.st, &p.server.uuid).await;
     p.session.flash("success", p.t("admin/egg.import.icon_deleted"), None);
     Ok(p.redirect(&back))
 }
