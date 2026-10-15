@@ -216,29 +216,6 @@ class BridgeController extends Controller
     }
 
     /**
-     * The plugins' navigation of one panel as the signed user sees it there (Filament hides
-     * items whose page/resource denies `canAccess()`), in the user's language.
-     */
-    public function userNavigation(Request $request): JsonResponse
-    {
-        $user = \App\Models\User::query()->find((int) $request->header('X-Pelican-Rs-User', '0'));
-        abort_if(is_null($user), 403);
-        $panel = Filament::getPanel((string) $request->input('panel'));
-        \Illuminate\Support\Facades\Auth::setUser($user);
-        if ($user->language) {
-            app()->setLocale($user->language);
-        }
-        Filament::setCurrentPanel($panel);
-        if ($panel->hasTenancy()) {
-            $tenant = \App\Models\Server::query()->where('uuid_short', (string) $request->input('tenant'))->first();
-            abort_if(is_null($tenant), 404);
-            Filament::setTenant($tenant);
-        }
-
-        return new JsonResponse($this->navigation([$panel], true));
-    }
-
-    /**
      * @param  \Filament\Panel[]|null  $panels
      * @return array<int, array<string, mixed>>
      */
@@ -470,14 +447,16 @@ class BridgeController extends Controller
     }
 
     /**
-     * The HTML of the plugins' render hooks for a page of `panel` (global hooks, those scoped to
-     * the panel and those the plugins gave the panel) and the alert banners their `boot()` sends,
-     * as the signed user (or a guest) sees them.
+     * What pelican-rs shows from the plugins on one page of `panel` (on server `tenant`), as the
+     * signed user (or a guest) sees it, in one call: menu entries (Filament hides pages whose
+     * `canAccess()` denies), the HTML of render hooks (global, scoped to the panel, given to the
+     * panel), the alert banners the plugins' `boot()` sends, and on server pages the console
+     * actions.
      */
-    public function renderHooks(Request $request): JsonResponse
+    public function page(Request $request): JsonResponse
     {
-        $id = (int) $request->header('X-Pelican-Rs-User', '0');
-        if ($id !== 0 && ($user = \App\Models\User::query()->find($id))) {
+        $user = \App\Models\User::query()->find((int) $request->header('X-Pelican-Rs-User', '0'));
+        if ($user) {
             \Illuminate\Support\Facades\Auth::setUser($user);
             if ($user->language) {
                 app()->setLocale($user->language);
@@ -485,6 +464,7 @@ class BridgeController extends Controller
         }
         $panelId = (string) $request->input('panel');
         $panel = null;
+        $tenant = null;
         try {
             $panel = Filament::getPanel($panelId);
             Filament::setCurrentPanel($panel);
@@ -498,6 +478,25 @@ class BridgeController extends Controller
             // Pages outside the panels (login): global hooks only.
             $panel = null;
         }
+        [$hooks, $banners] = $this->renderHooks($panel, $panelId);
+        $tenantReady = $panel && (!$panel->hasTenancy() || $tenant);
+
+        return new JsonResponse([
+            'navigation' => $user && $tenantReady ? $this->navigation([$panel], true) : [],
+            'hooks' => (object) $hooks,
+            'banners' => $banners,
+            'console_actions' => $user && $tenant && $panelId === 'server' ? $this->consoleActions() : [],
+        ]);
+    }
+
+    /**
+     * The plugins' render hooks for a page of the current panel (HTML by hook name) and the alert
+     * banners their `boot()` sends.
+     *
+     * @return array{0: array<string, string>, 1: array<int, array<string, mixed>>}
+     */
+    private function renderHooks(?\Filament\Panel $panel, string $panelId): array
+    {
         $banners = [];
         $all = [];
         if ($panel) {
@@ -523,22 +522,16 @@ class BridgeController extends Controller
             }
         }
 
-        return new JsonResponse(['hooks' => (object) $out, 'banners' => $banners]);
+        return [$out, $banners];
     }
 
-    /** The plugins' console header actions the signed user can use on a server. */
-    public function consoleActions(Request $request): JsonResponse
+    /**
+     * The plugins' console header actions the signed user can use on the current server.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function consoleActions(): array
     {
-        $user = \App\Models\User::query()->find((int) $request->header('X-Pelican-Rs-User', '0'));
-        abort_if(is_null($user), 403);
-        \Illuminate\Support\Facades\Auth::setUser($user);
-        if ($user->language) {
-            app()->setLocale($user->language);
-        }
-        Filament::setCurrentPanel(Filament::getPanel('server'));
-        $tenant = \App\Models\Server::query()->where('uuid_short', (string) $request->input('tenant'))->first();
-        abort_if(is_null($tenant), 404);
-        Filament::setTenant($tenant);
         $out = [];
         foreach (\PelicanRs\Bridge\Filament\ConsoleActionHost::pluginHeaderActions() as $action) {
             try {
@@ -557,7 +550,7 @@ class BridgeController extends Controller
             }
         }
 
-        return new JsonResponse($out);
+        return $out;
     }
 
     /** @return array<int, array<string, mixed>> */

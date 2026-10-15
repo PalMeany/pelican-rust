@@ -68,6 +68,7 @@ fn start_panel(state: AppState) -> axum::Router {
         pelican_api::jobs::spawn_scheduler(live.clone());
     }
     spawn_reloader(live.clone());
+    pelican_web::server_info::spawn_node_warmer(state.clone());
     plugins::start(&live);
     app(live)
 }

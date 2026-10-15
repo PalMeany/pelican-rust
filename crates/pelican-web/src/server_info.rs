@@ -218,12 +218,38 @@ pub async fn node_system_information(st: &AppState, node: &nodes::Model) -> Valu
     let key = format!("nodes.{}.system_information", node.id.0);
     let (st, node) = (st.clone(), node.clone());
     crate::cache::remember_swr(&key, Duration::from_secs(30), move || async move {
-        match wings_get(&st, &node, "/api/system", 15, 3).await {
-            Some(v) if v.get("cpu_count").is_some() => v,
-            _ => json!({ "exception": "Could not connect" }),
-        }
+        fetch_system_information(&st, &node).await
     })
     .await
+}
+
+async fn fetch_system_information(st: &AppState, node: &nodes::Model) -> Value {
+    match wings_get(st, node, "/api/system", 15, 3).await {
+        Some(v) if v.get("cpu_count").is_some() => v,
+        _ => json!({ "exception": "Could not connect" }),
+    }
+}
+
+async fn nodes_all(st: &AppState) -> Result<Vec<nodes::Model>, sea_orm::DbErr> {
+    use sea_orm::EntityTrait;
+    nodes::Entity::find().all(&st.db).await
+}
+
+/// Keeps every node's system information fresh in the background, so pages listing nodes (and
+/// their health) never wait for Wings or for an unreachable node's connect timeout.
+pub fn spawn_node_warmer(st: AppState) {
+    tokio::spawn(async move {
+        loop {
+            if let Ok(list) = nodes_all(&st).await {
+                futures::future::join_all(list.iter().map(|n| async {
+                    let info = fetch_system_information(&st, n).await;
+                    crate::cache::put(&format!("nodes.{}.system_information", n.id.0), Duration::from_secs(30), info);
+                }))
+                .await;
+            }
+            tokio::time::sleep(Duration::from_secs(25)).await;
+        }
+    });
 }
 
 /// `Node::ipAddresses()`: Wings-reported addresses (cached 1 h) + `0.0.0.0` and `::`.

@@ -831,41 +831,47 @@ where
 
 /// Forget cached per-user answers (the plugins changed: a new manifest).
 fn clear_user_caches() {
-    if let Ok(mut g) = NAV.lock() {
-        *g = None;
-    }
-    if let Ok(mut g) = HOOKS.lock() {
-        *g = None;
-    }
-    if let Ok(mut g) = ACTIONS.lock() {
+    if let Ok(mut g) = PAGE.lock() {
         *g = None;
     }
 }
 
-static NAV: std::sync::Mutex<Option<SwrMap<(String, i64, String), Vec<NavEntry>>>> = std::sync::Mutex::new(None);
+static PAGE: std::sync::Mutex<Option<SwrMap<(String, i64, String), Arc<PageExtras>>>> = std::sync::Mutex::new(None);
 
-/// The PHP plugins' navigation of a panel as `user` sees it (on server `tenant`): Filament
-/// hides pages whose `canAccess()` denies. Per user, panel and server ([`swr`]).
-pub async fn user_navigation(st: &AppState, panel: &str, user: i64, tenant: Option<&str>) -> Vec<NavEntry> {
-    let Some(m) = manifest() else { return Vec::new() };
-    if !m.navigation.iter().any(|n| n.panel == panel) || is_down() {
-        return Vec::new();
+/// What the PHP plugins add to a page of `panel` (`admin`, `app`, `server` with its `tenant`) as
+/// `user` (or a guest) sees it, from one call to the bridge (`/_bridge/page`): menu entries,
+/// render hooks, alert banners, console actions. Per user, panel and server ([`swr`]); no call
+/// when no plugin adds any of these.
+pub async fn page_extras(st: &AppState, panel: &str, user: Option<i64>, tenant: Option<&str>) -> Arc<PageExtras> {
+    let Some(m) = manifest() else { return Arc::default() };
+    let wanted = m.boots
+        || !m.render_hooks.is_empty()
+        || (user.is_some()
+            && (m.navigation.iter().any(|n| n.panel == panel) || (panel == "server" && !m.console_actions.is_empty())));
+    if !wanted || is_down() {
+        return Arc::default();
     }
-    let Some(sc) = get(st) else { return Vec::new() };
-    let key = (panel.to_string(), user, tenant.unwrap_or_default().to_string());
+    let Some(sc) = get(st) else { return Arc::default() };
+    let key = (panel.to_string(), user.unwrap_or(0), tenant.unwrap_or_default().to_string());
     let body = json!({ "panel": panel, "tenant": tenant });
     let panel = panel.to_string();
-    swr(&NAV, key, move || async move {
-        match sc.call_as(reqwest::Method::POST, "/_bridge/navigation", Some(user), Some(&body)).await {
-            Ok((200, v)) => Some(serde_json::from_value(v).unwrap_or_default()),
+    swr(&PAGE, key, move || async move {
+        match sc.call_as(reqwest::Method::POST, "/_bridge/page", user, Some(&body)).await {
+            Ok((200, v)) => Some(Arc::new(serde_json::from_value(v).unwrap_or_default())),
             Ok((status, _)) => {
-                tracing::warn!(status, panel, "sidecar navigation failed");
+                tracing::warn!(status, panel, "sidecar page data failed");
                 None
             }
             Err(_) => None,
         }
     })
     .await
+}
+
+/// The PHP plugins' navigation of a panel as `user` sees it (on server `tenant`): Filament
+/// hides pages whose `canAccess()` denies.
+pub async fn user_navigation(st: &AppState, panel: &str, user: i64, tenant: Option<&str>) -> Vec<NavEntry> {
+    page_extras(st, panel, Some(user), tenant).await.navigation.clone()
 }
 
 /// An alert banner a plugin sent (`AlertBanner::make()->send()`), title and body sanitized HTML.
@@ -885,35 +891,24 @@ pub struct Banner {
     pub closeable: bool,
 }
 
-/// What PHP plugins add to a page: their render hooks' HTML by hook name and the alert banners
-/// their `boot()` sends (shown at the top of the page, `PanelsRenderHook::PAGE_START`).
+/// What PHP plugins add to a page: menu entries, their render hooks' HTML by hook name, the
+/// alert banners their `boot()` sends (shown at the top of the page,
+/// `PanelsRenderHook::PAGE_START`) and, on server pages, console actions.
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct PageExtras {
+    #[serde(default)]
+    pub navigation: Vec<NavEntry>,
     #[serde(default)]
     pub hooks: serde_json::Map<String, Value>,
     #[serde(default)]
     pub banners: Vec<Banner>,
+    #[serde(default)]
+    pub console_actions: Vec<ConsoleAction>,
 }
 
-static HOOKS: std::sync::Mutex<Option<SwrMap<(String, i64, String), Arc<PageExtras>>>> = std::sync::Mutex::new(None);
-
-/// The PHP plugins' additions to a page of `panel` (`admin`, `app`, `server` with its `tenant`)
-/// as `user` (or a guest) sees it. Empty when no plugin registers hooks or acts on panel boot;
-/// per user, panel and server ([`swr`]).
+/// The PHP plugins' additions to a page of `panel` as `user` (or a guest) sees it ([`page_extras`]).
 pub async fn render_hooks(st: &AppState, panel: &str, user: Option<i64>, tenant: Option<&str>) -> Arc<PageExtras> {
-    if !manifest().is_some_and(|m| m.boots || !m.render_hooks.is_empty()) || is_down() {
-        return Arc::default();
-    }
-    let Some(sc) = get(st) else { return Arc::default() };
-    let key = (panel.to_string(), user.unwrap_or(0), tenant.unwrap_or_default().to_string());
-    let body = json!({ "panel": panel, "tenant": tenant });
-    swr(&HOOKS, key, move || async move {
-        match sc.call_as(reqwest::Method::POST, "/_bridge/hooks", user, Some(&body)).await {
-            Ok((200, v)) => Some(Arc::new(serde_json::from_value(v).unwrap_or_default())),
-            _ => None,
-        }
-    })
-    .await
+    page_extras(st, panel, user, tenant).await
 }
 
 /// An OAuth provider registered by a PHP plugin (its redirect and callback run in the sidecar).
@@ -947,23 +942,10 @@ pub struct ConsoleAction {
     pub color: Option<String>,
 }
 
-static ACTIONS: std::sync::Mutex<Option<SwrMap<(i64, String), Vec<ConsoleAction>>>> = std::sync::Mutex::new(None);
-
 /// The PHP plugins' console actions `user` can use on server `tenant` (run on the bridge's
-/// host page `/server/<tenant>/rs-console-action?action=<name>`); per user and server ([`swr`]).
+/// host page `/server/<tenant>/rs-console-action?action=<name>`).
 pub async fn console_actions(st: &AppState, user: i64, tenant: &str) -> Vec<ConsoleAction> {
-    if !manifest().is_some_and(|m| !m.console_actions.is_empty()) || is_down() {
-        return Vec::new();
-    }
-    let Some(sc) = get(st) else { return Vec::new() };
-    let body = json!({ "tenant": tenant });
-    swr(&ACTIONS, (user, tenant.to_string()), move || async move {
-        match sc.call_as(reqwest::Method::POST, "/_bridge/console-actions", Some(user), Some(&body)).await {
-            Ok((200, v)) => Some(serde_json::from_value(v).unwrap_or_default()),
-            _ => None,
-        }
-    })
-    .await
+    page_extras(st, "server", Some(user), Some(tenant)).await.console_actions.clone()
 }
 
 /// Server features (Wings console listeners) of WASM and PHP plugins: `(id, listeners)`.
