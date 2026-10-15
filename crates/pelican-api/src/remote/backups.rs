@@ -2,7 +2,7 @@
 
 use axum::Extension;
 use axum::extract::State;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use pelican_core::activity::morph;
 use pelican_core::state::AppState;
 use pelican_db::entities::{backup_hosts, backups, nodes, servers};
@@ -43,7 +43,7 @@ pub async fn upload_parts(
         return Err(ApiError::bad_request("A non-empty \"size\" query parameter must be provided."));
     }
     let uuid = ctx.bound.param("backup").unwrap_or_default().to_string();
-    let (backup, server) = find_backup(&st, &uuid).await?;
+    let (backup, server) = find_reported_backup(&st, &uuid).await?;
     let node = node(&ctx)?;
     if server.node_id != node.id {
         return Err(node_forbidden());
@@ -61,11 +61,45 @@ pub async fn upload_parts(
     if host.schema != "s3" {
         return Err(ApiError::bad_request("The configured backup schema is not an S3 compatible."));
     }
-    // S3 multipart presigning arrives with the backups milestone (PLAN M4).
-    Err(ApiError::internal("S3Exception"))
+    // S3BackupSchema::getUploadParts().
+    let bucket = crate::s3::Bucket::from_host(&host);
+    let key = crate::s3::backup_key(&server.uuid, &backup.uuid);
+    let upload_id = bucket.create_multipart_upload(&key).await?;
+    let lifespan = st.config.env.int_or("BACKUP_PRESIGNED_URL_LIFESPAN", 60);
+    let mut max_part = st.config.env.int_or("BACKUP_MAX_PART_SIZE", crate::s3::DEFAULT_MAX_PART_SIZE);
+    if !(crate::s3::MIN_MAX_PART_SIZE..=crate::s3::MAX_MAX_PART_SIZE).contains(&max_part) {
+        max_part = crate::s3::DEFAULT_MAX_PART_SIZE;
+    }
+    let now = chrono::Utc::now();
+    // `for ($i = 0; $i < ($size / $maxPartSize); $i++)` with float division.
+    let count = (size as f64 / max_part as f64).ceil() as i64;
+    let parts: Vec<String> = (1..=count.max(0))
+        .map(|n| {
+            bucket.presign(
+                "PUT",
+                &key,
+                &[("partNumber", n.to_string()), ("uploadId", upload_id.clone())],
+                lifespan * 60,
+                now,
+            )
+        })
+        .collect();
+    backups::Entity::update_many()
+        .col_expr(backups::Column::UploadId, Expr::value(Some(upload_id)))
+        .col_expr(backups::Column::UpdatedAt, Expr::value(Timestamp(pelican_core::time::now())))
+        .filter(backups::Column::Id.eq(backup.id))
+        .exec(&st.db)
+        .await?;
+    let concurrent = st.config.env.int_or("BACKUP_MAX_CONCURRENT_UPLOADS", crate::s3::MAX_CONCURRENT_UPLOADS);
+    Ok(crate::json::PhpJson::ok(serde_json::json!({
+        "parts": parts,
+        "part_size": max_part,
+        "max_concurrent_uploads": concurrent,
+    }))
+    .into_response())
 }
 
-/// The backup Wings reports on, waiting briefly for it to become visible: Wings answers
+/// The backup Wings uploads or reports on, waiting briefly for it to become visible: Wings answers
 /// `create_backup` before the panel commits the row, and a small server's backup can be
 /// done (and reported) before that commit. A 404 makes Wings delete the archive. PHP's
 /// slower request start-up hides the same race in the original.
@@ -142,12 +176,34 @@ pub async fn status(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
     // `$model->backupHost->schema` on a missing host → ErrorException (rolled back).
     let Some(host) = host else { return Err(ApiError::internal("ErrorException")) };
     if host.schema == "s3" {
-        if backup.upload_id.as_deref().is_none_or(str::is_empty) {
-            if successful {
-                return Err(ApiError::internal("Exception"));
+        // S3BackupSchema::completeMultipartUpload().
+        match backup.upload_id.as_deref().filter(|u| !u.is_empty()) {
+            None if successful => return Err(ApiError::internal("Exception")),
+            None => {}
+            Some(upload_id) => {
+                let bucket = crate::s3::Bucket::from_host(&host);
+                let key = crate::s3::backup_key(&server.uuid, &backup.uuid);
+                if !successful {
+                    bucket.abort_multipart_upload(&key, upload_id).await?;
+                } else {
+                    let parts = match input.get("parts").filter(|p| !p.is_null()) {
+                        Some(list) => list
+                            .as_array()
+                            .map(|a| {
+                                a.iter()
+                                    .map(|p| {
+                                        let n = p.get("part_number").map(pelican_core::php::string).unwrap_or_default();
+                                        let etag = p.get("etag").map(pelican_core::php::string).unwrap_or_default();
+                                        (pelican_core::php::intval(&n), etag)
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                        None => bucket.list_parts(&key, upload_id).await?,
+                    };
+                    bucket.complete_multipart_upload(&key, upload_id, &parts).await?;
+                }
             }
-        } else {
-            return Err(ApiError::internal("S3Exception"));
         }
     }
     ctx.activity(event)

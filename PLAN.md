@@ -66,7 +66,8 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] `POST /sftp/auth` (пароль, ключ OpenSSH, троттлинг, права, конфликты состояния)
 - [x] `POST /activity`
 - [x] backups: status, restore (wings-адаптер)
-- [ ] backups S3: presigned multipart (R11), complete/abort (R12) — нужен MinIO в диф-окружении
+- [x] backups S3: собственный SigV4 (`pelican_api::s3`, подпись сверена с примером AWS): R11 CreateMultipartUpload + presigned UploadPart, R12 Complete/Abort/ListParts, presigned GET (скачивание, восстановление), DeleteObject; E2E с настоящим Wings и S3-сервером rclone (`scripts/e2e/s3-up`; MinIO-образы больше не публикуются). Wings блокирует восстановление с приватных адресов — для e2e `backups.restore_host_allowlist: [minio]`
+  - замечание: при QUEUE_CONNECTION=sync вебхук на ActivityLogged доставляется внутри транзакции восстановления (как в оригинале), и R13 может прийти раньше коммита — статус restoring_backup остаётся; с очередью database гонки нет
 - [x] `Server::saved` → удаление сабюзера-владельца (SubuserDeletionService)
 - [x] Клиент Wings (семантика throwIf/User-Agent) + JWT (побайтно = PHP lcobucci); остальные вызовы — по мере эндпоинтов M4/M5
 - [ ] Конфигурация ноды (JSON/YAML) — вместе с Application API nodes (M5)

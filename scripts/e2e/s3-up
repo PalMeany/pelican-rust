@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Throwaway S3 store for end-to-end backup checks: rclone's S3 server as `minio:9000`
+# on the `pelican-e2e` network, bucket `pelican-test`, fixed test keys
+# (access `pelican-e2e`, secret `pelican-e2e-secret`). Point an S3 backup host at
+# endpoint http://minio:9000, region us-east-1, path-style on.
+set -euo pipefail
+VM=pelican
+limactl shell "$VM" -- mkdir -p /tmp/s3data/pelican-test
+limactl shell "$VM" -- docker run -d --name minio --network pelican-e2e -v /tmp/s3data:/data \
+  rclone/rclone:1.69.1 serve s3 --addr :9000 --auth-key pelican-e2e,pelican-e2e-secret /data

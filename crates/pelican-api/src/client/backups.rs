@@ -284,15 +284,12 @@ pub async fn initiate_backup<C: ConnectionTrait>(
         ..Default::default()
     };
     let backup = pelican_db::write::insert(db, am).await?;
-    if host.schema == "wings" {
-        let (_, conn) = node_conn(st, server).await?;
-        st.wings
-            .create_backup(&conn, &server.uuid, "wings", &backup.uuid, &o.ignored.join("\n"))
-            .await
-            .map_err(wings_err)?;
-    } else {
-        return Err(ApiError::internal("S3Exception"));
-    }
+    // Both schemas ask Wings to create it (`DaemonBackupRepository::create`, adapter = schema).
+    let (_, conn) = node_conn(st, server).await?;
+    st.wings
+        .create_backup(&conn, &server.uuid, &host.schema, &backup.uuid, &o.ignored.join("\n"))
+        .await
+        .map_err(wings_err)?;
     Ok(backup)
 }
 
@@ -340,6 +337,17 @@ async fn host_of<C: ConnectionTrait>(db: &C, backup: &backups::Model) -> ApiResu
         .ok_or_else(|| ApiError::internal("ErrorException"))
 }
 
+/// `S3BackupSchema::getDownloadLink`: a presigned GET valid for five minutes.
+fn s3_download_link(host: &backup_hosts::Model, server: &servers::Model, backup: &backups::Model) -> String {
+    crate::s3::Bucket::from_host(&host).presign(
+        "GET",
+        &crate::s3::backup_key(&server.uuid, &backup.uuid),
+        &[],
+        300,
+        chrono::Utc::now(),
+    )
+}
+
 /// `GET /backups/{backup}/download`.
 pub async fn download(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) -> ApiResult<Response> {
     require(&st, &ctx, "backup.download").await?;
@@ -348,7 +356,7 @@ pub async fn download(State(st): State<AppState>, Extension(ctx): Extension<Ctx>
     let host = host_of(&st.db, &backup).await?;
     let url = match host.schema.as_str() {
         "wings" => download_link(&st, &ctx, &server, &backup).await?,
-        "s3" => return Err(ApiError::internal("S3Exception")),
+        "s3" => s3_download_link(&host, &server, &backup),
         _ => {
             return Err(ApiError::bad_request(
                 "The backup requested references an unknown disk driver type and cannot be downloaded.",
@@ -429,7 +437,8 @@ pub async fn restore(State(st): State<AppState>, Extension(ctx): Extension<Ctx>,
     let host = host_of(&st.db, &backup).await?;
     let url = match host.schema.as_str() {
         "wings" => download_link(&st, &ctx, &server, &backup).await?,
-        _ => return Err(ApiError::internal("S3Exception")),
+        "s3" => s3_download_link(&host, &server, &backup),
+        _ => return Err(ApiError::internal("Exception")),
     };
     let truncate_raw = input.get("truncate").cloned().unwrap_or(Value::Null);
     let truncate = php_boolean(Some(&truncate_raw));
@@ -504,7 +513,8 @@ pub async fn delete_backup_in<C: ConnectionTrait>(
             other => other.map_err(wings_err),
         }
     } else {
-        Err(ApiError::internal("S3Exception"))
+        let bucket = crate::s3::Bucket::from_host(&host);
+        bucket.delete_object(&crate::s3::backup_key(&server.uuid, &backup.uuid)).await
     };
     if let Err(e) = result {
         if backup.is_successful.0 {
