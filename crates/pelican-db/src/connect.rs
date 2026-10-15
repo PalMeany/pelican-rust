@@ -230,7 +230,10 @@ pub async fn connect(cfg: &DbConfig) -> Result<DatabaseConnection, DbErr> {
         }
         Driver::Sqlite => {
             let fk = cfg.foreign_keys;
-            opts.map_sqlx_sqlite_opts(move |o| o.foreign_keys(fk).create_if_missing(true));
+            // PDO's SQLite busy timeout (60 s; sqlx waits 5 s): the PHP sidecar writes to the same file.
+            opts.map_sqlx_sqlite_opts(move |o| {
+                o.foreign_keys(fk).create_if_missing(true).busy_timeout(Duration::from_secs(60))
+            });
         }
     }
 
