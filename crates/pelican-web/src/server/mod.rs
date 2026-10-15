@@ -54,6 +54,8 @@ pub struct ServerPanel {
     /// `None` = every permission (owner, root admin, `update server` on the node).
     perms: Option<HashSet<String>>,
     pub transfer: bool,
+    /// `WebhookResource::getNavigationBadge()`: this server's webhooks (None when hidden).
+    webhooks: Option<u64>,
 }
 
 impl std::ops::Deref for ServerPanel {
@@ -131,7 +133,19 @@ async fn load(authed: Authed, id: &str) -> Result<ServerPanel, WebError> {
         Some(list.into_iter().filter_map(|v| v.as_str().map(String::from)).collect())
     };
     let transfer = pelican_core::server_state::active_transfer(db, server.id.0).await?.is_some();
-    Ok(ServerPanel { authed, server, node, perms, transfer })
+    let webhooks = if authed.user.gate_before("viewList webhook") {
+        use sea_orm::PaginatorTrait;
+        Some(
+            pelican_db::entities::webhook_configurations::Entity::find()
+                .filter(pelican_db::entities::webhook_configurations::Column::ServerId.eq(server.id))
+                .filter(pelican_db::entities::webhook_configurations::Column::DeletedAt.is_null())
+                .count(db)
+                .await?,
+        )
+    } else {
+        None
+    };
+    Ok(ServerPanel { authed, server, node, perms, transfer, webhooks })
 }
 
 #[derive(Serialize)]
@@ -201,8 +215,11 @@ impl ServerPanel {
         add("mounts", self.t("server/mount.title"), "layers-linked", Some("mount.read"));
         add("startup", self.t("server/startup.title"), "player-play", Some("startup.read"));
         add("settings", self.t("server/setting.title"), "settings", None);
-        if self.user.gate_before("viewList webhook") {
+        if self.webhooks.is_some() {
             add("webhook", self.t("admin/webhook.nav_title"), "webhook", None);
+            if let Some(item) = items.last_mut().filter(|i| i.icon == "webhook") {
+                item.badge = self.webhooks.filter(|n| *n > 0).map(|n| n.to_string());
+            }
         }
         if self.user.is_admin() && self.user.can_view_server(self.node.id.0) {
             items.push(NavItem {
