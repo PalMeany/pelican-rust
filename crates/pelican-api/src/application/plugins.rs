@@ -157,15 +157,19 @@ pub async fn view(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) ->
 
 /// A WASM plugin's install/uninstall hook (the PHP plugin's migrations/seeders); a failed
 /// install leaves it `not_installed` with the message, like `installPlugin()`.
-async fn run_hook(cfg: &Config, p: &Plugin, install: bool) -> ApiResult<()> {
+pub async fn lifecycle_hook(cfg: &Config, p: &Plugin, install: bool) -> Result<(), String> {
     let Some(rt) = pelican_plugins::runtime::global() else { return Ok(()) };
     if let Err(e) = rt.lifecycle_hook(cfg, p, install).await {
         if install {
             let _ = cfg.set_status(p, Status::NotInstalled, Some(e.clone()));
         }
-        return Err(service_err(pelican_plugins::Error::Message(e)));
+        return Err(e);
     }
     Ok(())
+}
+
+async fn run_hook(cfg: &Config, p: &Plugin, install: bool) -> ApiResult<()> {
+    lifecycle_hook(cfg, p, install).await.map_err(|e| service_err(pelican_plugins::Error::Message(e)))
 }
 
 /// After an import: reinstall (without enabling) when the plugin was installed.
@@ -278,6 +282,9 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
         return Err(panel_exception());
     }
     let p = lifecycle::update(&cfg, &p).await.map_err(service_err)?;
+    if p.status != Status::NotInstalled {
+        run_hook(&cfg, &p, true).await?;
+    }
     pelican_plugins::runtime::reload_global(&cfg);
     Ok(PhpJson::ok(plugin_data(&cfg, &p).await).into_response())
 }

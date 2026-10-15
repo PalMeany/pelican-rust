@@ -1048,7 +1048,11 @@ impl ScheduleRow {
 /// Payload column (`formatPayload`): multi-line payloads become badges,
 /// `power` uppercases the action, an empty payload shows the placeholder.
 fn payload_cell(p: &ServerPanel, t: &tasks::Model) -> Cell {
-    let tooltip = ACTION_LABELS.iter().find(|(a, _)| *a == t.action).map(|(_, k)| p.t(k));
+    let tooltip = ACTION_LABELS
+        .iter()
+        .find(|(a, _)| *a == t.action)
+        .map(|(_, k)| p.t(k))
+        .or_else(|| plugin_task(&t.action).and_then(|(_, pt)| pt.payload_label));
     if t.payload.is_empty() {
         return Cell::text(p.t("server/schedule.tasks.no_payload"));
     }
@@ -1166,10 +1170,20 @@ impl DialogState {
 
 /// The `action` select options of the task form (`TaskService::getMappings()`).
 pub fn action_options(p: &ServerPanel) -> Vec<(String, String)> {
-    ACTIONS
+    let mut out: Vec<(String, String)> = ACTIONS
         .iter()
         .map(|(id, _)| ((*id).to_string(), p.t(&format!("server/schedule.tasks.actions.{id}.title"))))
-        .collect()
+        .collect();
+    // Task types of WASM plugins (`TaskService::register`).
+    for (plugin, t) in pelican_plugins::runtime::task_types() {
+        out.push((t.id.clone(), crate::plugin_pages::label(&p.st, &plugin, &p.locale(), &t.name)));
+    }
+    out
+}
+
+/// Plugin task type by id: `(plugin, type)`.
+fn plugin_task(action: &str) -> Option<(String, pelican_plugins::runtime::TaskType)> {
+    pelican_plugins::runtime::task_types().into_iter().find(|(_, t)| t.id == action)
 }
 
 /// `GET /schedules/create` — `CreateSchedule`.
@@ -1432,7 +1446,10 @@ fn validate_task_local(form: &Form, p: &ServerPanel) -> Errors {
     v.attribute_name("payload", &p.t("server/schedule.tasks.payload").to_lowercase());
     v.attribute_name("time_offset", &p.t("server/schedule.tasks.time_offset").to_lowercase());
     v.attribute_name("continue_on_failure", &p.t("server/schedule.tasks.continue_on_failure").to_lowercase());
-    v.rules("action", &["required", "in:command,power,backup,delete_files"]);
+    let mut actions: Vec<String> = ACTIONS.iter().map(|(a, _)| (*a).to_string()).collect();
+    actions.extend(pelican_plugins::runtime::task_types().into_iter().map(|(_, t)| t.id));
+    let rule = format!("in:{}", actions.join(","));
+    v.rules("action", &["required", rule.as_str()]);
     v.rules("payload", &["required_unless:action,backup", "string", "nullable"]);
     v.rules("time_offset", &["required", "numeric", "min:0", "max:900"]);
     v.rules("sequence_id", &["sometimes", "required", "numeric", "min:1"]);
@@ -1491,7 +1508,10 @@ async fn task_create(p: ServerPanel, RecordId(sid): RecordId, form: Form) -> Web
     let ctx = api_ctx(&p)?;
     let bound = bound_full(&p, sid, None).await?;
     let outcome = call(
-        api::task_store(axum::extract::State(p.st.clone()), Extension(ctx_with_bound(&ctx, bound)), In(input)),
+        api::PANEL_FORM.scope(
+            true,
+            api::task_store(axum::extract::State(p.st.clone()), Extension(ctx_with_bound(&ctx, bound)), In(input)),
+        ),
         |_| (),
     )
     .await;
@@ -1574,7 +1594,10 @@ async fn task_update(
     let ctx = api_ctx(&p)?;
     let bound = bound_full(&p, sid, Some(tid)).await?;
     let outcome = call(
-        api::task_update(axum::extract::State(p.st.clone()), Extension(ctx_with_bound(&ctx, bound)), In(input)),
+        api::PANEL_FORM.scope(
+            true,
+            api::task_update(axum::extract::State(p.st.clone()), Extension(ctx_with_bound(&ctx, bound)), In(input)),
+        ),
         |_| (),
     )
     .await;
@@ -1667,6 +1690,9 @@ fn schema_label(p: &ServerPanel, action: &str) -> Option<String> {
         .iter()
         .find(|(id, _)| *id == action)
         .map(|(id, _)| p.t(&format!("server/schedule.tasks.actions.{id}.title")))
+        .or_else(|| {
+            plugin_task(action).map(|(plugin, t)| crate::plugin_pages::label(&p.st, &plugin, &p.locale(), &t.name))
+        })
 }
 
 /// Pure form of the payload column used by `payload_cell` and tests.

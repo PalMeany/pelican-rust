@@ -265,10 +265,23 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
     Ok(no_content())
 }
 
+tokio::task_local! {
+    /// Set by the panel's task form: the Filament form offers every registered task type
+    /// (plugins included), while `StoreTaskRequest` lists only the core four.
+    pub static PANEL_FORM: bool;
+}
+
 /// `StoreTaskRequest::rules()`.
 fn validate_task(input: &Input) -> ApiResult<()> {
     let mut v = Validator::new(input);
-    v.rules("action", &["required", "in:command,power,backup,delete_files"]);
+    let mut actions = String::from("in:command,power,backup,delete_files");
+    if PANEL_FORM.try_with(|f| *f).unwrap_or(false) {
+        for (_, t) in pelican_plugins::runtime::task_types() {
+            actions.push(',');
+            actions.push_str(&t.id);
+        }
+    }
+    v.rules("action", &["required", actions.as_str()]);
     v.rules("payload", &["required_unless:action,backup", "string", "nullable"]);
     v.rules("time_offset", &["required", "numeric", "min:0", "max:900"]);
     v.rules("sequence_id", &["sometimes", "required", "numeric", "min:1"]);

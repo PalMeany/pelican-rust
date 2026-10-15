@@ -300,7 +300,21 @@ async fn run_action(st: &AppState, server: &servers::Model, task: &tasks::Model)
             Ok(())
         }
         "delete_files" => delete_files(st, &conn()?, server, &task.payload).await,
-        _ => Err(ApiError::internal("InvalidArgumentException")),
+        // Task types registered by WASM plugins (ADR-0018).
+        other => {
+            let owner = pelican_plugins::runtime::task_types().into_iter().find(|(_, t)| t.id == other).map(|(p, _)| p);
+            let (Some(plugin), Some(rt)) = (owner, pelican_plugins::runtime::global()) else {
+                return Err(ApiError::internal("InvalidArgumentException"));
+            };
+            match rt.run_task(&plugin, other, &task.payload, &crate::plugin_routes::server_json(server)).await {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(e)) => {
+                    tracing::warn!(plugin, task = other, error = %e, "plugin task failed");
+                    Err(ApiError::internal("PluginTaskException"))
+                }
+                Err(_) => Err(ApiError::internal("PluginTaskException")),
+            }
+        }
     }
 }
 

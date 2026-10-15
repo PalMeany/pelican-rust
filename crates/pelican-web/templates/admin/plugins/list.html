@@ -1,0 +1,58 @@
+{% extends "layouts/panel.html" %}
+{% import "components/table.html" as tbl %}
+{% block head %}<script src="{{ asset('js/plugins.js') }}" defer></script>{% endblock %}
+{% block content %}
+{% if safe_mode %}<div class="banner warning"><div class="stack"><strong>{{ trans('admin/plugin.safe_mode_active') }}</strong></div></div>{% endif %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions">
+    {% if can_import %}
+    <button type="button" class="btn btn-gray" data-modal-open="plugin-import-file" title="{{ import_from_file }}">{{ icon('file-download', 'icon-sm') }}</button>
+    <button type="button" class="btn btn-gray" data-modal-open="plugin-import-url" title="{{ import_from_url }}">{{ icon('world-download', 'icon-sm') }}</button>
+    {% endif %}
+    <button type="button" class="btn btn-gray" data-reorder>{{ icon('arrows-sort', 'icon-sm') }}<span data-reorder-off>{{ change_load_order }}</span><span data-reorder-on hidden>{{ apply_load_order }}</span></button>
+  </div>
+</div>
+{{ tbl.render(table, csrf) }}
+{% if can_import %}
+<dialog id="plugin-import-file" class="modal">
+  <form method="post" action="/admin/plugins/import/file" enctype="multipart/form-data"
+    data-import-fetch data-csrf="{{ csrf }}">
+    {{ csrf_field() }}
+    <input type="hidden" name="_back" value="{{ back_url }}">
+    <div class="modal-head"><h2>{{ import_from_file }}</h2></div>
+    <div class="modal-body stack">
+      <label class="stack small">{{ file_label }}
+        <input class="input" type="file" name="file" accept=".zip,application/zip,application/zip-compressed,application/x-zip-compressed" required>
+      </label>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-gray" data-modal-close>{{ close_label }}</button>
+      <button type="submit" class="btn btn-success">{{ icon('file-download', 'icon-sm') }}{{ import_from_file }}</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="plugin-import-url" class="modal">
+  <form method="post" action="/admin/plugins/import/url" hx-boost="false">
+    {{ csrf_field() }}
+    <input type="hidden" name="_back" value="{{ back_url }}">
+    <div class="modal-head"><h2>{{ import_from_url }}</h2></div>
+    <div class="modal-body stack">
+      <input class="input" type="url" name="url" required pattern=".*\.zip(\?.*)?" placeholder="https://…/plugin.zip">
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-gray" data-modal-close>{{ close_label }}</button>
+      <button type="submit" class="btn btn-success">{{ icon('world-download', 'icon-sm') }}{{ import_from_url }}</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+<dialog id="plugin-readme" class="modal">
+  <div class="modal-head"><h2 data-readme-title>&nbsp;</h2></div>
+  <div class="modal-body stack" data-readme-body style="max-height:70vh;overflow:auto"></div>
+  <div class="modal-foot">
+    <a class="btn btn-success" data-readme-url target="_blank" rel="noopener" href="#" hidden>{{ visit_website }}{{ icon('external-link', 'icon-sm') }}</a>
+    <button type="button" class="btn btn-gray" data-modal-close>{{ close_label }}</button>
+  </div>
+</dialog>
+{% endblock %}

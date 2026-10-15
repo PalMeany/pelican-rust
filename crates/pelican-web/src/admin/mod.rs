@@ -10,6 +10,7 @@ mod health;
 mod logs;
 mod mounts;
 mod nodes;
+mod plugins;
 mod roles;
 mod server_relations;
 mod server_transfer;
@@ -43,6 +44,7 @@ pub fn routes() -> Router<AppState> {
         .merge(logs::routes())
         .merge(mounts::routes())
         .merge(nodes::routes())
+        .merge(plugins::routes())
         .merge(roles::routes())
         .merge(servers_create::routes())
         .merge(servers::routes())
@@ -199,7 +201,9 @@ impl Admin {
             advanced.push(item("logs", t("admin/log.navigation.panel_logs"), "file-info", None));
         }
         if self.can("viewList plugin") {
-            advanced.push(item("plugins", t("admin/plugin.nav_title"), "packages", None));
+            // getNavigationBadge(): the plugin count, hidden at zero.
+            let n = pelican_api::application::plugins::config(st).plugins().len();
+            advanced.push(item("plugins", t("admin/plugin.nav_title"), "packages", (n > 0).then(|| n.to_string())));
         }
         if self.can("viewList webhook") {
             advanced.push(item(

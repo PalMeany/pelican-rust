@@ -24,7 +24,7 @@ wasmtime::component::bindgen!({
     exports: { default: async },
 });
 
-pub use pelican::plugin::types::{Header, Level, NavItem, Page, Route, RouteScope};
+pub use pelican::plugin::types::{Header, Level, NavItem, Page, Route, RouteScope, TaskType};
 use pelican::plugin::{host, types};
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -205,6 +205,15 @@ pub fn reload_global(cfg: &Config) {
         let cfg = cfg.clone();
         tokio::spawn(async move { rt.load_all(&cfg).await });
     }
+}
+
+/// Schedule task types of the loaded plugins: `(plugin, type)`.
+pub fn task_types() -> Vec<(String, pelican::plugin::types::TaskType)> {
+    global()
+        .map(|rt| {
+            rt.loaded().iter().flat_map(|l| l.registration.tasks.iter().map(|t| (l.id.clone(), t.clone()))).collect()
+        })
+        .unwrap_or_default()
 }
 
 /// Per-call time budget (in epoch ticks of 10 ms).

@@ -1,0 +1,20 @@
+{% extends "layouts/panel.html" %}
+{% import "components/forms.html" as f %}
+{% block content %}
+<div class="stack">
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="page-actions"><a class="btn btn-gray" href="/admin/plugins">{{ icon('arrow-left', 'icon-sm') }}</a></div>
+</div>
+<form method="post" class="card card-body form" action="/admin/plugins/{{ plugin }}/settings">
+  {{ csrf_field() }}
+  {% for fd in fields %}
+    {% if fd.kind == 'textarea' %}{{ f.textarea(fd.name, fd.label, values[fd.name] or '', errors, required=fd.required, hint=fd.help or '') }}
+    {% elif fd.kind == 'toggle' %}{{ f.toggle(fd.name, fd.label, values[fd.name], hint=fd.help or '', errors=errors) }}
+    {% elif fd.kind == 'select' %}{{ f.select(fd.name, fd.label, fd.options, values[fd.name] or '', errors, required=fd.required, hint=fd.help or '') }}
+    {% else %}{{ f.text(fd.name, fd.label, values[fd.name] or '', errors, type=('password' if fd.kind == 'password' else ('number' if fd.kind == 'number' else 'text')), required=fd.required, hint=fd.help or '') }}{% endif %}
+  {% endfor %}
+  <div><button class="btn" type="submit">{{ icon('device-floppy', 'icon-sm') }}{{ trans('filament-panels::resources/pages/edit-record.form.actions.save.label') }}</button></div>
+</form>
+</div>
+{% endblock %}
