@@ -10,6 +10,7 @@ pelican-wings = { path = "../pelican-wings" }
 sea-orm.workspace = true
 pelican-core = { path = "../pelican-core" }
 pelican-api = { path = "../pelican-api" }
+egg-format = { path = "../egg-format" }
 pelican-web = { path = "../pelican-web" }
 pelican-db = { path = "../pelican-db" }
 pelican-plugins = { path = "../pelican-plugins" }

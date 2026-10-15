@@ -102,7 +102,7 @@ pub async fn check_updates(st: &AppState) {
     }
 }
 
-async fn check(st: &AppState, egg: &eggs::Model) -> Result<(), String> {
+pub async fn check(st: &AppState, egg: &eggs::Model) -> Result<(), String> {
     let Some(url) = egg.update_url.as_deref() else { return Ok(()) };
     let ext = reqwest::Url::parse(url)
         .ok()

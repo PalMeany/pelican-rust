@@ -2883,6 +2883,7 @@ dependencies = [
  "chrono-tz",
  "clap",
  "deunicode",
+ "egg-format",
  "pelican-api",
  "pelican-core",
  "pelican-db",

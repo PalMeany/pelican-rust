@@ -547,9 +547,10 @@ pub async fn prune_images(st: &AppState) -> ApiResult<()> {
     Ok(())
 }
 
-/// `p:maintenance:clean-service-backups`: `storage/app/services/.bak` files older than 5 minutes.
+/// `p:maintenance:clean-service-backups`: `services/.bak` files of the `local` disk (Laravel 11+:
+/// `storage/app/private`) older than 5 minutes.
 pub fn clean_service_backups(st: &AppState) {
-    let dir = st.config.base_path.join("storage/app/services/.bak");
+    let dir = st.config.base_path.join("storage/app/private/services/.bak");
     let Ok(entries) = std::fs::read_dir(&dir) else { return };
     for e in entries.flatten() {
         let old = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok());
