@@ -128,34 +128,59 @@ pub async fn listening(st: &AppState, action: Action, model: &str) -> ApiResult<
 }
 
 /// `eloquent.created` for a model instance (as stored).
-pub async fn created<M: Eloquent>(st: &AppState, m: &M) -> ApiResult<()> {
-    fire(st, &st.db, Action::Created, M::CLASS, m.to_array()).await
+pub async fn created<M: Eloquent>(st: &AppState, m: &M) {
+    emit(st, Action::Created, M::CLASS, m.to_array()).await
 }
 
 /// `eloquent.updated` for a model instance (as stored after the update).
-pub async fn updated<M: Eloquent>(st: &AppState, m: &M) -> ApiResult<()> {
-    fire(st, &st.db, Action::Updated, M::CLASS, m.to_array()).await
+pub async fn updated<M: Eloquent>(st: &AppState, m: &M) {
+    emit(st, Action::Updated, M::CLASS, m.to_array()).await
 }
 
 /// `eloquent.deleted` for a model instance (as it was before the delete; soft-deleted
 /// models carry their `deleted_at`).
-pub async fn deleted<M: Eloquent>(st: &AppState, m: &M) -> ApiResult<()> {
-    fire(st, &st.db, Action::Deleted, M::CLASS, m.to_array()).await
+pub async fn deleted<M: Eloquent>(st: &AppState, m: &M) {
+    emit(st, Action::Deleted, M::CLASS, m.to_array()).await
 }
 
 /// Re-read the row `id` and fire `action` for it (nothing is read without listeners).
-pub async fn fire_id<E>(st: &AppState, action: Action, id: i64) -> ApiResult<()>
+pub async fn fire_id<E>(st: &AppState, action: Action, id: i64)
 where
     E: EntityTrait,
     E::Model: Eloquent,
     <E::PrimaryKey as PrimaryKeyTrait>::ValueType: From<Int>,
 {
-    if !listening(st, action, <E::Model as Eloquent>::CLASS).await? {
-        return Ok(());
+    fire_id_in::<E, _>(st, &st.db, action, id).await
+}
+
+/// [`fire_id`] reading through `db` (inside a transaction that must see the row).
+pub async fn fire_id_in<E, C>(st: &AppState, db: &C, action: Action, id: i64)
+where
+    E: EntityTrait,
+    E::Model: Eloquent,
+    <E::PrimaryKey as PrimaryKeyTrait>::ValueType: From<Int>,
+    C: ConnectionTrait,
+{
+    let class = <E::Model as Eloquent>::CLASS;
+    let res = async {
+        if !listening(st, action, class).await? {
+            return Ok(());
+        }
+        match E::find_by_id(Int(id)).one(db).await? {
+            Some(m) => fire(st, db, action, class, m.to_array()).await,
+            None => Ok(()),
+        }
     }
-    match E::find_by_id(Int(id)).one(&st.db).await? {
-        Some(m) => fire(st, &st.db, action, <E::Model as Eloquent>::CLASS, m.to_array()).await,
-        None => Ok(()),
+    .await;
+    if let Err(e) = res {
+        tracing::warn!(error = ?e, model = class, "model event failed");
+    }
+}
+
+/// The write already happened: a failed event is logged, not returned.
+async fn emit(st: &AppState, action: Action, model: &str, data: Value) {
+    if let Err(e) = fire(st, &st.db, action, model, data).await {
+        tracing::warn!(error = ?e, model, "model event failed");
     }
 }
 

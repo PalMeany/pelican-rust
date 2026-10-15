@@ -173,6 +173,7 @@ impl LogActivity for Activity {
     fn log<'a>(self, st: &'a AppState) -> impl Future<Output = ApiResult<i64>> + Send + 'a {
         async move {
             let id = self.save_in(&st.db).await?;
+            activity_created(st, &st.db, id).await;
             activity_logged(st, &st.db, &self, id).await?;
             Ok(id)
         }
@@ -185,8 +186,32 @@ impl LogActivity for Activity {
     ) -> impl Future<Output = ApiResult<i64>> + Send + 'a {
         async move {
             let id = self.save_in(db).await?;
+            activity_created(st, db, id).await;
             activity_logged(st, db, &self, id).await?;
             Ok(id)
+        }
+    }
+}
+
+/// `eloquent.created` of the log row, then of each subject (`ActivityLogService::save()`).
+async fn activity_created<C: ConnectionTrait>(st: &AppState, db: &C, id: i64) {
+    use crate::model_events::{Action, Eloquent, fire, fire_id_in, listening};
+    use pelican_db::entities::{activity_log_subjects, activity_logs};
+    use sea_orm::{EntityTrait, QueryFilter, QueryOrder};
+
+    fire_id_in::<activity_logs::Entity, _>(st, db, Action::Created, id).await;
+    if !listening(st, Action::Created, "ActivityLogSubject").await.unwrap_or(false) {
+        return;
+    }
+    let subjects = activity_log_subjects::Entity::find()
+        .filter(activity_log_subjects::Column::ActivityLogId.eq(id))
+        .order_by_asc(activity_log_subjects::Column::Id)
+        .all(db)
+        .await
+        .unwrap_or_default();
+    for s in subjects {
+        if let Err(e) = fire(st, db, Action::Created, "ActivityLogSubject", s.to_array()).await {
+            tracing::warn!(error = ?e, "model event failed");
         }
     }
 }
