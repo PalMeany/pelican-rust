@@ -139,6 +139,19 @@ class BridgeController extends Controller
     /** Plugin lifecycle steps that need PHP (composer packages, migrations, seeders). */
     public function artisan(Request $request, PluginService $service): JsonResponse
     {
+        // p:plugin:composer: every installed plugin's packages, no plugin of its own.
+        if ($request->input('action') === 'composer') {
+            try {
+                $service->manageComposerPackages();
+            } catch (Throwable $exception) {
+                report($exception);
+
+                return new JsonResponse(['error' => $exception->getMessage()], 500);
+            }
+
+            return new JsonResponse(['ok' => true]);
+        }
+
         $plugin = Plugin::query()->findOrFail((string) $request->input('plugin'));
 
         try {

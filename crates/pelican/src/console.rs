@@ -60,14 +60,22 @@ impl Console {
         println!();
     }
 
-    fn prompt(&self, question: &str, default: Option<&str>, suffix: &str) {
+    fn question(&self, question: &str, default: Option<&str>, suffix: &str) {
         let q = self.paint("32", question);
         match default {
             Some(d) => println!(" {q}{suffix} [{}]:", self.paint("33", d)),
             None => println!(" {q}{suffix}:"),
         }
+    }
+
+    fn cursor(&self) {
         print!(" > ");
         let _ = std::io::stdout().flush();
+    }
+
+    fn prompt(&self, question: &str, default: Option<&str>, suffix: &str) {
+        self.question(question, default, suffix);
+        self.cursor();
     }
 
     fn read_line(&self) -> Option<String> {
@@ -114,30 +122,67 @@ impl Console {
     /// `$this->choice($question, $choices, $default)`: returns one of `choices` (by value or
     /// by its index).
     pub fn choice(&self, question: &str, choices: &[&str], default: Option<&str>) -> Option<String> {
+        let indexed: Vec<(String, &str)> = choices.iter().enumerate().map(|(i, c)| (i.to_string(), *c)).collect();
+        let options: Vec<(&str, &str)> = indexed.iter().map(|(k, c)| (k.as_str(), *c)).collect();
         if !self.interactive {
             return default.map(str::to_string);
         }
+        let default_key = default.and_then(|d| options.iter().find(|(_, c)| *c == d)).map(|(k, _)| *k);
+        let key = self.choose(question, &options, default_key, default, false)?;
+        key.first().and_then(|k| k.parse::<usize>().ok()).and_then(|i| choices.get(i)).map(|c| c.to_string())
+    }
+
+    /// `$this->choice($question, ['key' => 'label', ...], $default)`: Symfony lists
+    /// associative choices as `[key] label` and answers with the key.
+    pub fn choice_assoc(&self, question: &str, choices: &[(&str, &str)], default: Option<&str>) -> Option<String> {
+        if !self.interactive {
+            return default.map(str::to_string);
+        }
+        self.choose(question, choices, default, default, false)?.into_iter().next()
+    }
+
+    /// `$this->choice(..., multiple: true)`: comma separated answers, the keys in order.
+    pub fn choice_assoc_multiple(
+        &self,
+        question: &str,
+        choices: &[(&str, &str)],
+        default: Option<&str>,
+    ) -> Option<Vec<String>> {
+        if !self.interactive {
+            return default.map(|d| d.split(',').map(|s| s.trim().to_string()).collect());
+        }
+        self.choose(question, choices, default, default, true)
+    }
+
+    /// The question loop of Symfony's `ChoiceQuestion`: an answer matches a key or a label;
+    /// an invalid one is reported and asked again.
+    fn choose(
+        &self,
+        question: &str,
+        choices: &[(&str, &str)],
+        default_key: Option<&str>,
+        shown_default: Option<&str>,
+        multiple: bool,
+    ) -> Option<Vec<String>> {
         loop {
-            self.prompt(question, default, "");
-            for (i, c) in choices.iter().enumerate() {
-                println!("  [{}] {c}", self.paint("33", &i.to_string()));
+            self.question(question, shown_default, "");
+            for (k, c) in choices {
+                println!("  [{}] {c}", self.paint("33", k));
             }
-            print!(" > ");
-            let _ = std::io::stdout().flush();
+            self.cursor();
             let answer = self.read_line().unwrap_or_default().trim().to_string();
             println!();
-            if answer.is_empty() {
-                if let Some(d) = default {
-                    return Some(d.to_string());
-                }
+            let answer = if answer.is_empty() { default_key?.to_string() } else { answer };
+            let parts: Vec<&str> =
+                if multiple { answer.split(',').map(str::trim).collect() } else { vec![answer.as_str()] };
+            let keys: Option<Vec<String>> = parts
+                .iter()
+                .map(|a| choices.iter().find(|(k, c)| k == a || c == a).map(|(k, _)| k.to_string()))
+                .collect();
+            match keys {
+                Some(keys) => return Some(keys),
+                None => self.error(&format!("Value \"{answer}\" is invalid")),
             }
-            if let Some(c) = choices.iter().find(|c| **c == answer) {
-                return Some(c.to_string());
-            }
-            if let Some(c) = answer.parse::<usize>().ok().and_then(|i| choices.get(i)) {
-                return Some(c.to_string());
-            }
-            self.error(&format!("Value \"{answer}\" is invalid"));
         }
     }
 

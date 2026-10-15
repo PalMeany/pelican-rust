@@ -103,16 +103,7 @@ fn note(io: &Console, text: &str) {
 /// matched, the keys are returned. An unknown answer (no interaction without a known
 /// default key) yields an empty string, as PHP's `null` written to `.env`.
 fn keyed_choice(io: &Console, q: &str, options: &[(&str, &str)], default_key: Option<&str>) -> String {
-    let labels: Vec<&str> = options.iter().map(|(_, l)| *l).collect();
-    let default =
-        known_key(options, default_key).and_then(|k| options.iter().find(|(key, _)| *key == k)).map(|(_, l)| *l);
-    let picked = io.choice(q, &labels, default).unwrap_or_default();
-    // The answer comes back as a label (directly or via the index); keys are accepted too.
-    options
-        .iter()
-        .find(|(_, l)| *l == picked)
-        .or_else(|| options.iter().find(|(k, _)| *k == picked))
-        .map_or(picked, |(k, _)| (*k).to_string())
+    io.choice_assoc(q, options, known_key(options, default_key)).unwrap_or_default()
 }
 
 /// `$default` of the original only when it is a valid key of the choices.

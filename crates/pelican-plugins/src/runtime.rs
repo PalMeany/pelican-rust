@@ -306,6 +306,27 @@ pub struct Runtime {
     loaded: RwLock<Vec<Arc<Loaded>>>,
     /// Compiled components by path, invalidated by mtime/size (reloads skip recompiling).
     compiled: std::sync::Mutex<std::collections::HashMap<PathBuf, (std::time::SystemTime, u64, Component)>>,
+    /// [`fingerprint`] of the plugins directory as of the last [`Runtime::load_all`].
+    seen: std::sync::Mutex<Option<u64>>,
+}
+
+/// What the loaded set depends on: every WASM plugin's id, status, version, load order,
+/// panels, WASM section and component file stamp. Changes made by another process (the
+/// `p:plugin:*` commands) show up here; the original re-reads its plugins per request.
+pub fn fingerprint(cfg: &Config) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    cfg.safe_mode.hash(&mut h);
+    for p in cfg.plugins().into_iter().filter(|p| p.wasm.is_some()) {
+        (&p.id, p.status.as_str(), &p.version, p.load_order, &p.panels).hash(&mut h);
+        let wasm = p.wasm.as_ref().map(Value::to_string).unwrap_or_default();
+        wasm.hash(&mut h);
+        let file = p.wasm.as_ref().and_then(|w| w.get("component")).and_then(Value::as_str).unwrap_or("plugin.wasm");
+        if let Ok(meta) = std::fs::metadata(cfg.root.join(&p.dir).join(file)) {
+            (meta.modified().ok(), meta.len()).hash(&mut h);
+        }
+    }
+    h.finish()
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -340,6 +361,7 @@ impl Runtime {
             storage,
             loaded: RwLock::new(Vec::new()),
             compiled: std::sync::Mutex::new(std::collections::HashMap::new()),
+            seen: std::sync::Mutex::new(None),
         }))
     }
 
@@ -416,6 +438,9 @@ impl Runtime {
             if let Ok(mut g) = self.loaded.write() {
                 g.clear();
             }
+            if let Ok(mut g) = self.seen.lock() {
+                *g = Some(fingerprint(cfg));
+            }
             return;
         }
         cfg.refresh_statuses();
@@ -443,6 +468,18 @@ impl Runtime {
         }
         if let Ok(mut g) = self.loaded.write() {
             *g = loaded;
+        }
+        if let Ok(mut g) = self.seen.lock() {
+            *g = Some(fingerprint(cfg));
+        }
+    }
+
+    /// [`Runtime::load_all`] when the plugins changed since the last load.
+    pub async fn reload_if_changed(&self, cfg: &Config) {
+        let seen = self.seen.lock().ok().and_then(|g| *g);
+        if seen.is_some_and(|s| s != fingerprint(cfg)) {
+            tracing::info!("plugins changed on disk, reloading");
+            self.load_all(cfg).await;
         }
     }
 

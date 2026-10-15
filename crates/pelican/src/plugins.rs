@@ -65,6 +65,13 @@ impl Services for PanelServices {
     }
 }
 
+/// A plugin runtime whose host services act on `live` (the server's, or a CLI command's
+/// own for install/uninstall hooks).
+pub fn runtime(live: &Live) -> Result<Arc<Runtime>, String> {
+    let storage = live.get().config.base_path.join("storage").join("plugins");
+    Runtime::new(Arc::new(PanelServices { live: live.clone() }), storage).map_err(|e| format!("{e:#}"))
+}
+
 /// Create the runtime and load the enabled plugins in the background.
 pub fn start(live: &Live) {
     let st = live.get();
@@ -80,14 +87,40 @@ pub fn start(live: &Live) {
         }
         pelican_api::sidecar::spawn_refresher(st.clone());
     }
-    let storage = st.config.base_path.join("storage").join("plugins");
-    match Runtime::new(Arc::new(PanelServices { live: live.clone() }), storage) {
+    match runtime(live) {
         Ok(rt) => {
             pelican_plugins::runtime::set_global(rt.clone());
             pelican_core::server_config::set_extra_features(pelican_api::sidecar::all_feature_listeners);
-            tokio::spawn(async move { rt.load_all(&cfg).await });
+            tokio::spawn(watch(live.clone(), rt));
         }
         Err(e) => tracing::error!(error = %e, "starting the plugin runtime failed"),
+    }
+}
+
+/// Load the plugins, then follow changes made outside this process (`p:plugin:*`, files
+/// copied in): reload the WASM plugins, re-link new or removed PHP plugins for the sidecar.
+async fn watch(live: Live, rt: Arc<Runtime>) {
+    let st = live.get();
+    rt.load_all(&pelican_api::application::plugins::config(&st)).await;
+    let php_ids = |plugins: &[pelican_plugins::Plugin]| -> Vec<String> {
+        plugins.iter().filter(|p| p.wasm.is_none()).map(|p| p.id.clone()).collect()
+    };
+    let mut linked = php_ids(&pelican_api::application::plugins::config(&st).plugins());
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        let st = live.get();
+        let cfg = pelican_api::application::plugins::config(&st);
+        rt.reload_if_changed(&cfg).await;
+        if pelican_api::sidecar::get(&st).is_some() {
+            let plugins = cfg.plugins();
+            let ids = php_ids(&plugins);
+            if ids != linked {
+                match pelican_api::sidecar::sync_plugins_dir(&st, &plugins) {
+                    Ok(()) => linked = ids,
+                    Err(e) => tracing::warn!(error = %e, "re-linking the sidecar's plugins failed"),
+                }
+            }
+        }
     }
 }
 

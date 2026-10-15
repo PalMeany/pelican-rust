@@ -614,6 +614,17 @@ pub async fn delegate(
     Some(lifecycle(st, &p.id, action, extra).await)
 }
 
+/// `PluginService::manageComposerPackages()` in the sidecar (`p:plugin:composer`; `None`
+/// without a sidecar: only PHP plugins have composer packages).
+pub async fn composer(st: &AppState) -> Option<Result<(), String>> {
+    get(st)?;
+    let cfg = crate::application::plugins::config(st);
+    if let Err(e) = sync_plugins_dir(st, &cfg.plugins()) {
+        return Some(Err(e.to_string()));
+    }
+    Some(lifecycle(st, "", "composer", json!({})).await)
+}
+
 /// `Role::registerCustomPermissions()` of WASM and PHP plugins: `(model, prefixes)`.
 pub fn all_admin_permissions() -> Vec<(String, Vec<String>)> {
     let mut out = pelican_plugins::runtime::admin_permissions();
