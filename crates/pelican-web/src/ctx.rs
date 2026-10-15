@@ -191,10 +191,11 @@ impl Web {
 fn banners(list: &[pelican_api::sidecar::Banner]) -> Vec<pelican_api::sidecar::Banner> {
     list.iter()
         .map(|b| {
-            let status = match b.status.as_deref() {
-                Some(s @ ("success" | "danger" | "warning" | "info")) => s,
-                _ => "info",
-            };
+            let status = b
+                .status
+                .as_deref()
+                .filter(|s| matches!(*s, "success" | "danger" | "warning" | "info"))
+                .unwrap_or("info");
             let own = b
                 .icon
                 .as_deref()
