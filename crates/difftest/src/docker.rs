@@ -11,8 +11,9 @@ const SOCKET: &str = "/var/run/docker.sock";
 async fn request(method: &str, path: &str, body: Option<&serde_json::Value>) -> Result<(u16, Vec<u8>)> {
     let mut s = UnixStream::connect(SOCKET).await.with_context(|| format!("connecting to {SOCKET}"))?;
     let payload = body.map(|b| b.to_string()).unwrap_or_default();
+    // Unversioned: the daemon's own API version (newer daemons reject old pinned versions).
     let head = format!(
-        "{method} /v1.41{path} HTTP/1.1\r\nHost: docker\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "{method} {path} HTTP/1.1\r\nHost: docker\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         payload.len()
     );
     s.write_all(head.as_bytes()).await?;
