@@ -144,6 +144,13 @@ class BridgeController extends Controller
     /** Plugin lifecycle steps that need PHP (composer packages, migrations, seeders). */
     public function artisan(Request $request, PluginService $service): JsonResponse
     {
+        if ($request->input('action') === 'optimize-clear') {
+            return $this->optimizeClear();
+        }
+        if ($request->input('action') === 'optimize-cache') {
+            return $this->optimizeCache();
+        }
+
         // p:plugin:composer: every installed plugin's packages, no plugin of its own.
         if ($request->input('action') === 'composer') {
             try {
@@ -154,7 +161,7 @@ class BridgeController extends Controller
                 return new JsonResponse(['error' => $exception->getMessage()], 500);
             }
 
-            return new JsonResponse(['ok' => true]);
+            return $this->optimizeClear();
         }
 
         $plugin = Plugin::query()->findOrFail((string) $request->input('plugin'));
@@ -169,6 +176,46 @@ class BridgeController extends Controller
                 default => abort(422),
             };
         } catch (Throwable $exception) {
+            return new JsonResponse(['error' => $exception->getMessage()], 500);
+        }
+
+        return $this->optimizeClear();
+    }
+
+    /**
+     * `filament:optimize-clear`: Filament's component cache and the Blade icons manifest dropped
+     * (after a plugin change; this request still runs with the plugins as they were).
+     */
+    private function optimizeClear(): JsonResponse
+    {
+        try {
+            foreach (Filament::getPanels() as $panel) {
+                $panel->clearCachedComponents();
+            }
+            app(\BladeUI\Icons\IconsManifest::class)->delete();
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return new JsonResponse(['error' => $exception->getMessage()], 500);
+        }
+
+        return new JsonResponse(['ok' => true]);
+    }
+
+    /**
+     * `filament:optimize` (components and icons cached, as p:environment:setup leaves the panel);
+     * pelican-rs asks for it in a request after optimizeClear(), booted with the current plugins.
+     */
+    private function optimizeCache(): JsonResponse
+    {
+        try {
+            foreach (Filament::getPanels() as $panel) {
+                $panel->cacheComponents();
+            }
+            app(\BladeUI\Icons\IconsManifest::class)->write(app(\BladeUI\Icons\Factory::class)->all());
+        } catch (Throwable $exception) {
+            report($exception);
+
             return new JsonResponse(['error' => $exception->getMessage()], 500);
         }
 

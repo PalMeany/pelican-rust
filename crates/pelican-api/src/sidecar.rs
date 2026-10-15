@@ -378,6 +378,19 @@ pub async fn refresh(st: &AppState) -> ApiResult<()> {
     }
     if changed {
         clear_user_caches();
+        // Filament's component and icon caches, rebuilt for the plugins as they are now: dropped,
+        // then written by a request that booted without them.
+        if accepted {
+            for action in ["optimize-clear", "optimize-cache"] {
+                match sc.call(reqwest::Method::POST, "/_bridge/artisan", Some(&json!({ "action": action }))).await {
+                    Ok((200, _)) => {}
+                    other => {
+                        tracing::warn!(action, result = ?other.map(|(s, _)| s), "sidecar filament:optimize failed");
+                        break;
+                    }
+                }
+            }
+        }
     }
     let lang = if accepted {
         match sc.call(reqwest::Method::GET, "/_bridge/lang", None).await? {
