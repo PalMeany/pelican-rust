@@ -332,5 +332,72 @@
     if (input) input.type = input.type === 'password' ? 'text' : 'password';
   });
 
+  // ----- passkeys (the original's resources/js/passkeys on @laravel/passkeys) -----
+  const b64u = {
+    decode: (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), (c) => c.charCodeAt(0)).buffer,
+    encode: (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+  };
+  async function passkeyFetch(url, body) {
+    const r = await fetch(url, {
+      method: body ? 'POST' : 'GET',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.message || r.statusText);
+    return data;
+  }
+  function credentialJSON(c) {
+    const r = c.response;
+    const out = { id: c.id, rawId: b64u.encode(c.rawId), type: c.type, response: { clientDataJSON: b64u.encode(r.clientDataJSON) } };
+    if (r.attestationObject) {
+      out.response.attestationObject = b64u.encode(r.attestationObject);
+      out.response.transports = r.getTransports ? r.getTransports() : [];
+    } else {
+      out.response.authenticatorData = b64u.encode(r.authenticatorData);
+      out.response.signature = b64u.encode(r.signature);
+      if (r.userHandle) out.response.userHandle = b64u.encode(r.userHandle);
+    }
+    out.clientExtensionResults = c.getClientExtensionResults ? c.getClientExtensionResults() : {};
+    return out;
+  }
+  const descriptors = (list) => (list || []).map((d) => ({ ...d, id: b64u.decode(d.id) }));
+  window.registerPasskey = async function (name) {
+    const { options: o } = await passkeyFetch('/user/passkeys/options');
+    const publicKey = { ...o, challenge: b64u.decode(o.challenge), user: { ...o.user, id: b64u.decode(o.user.id) }, excludeCredentials: descriptors(o.excludeCredentials) };
+    const cred = await navigator.credentials.create({ publicKey });
+    return passkeyFetch('/user/passkeys', { name, credential: credentialJSON(cred) });
+  };
+  window.authenticateWithPasskey = async function () {
+    const { options: o } = await passkeyFetch('/passkeys/login/options');
+    const publicKey = { ...o, challenge: b64u.decode(o.challenge), allowCredentials: descriptors(o.allowCredentials) };
+    const cred = await navigator.credentials.get({ publicKey });
+    return passkeyFetch('/passkeys/login', { credential: credentialJSON(cred) });
+  };
+  document.addEventListener('click', async (e) => {
+    const reg = e.target.closest('[data-passkey-register]');
+    if (reg) {
+      try {
+        await window.registerPasskey(document.getElementById('passkey-name')?.value || '');
+        location.reload();
+      } catch (err) {
+        notify({ status: 'danger', title: reg.dataset.failed, body: err?.message });
+      }
+      return;
+    }
+    const login = e.target.closest('[data-passkey-login]');
+    if (login) {
+      try {
+        const r = await window.authenticateWithPasskey();
+        if (r?.redirect) location.href = r.redirect;
+      } catch (err) {
+        // Dismissing the OS / password-manager prompt is not a failure worth surfacing.
+        if (err?.name === 'NotAllowedError' || err?.name === 'AbortError') return;
+        notify({ status: 'danger', title: err?.message || login.dataset.failed });
+      }
+    }
+  });
+
   document.addEventListener('DOMContentLoaded', () => flushFlash(document));
 })();

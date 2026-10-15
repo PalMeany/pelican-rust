@@ -28,7 +28,7 @@ static PHP_LISTS: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../../pelican-api/data/php-lists.json")).unwrap_or(Value::Null)
 });
 
-const TABS: [&str; 7] = ["account", "2fa", "api_keys", "ssh_keys", "activity", "customization", "oauth"];
+const TABS: [&str; 8] = ["account", "2fa", "passkeys", "api_keys", "ssh_keys", "activity", "customization", "oauth"];
 const MFA_APP: &str = "filament-panels::auth/multi-factor/app";
 const MFA_EMAIL: &str = "filament-panels::auth/multi-factor/email";
 
@@ -39,6 +39,7 @@ pub fn routes() -> Router<AppState> {
         .route("/profile/api-keys/{id}/delete", post(api_key_delete))
         .route("/profile/ssh-keys", post(ssh_key_create))
         .route("/profile/ssh-keys/{id}/delete", post(ssh_key_delete))
+        .route("/profile/passkeys/{id}/delete", post(passkey_delete))
         .route("/profile/mfa/app/setup", get(app_setup_form).post(app_setup))
         .route("/profile/mfa/app/disable", post(app_disable))
         .route("/profile/mfa/app/recovery-codes", post(app_regenerate))
@@ -153,7 +154,7 @@ fn tab_of(web: &Authed) -> String {
     form_urlencoded::parse(q.as_bytes())
         .find(|(k, _)| k == "tab")
         .map(|(_, v)| v.into_owned())
-        .filter(|t| TABS.contains(&t.as_str()))
+        .filter(|t| TABS.contains(&t.as_str()) && (t != "passkeys" || web.secure))
         .unwrap_or_else(|| "account".into())
 }
 
@@ -247,6 +248,11 @@ async fn render(web: &Authed, account: &Account, errors: &Errors, extra: Mj) -> 
         .limit(50)
         .all(&st.db)
         .await?;
+    let passkeys = pelican_db::entities::passkeys::Entity::find()
+        .filter(pelican_db::entities::passkeys::Column::UserId.eq(u.id.0))
+        .order_by_asc(pelican_db::entities::passkeys::Column::Id)
+        .all(&st.db)
+        .await?;
     let see_ips = web.user.gate_before("seeIps activityLog");
     let activity = crate::activity::entries(&st.db, logs, &web.locale(), see_ips).await?;
     let app_enabled = u.mfa_app_secret.as_deref().is_some_and(|s| !s.is_empty());
@@ -266,6 +272,13 @@ async fn render(web: &Authed, account: &Account, errors: &Errors, extra: Mj) -> 
                     context! { id => s.id, name => s.name, icon => s.icon, color => s.color, linked => linked }
                 })
                 .collect::<Vec<_>>(),
+            // The passkeys tab is hidden unless `$request->isSecure()`.
+            passkeys_enabled => web.secure,
+            passkeys => passkeys.iter().map(|p| context! {
+                id => p.id.0,
+                name => p.name.clone(),
+                last_used_at => p.last_used_at.map(|t| t.0.format("%Y-%m-%d %H:%M:%S").to_string()),
+            }).collect::<Vec<_>>(),
             avatars_uploadable => web.st.config.env.bool_or("FILAMENT_UPLOADABLE_AVATARS", false),
             has_avatar => crate::models::avatar_path(&web.st, web.user.id()).exists(),
             avatar_url => crate::models::avatar_url(&web.st, u),
@@ -550,6 +563,14 @@ async fn ssh_key_create(web: Authed, form: Form) -> WebResult {
         .await;
     web.session.flash("success", web.t("profile.ssh_key_created"), Some(format!("SHA256:{fingerprint}")));
     Ok(web.redirect("/profile?tab=ssh_keys"))
+}
+
+/// Passkeys::deletePasskey(): one of the user's own passkeys.
+async fn passkey_delete(web: Authed, Path(id): Path<i64>) -> WebResult {
+    if crate::auth::passkeys::delete_for(&web, id).await.is_ok() {
+        web.flash_success(web.t("passkeys.deleted_notification_title"));
+    }
+    Ok(web.redirect("/profile?tab=passkeys"))
 }
 
 async fn ssh_key_delete(web: Authed, Path(id): Path<i64>) -> WebResult {

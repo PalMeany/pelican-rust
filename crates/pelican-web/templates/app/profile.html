@@ -12,7 +12,7 @@
   </div>
 </div>
 <div><nav class="tabs">
-  {% for t in [['account', 'user-cog']] + ([['oauth', 'brand-oauth']] if oauth else []) + [['2fa', 'shield-lock'], ['api_keys', 'key'], ['ssh_keys', 'lock-code'], ['activity', 'history'], ['customization', 'adjustments']] %}
+  {% for t in [['account', 'user-cog']] + ([['oauth', 'brand-oauth']] if oauth else []) + [['2fa', 'shield-lock']] + ([['passkeys', 'fingerprint']] if passkeys_enabled else []) + [['api_keys', 'key'], ['ssh_keys', 'lock-code'], ['activity', 'history'], ['customization', 'adjustments']] %}
   <button type="button" data-tab="{{ t[0] }}" class="{{ 'active' if tab == t[0] }}">{{ icon(t[1], 'icon-sm') }}{{ trans('profile.tabs.' ~ t[0]) }}</button>
   {% endfor %}
 </nav></div>
@@ -100,6 +100,30 @@
     {% endif %}
   </div>
 </section>
+
+{% if passkeys_enabled %}
+<section class="card" data-tab-panel="passkeys"{% if tab != 'passkeys' %} hidden{% endif %}>
+  <div class="card-head"><div><h2>{{ trans('profile.tabs.passkeys') }}</h2><p class="muted small">{{ trans('passkeys.description') }}</p></div></div>
+  <div class="card-body stack">
+    <div class="row" style="align-items:flex-start;flex-wrap:nowrap">
+      <label class="input-group" style="flex:1"><span class="addon">{{ trans('passkeys.name') }}</span>
+        <input class="input" id="passkey-name" type="text" placeholder="{{ trans('passkeys.name') }}" maxlength="255"></label>
+      <button type="button" class="btn" data-passkey-register data-failed="{{ trans('passkeys.registration_failed_notification_title') }}">{{ trans('passkeys.create') }}</button>
+    </div>
+    {% if passkeys %}
+    <strong class="small">{{ trans('passkeys.passkeys') }}</strong>
+    {% for p in passkeys %}
+    <div class="card card-body row" style="justify-content:space-between;flex-wrap:nowrap">
+      <div style="min-width:0"><div class="truncate">{{ p.name }}</div>
+        <div class="muted small">{{ trans('passkeys.last_used') }}: {{ (p.last_used_at | ago) if p.last_used_at else trans('passkeys.not_used_yet') }}</div></div>
+      <form method="post" action="/profile/passkeys/{{ p.id }}/delete" data-confirm="{{ trans('filament-actions::modal.confirmation') }}" data-confirm-title="{{ trans('passkeys.delete') }}" data-confirm-ok="{{ trans('passkeys.delete') }}" data-confirm-color="danger">
+        {{ csrf_field() }}<button class="btn btn-sm btn-danger" type="submit">{{ trans('passkeys.delete') }}</button></form>
+    </div>
+    {% endfor %}
+    {% endif %}
+  </div>
+</section>
+{% endif %}
 
 <section class="grid grid-3" data-tab-panel="api_keys"{% if tab != 'api_keys' %} hidden{% endif %}>
   <form class="card span-2" method="post" action="/profile/api-keys">

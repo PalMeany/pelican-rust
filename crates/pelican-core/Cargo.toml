@@ -28,6 +28,11 @@ hex = "0.4"
 indexmap = { version = "2", features = ["serde"] }
 regex = "1"
 base64.workspace = true
+hmac = "0.12"
+subtle = "2"
+p256 = "0.13"
+rsa = { version = "0.9", features = ["sha2"] }
+ciborium = "0.2"
 lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "sendmail-transport", "tokio1", "tokio1-rustls-tls", "hostname"] }
 
 [dev-dependencies]

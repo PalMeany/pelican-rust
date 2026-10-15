@@ -62,6 +62,7 @@ pub fn router(state: AppState) -> Router {
         .route("/password-reset/request", get(auth::password_reset::request_form).post(auth::password_reset::request))
         .route("/password-reset/reset", get(auth::password_reset::reset_form).post(auth::password_reset::reset))
         .route("/installer/complete", get(installer_complete))
+        .merge(auth::passkeys::routes())
         .merge(app::routes())
         .merge(admin::routes())
         .merge(server::routes())

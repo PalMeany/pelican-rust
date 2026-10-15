@@ -18,3 +18,4 @@ pub mod server_state;
 pub mod sshkey;
 pub mod state;
 pub mod time;
+pub mod webauthn;

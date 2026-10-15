@@ -3,6 +3,7 @@
 
 pub mod captcha;
 pub mod oauth;
+pub mod passkeys;
 pub mod password_reset;
 pub mod totp;
 
@@ -59,6 +60,8 @@ fn render_login(web: &Web, errors: &Errors, login: &str, remember: bool) -> WebR
             old => context! { login => login, remember => remember },
             captcha_site_key => captcha::site_key(&web.st),
             oauth => Value::from_serialize(oauth::enabled(&web.st.config.env)),
+            // The passkey action is hidden unless `$request->isSecure()`.
+            passkeys_enabled => web.secure,
             password_login => !web.st.config.env.bool_or("PANEL_DISABLE_PASSWORD_LOGIN", false)
                 && !web.st.config.env.bool_or("AUTH_DISABLE_PASSWORD_LOGIN", false),
         },
@@ -375,7 +378,7 @@ pub async fn logout(web: Web) -> Response {
     web.redirect("/login")
 }
 
-fn sha1_hex(s: &str) -> String {
+pub(crate) fn sha1_hex(s: &str) -> String {
     use sha1::Digest;
     hex::encode(sha1::Sha1::digest(s.as_bytes()))
 }

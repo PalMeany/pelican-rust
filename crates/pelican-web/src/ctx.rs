@@ -29,6 +29,13 @@ pub struct Web {
     /// `$request->ip()` (trusted proxies applied).
     pub ip: String,
     pub user_agent: Option<String>,
+    /// `$request->isSecure()` (https through a trusted proxy).
+    pub secure: bool,
+    /// `$request->getHost()` and `getSchemeAndHttpHost()`.
+    pub host: String,
+    pub scheme_host: String,
+    /// The `Origin` header.
+    pub origin: Option<String>,
 }
 
 /// A page that requires a signed-in user (Filament `Authenticate`).
@@ -197,18 +204,31 @@ impl FromRequestParts<AppState> for Web {
             None => None,
         };
         let uri = parts.extensions.get::<OriginalUri>().map(|u| u.0.clone()).unwrap_or_else(|| parts.uri.clone());
-        let ip = parts
-            .extensions
-            .get::<ConnectInfo<SocketAddr>>()
-            .map(|c| {
+        let peer = parts.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0.ip());
+        let ip = peer
+            .map(|p| {
                 pelican_core::net::client_ip(
-                    c.0.ip(),
+                    p,
                     parts.headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()),
                     &st.config.trusted_proxies,
                 )
                 .to_string()
             })
             .unwrap_or_else(|| "127.0.0.1".into());
+        let header = |name: &str| parts.headers.get(name).and_then(|v| v.to_str().ok()).map(str::to_string);
+        let trusted = peer.is_some_and(|p| pelican_core::net::is_trusted_proxy(p, &st.config.trusted_proxies));
+        let forwarded = |name: &str| {
+            trusted.then(|| header(name)).flatten().and_then(|v| v.split(',').next().map(|s| s.trim().to_string()))
+        };
+        let secure = forwarded("x-forwarded-proto").is_some_and(|p| p.eq_ignore_ascii_case("https"));
+        let http_host = forwarded("x-forwarded-host")
+            .or_else(|| header("host"))
+            .unwrap_or_else(|| "localhost".into())
+            .to_lowercase();
+        let host = match http_host.strip_prefix('[') {
+            Some(v6) => format!("[{}", v6.split(']').next().unwrap_or("")) + "]",
+            None => http_host.split(':').next().unwrap_or("").to_string(),
+        };
         Ok(Web {
             st: st.clone(),
             session,
@@ -218,6 +238,10 @@ impl FromRequestParts<AppState> for Web {
             query: uri.query().map(str::to_string),
             ip,
             user_agent: parts.headers.get(header::USER_AGENT).and_then(|v| v.to_str().ok()).map(str::to_string),
+            scheme_host: format!("{}://{http_host}", if secure { "https" } else { "http" }),
+            secure,
+            host,
+            origin: header("origin"),
         })
     }
 }

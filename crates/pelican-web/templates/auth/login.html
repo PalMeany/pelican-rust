@@ -24,6 +24,9 @@
   {% for o in oauth %}<a class="btn" href="/auth/oauth/redirect/{{ o.id }}" hx-boost="false"{% if o.color %} style="background:{{ o.color }}"{% endif %}>{% if o.icon %}{{ icon(o.icon, 'icon-sm') }}{% endif %}{{ o.name }}</a>{% endfor %}
 </div>
 {% endif %}
+{% if passkeys_enabled %}
+<button type="button" class="btn btn-gray btn-block" style="margin-top:1rem" data-passkey-login data-failed="Passkey authentication failed">{{ icon('key', 'icon-sm') }}{{ trans('passkeys.authenticate_using_passkey') }}</button>
+{% endif %}
 {% if password_login %}
 <p class="sub"><a href="/password-reset/request">{{ trans('filament-panels::auth/pages/login.actions.request_password_reset.label') }}</a></p>
 {% else %}

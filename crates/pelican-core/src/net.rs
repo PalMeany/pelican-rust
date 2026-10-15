@@ -145,6 +145,14 @@ impl IpRange {
 }
 
 /// Resolve the client IP like Laravel/Symfony with `TRUSTED_PROXIES`.
+/// The peer is one of `TRUSTED_PROXIES` (its `X-Forwarded-*` headers count).
+pub fn is_trusted_proxy(remote: IpAddr, trusted: &[String]) -> bool {
+    trusted.iter().any(|t| match t.as_str() {
+        "**" | "*" => true,
+        other => IpRange::parse(other).is_some_and(|r| r.contains(&remote)),
+    })
+}
+
 pub fn client_ip(remote: IpAddr, forwarded_for: Option<&str>, trusted: &[String]) -> IpAddr {
     let is_trusted = |ip: &IpAddr| -> bool {
         trusted.iter().any(|t| match t.as_str() {

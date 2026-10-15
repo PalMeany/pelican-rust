@@ -109,10 +109,10 @@ Application API → UI → плагины → PHP-sidecar.
   - [x] маршрутизация в бинаре: `/api/*` → API, остальное → web; dev-окружение (SQLite + `difftest --seed`)
 - [x] Ресурсный фреймворк: таблица (колонки/фильтры/сортировка/пагинация, действия строк, опрос через htmx), формы (поля+валидация Laravel, TagsInput, KeyValue), модалки/подтверждения, вкладки (`?tab=`); руководство `docs/ui-guide.md`
 - [x] Массовые действия таблиц: каркас (чекбоксы, «выбрать все», панель действий, частичные уведомления, `checkIfRecordIsSelectableUsing`); mounts, users, roles, database hosts, eggs (delete/update), webhooks (admin и сервера), логи (zip/удаление), аллокации нод и серверов
-- [~] Auth: логин (email/username, троттлинг 5/мин, auth:success/auth:fail), MFA-челлендж (TOTP google2fa окно 8 + защита от повтора, recovery-коды bcrypt, email-код 4 мин), сброс пароля (брокер Laravel, подписанная ссылка), OAuth (11 драйверов Socialite, вход/привязка/создание пользователей), капча Turnstile — готово; passkeys — нет (нужна проверка WebAuthn, совместимая с форматом web-auth/webauthn-lib в `passkeys.credential`)
+- [x] Auth: логин (email/username, троттлинг 5/мин, auth:success/auth:fail), MFA-челлендж (TOTP google2fa окно 8 + защита от повтора, recovery-коды bcrypt, email-код 4 мин), сброс пароля (брокер Laravel, подписанная ссылка), OAuth (11 драйверов Socialite, вход/привязка/создание пользователей), капча Turnstile, passkeys (ADR-0017, кросс-проверка с webauthn-lib) — готово
 - [x] Профиль: аккаунт, 2FA (TOTP с QR, recovery-коды, email-коды; настройка/отключение/перевыпуск), API-ключи, SSH-ключи, активити, кастомизация
 - [x] Профиль: OAuth-привязки, аватары (Gravatar/UI Avatars/загрузка)
-- [ ] Профиль: passkeys
+- [x] Профиль: passkeys (регистрация/удаление, вход; UI только по https, как в оригинале)
 - [x] RequireTwoFactorAuthentication (уровни none/admin/all)
 - [~] Admin: каркас (доступ isAdmin, сайдбар с группами и бейджами по правам spatie)
   - [x] mounts (эталон)
