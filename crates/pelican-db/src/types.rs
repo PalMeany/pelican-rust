@@ -269,7 +269,13 @@ impl TryGetable for Timestamp {
             res,
             idx,
             &[
-                via!(chrono::NaiveDateTime, |v| v),
+                // MySQL "zero" dates (`0000-00-00 00:00:00`, written by old non-strict servers)
+                // arrive as an empty binary date that sqlx rejects as unexpected null: read
+                // them as NULL (QUESTIONS Q5).
+                |res, idx| match <Option<chrono::NaiveDateTime> as TryGetable>::try_get_by(res, idx) {
+                    Err(TryGetError::DbErr(e)) if is_zero_date(&e.to_string()) => Ok(None),
+                    other => other,
+                },
                 via!(chrono::DateTime<chrono::Utc>, |v| v.naive_utc()),
                 |res, idx| match <Option<String> as TryGetable>::try_get_by(res, idx)? {
                     None => Ok(None),
@@ -281,6 +287,12 @@ impl TryGetable for Timestamp {
         )?;
         v.map(Timestamp).ok_or_else(|| null_err(idx))
     }
+}
+
+/// sqlx's error for an all-zero MySQL date (binary: empty date; text: `0000-00-00`).
+fn is_zero_date(msg: &str) -> bool {
+    let m = msg.to_ascii_lowercase();
+    m.contains("unexpected null") || m.contains("0000-00-00")
 }
 
 /// Parse the textual forms found in SQLite databases written by Laravel.

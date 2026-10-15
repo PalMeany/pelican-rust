@@ -132,3 +132,31 @@ async fn all_entities_select() -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+/// QUESTIONS Q5: MySQL/MariaDB "zero" dates from old non-strict servers read as NULL.
+#[tokio::test]
+async fn mysql_zero_dates_read_as_null() -> anyhow::Result<()> {
+    use pelican_db::Driver;
+    use sea_orm::{ConnectionTrait, FromQueryResult, Statement};
+    #[derive(FromQueryResult)]
+    struct Row {
+        at: Option<Timestamp>,
+    }
+    for driver in drivers_under_test().into_iter().filter(|d| matches!(d, Driver::Mysql | Driver::Mariadb)) {
+        let t = pelican_db::testing::empty(driver).await.map_err(|e| anyhow::anyhow!("{driver:?}: {e}"))?;
+        let b = t.db.get_database_backend();
+        for sql in [
+            "SET SESSION sql_mode = ''",
+            "CREATE TABLE zero_dates (id INT PRIMARY KEY, at DATETIME NULL)",
+            "INSERT INTO zero_dates VALUES (1, '0000-00-00 00:00:00'), (2, '2026-10-15 01:02:03'), (3, NULL)",
+        ] {
+            t.db.execute_raw(Statement::from_string(b, sql)).await?;
+        }
+        let rows = Row::find_by_statement(Statement::from_string(b, "SELECT at FROM zero_dates ORDER BY id"))
+            .all(&t.db)
+            .await?;
+        let got: Vec<Option<String>> = rows.iter().map(|r| r.at.map(|t| t.0.to_string())).collect();
+        assert_eq!(got, vec![None, Some("2026-10-15 01:02:03".into()), None], "{driver:?}");
+    }
+    Ok(())
+}
