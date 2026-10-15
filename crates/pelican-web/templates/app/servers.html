@@ -6,25 +6,18 @@
 {% if grid %}
 <div id="servers-grid" class="stack" hx-boost="true" hx-target="#servers-grid" hx-select="#servers-grid" hx-swap="outerHTML"
   hx-get="{{ table.current_url }}" hx-trigger="every 15s">
-  <div><nav class="tabs">
-    {% for tab in table.tabs %}<a href="{{ tab.url }}" class="{{ 'active' if tab.active }}">{{ tab.label }}<span class="badge{{ ' badge-primary' if tab.active }}">{{ tab.badge }}</span></a>{% endfor %}
-  </nav></div>
-  <form class="row" method="get" action="/">
+  {{ tbl.tabs(table.tabs) }}
+  <div class="card table-card">
+  <form class="table-toolbar" method="get" action="/">
     {% for k in table.keep %}<input type="hidden" name="{{ k[0] }}" value="{{ k[1] }}">{% endfor %}
-    {% for f in table.filters %}
-    <select class="select" id="grid-filter-{{ f.name }}" name="filter[{{ f.name }}]" style="width:auto;min-width:10rem" aria-label="{{ f.label }}"
-      hx-get="/" hx-trigger="change" hx-include="closest form" hx-push-url="true">
-      <option value="">{{ f.label }}: {{ trans('filament-tables::table.filters.select.placeholder') }}</option>
-      {% for o in f.options %}<option value="{{ o[0] }}"{% if o[0] == f.value %} selected{% endif %}>{{ o[1] }}</option>{% endfor %}
-    </select>
-    {% endfor %}
-    <div style="flex:1"></div>
-    <input class="input" id="grid-search" type="search" name="search" value="{{ table.search }}" style="max-width:18rem"
+    <div class="spacer"></div>
+    <input class="input search" id="grid-search" type="search" name="search" value="{{ table.search }}"
       placeholder="{{ trans('filament-tables::table.fields.search.placeholder') }}" aria-label="{{ trans('filament-tables::table.fields.search.label') }}"
       hx-get="/" hx-trigger="input changed delay:400ms, search" hx-include="closest form" hx-push-url="true">
+    {% if table.filters %}{{ tbl.filters_dropdown('grid', table.filters, '/') }}{% endif %}
   </form>
   {% if cards %}
-  <div class="grid grid-2">
+  <div class="grid grid-2 server-grid">
     {% for c in cards %}
     <div class="card server-card" data-href="{{ c.url }}" onclick="if(!event.target.closest('a,button,form,details'))location.href=this.dataset.href">
       <span class="server-card-bar bg-{{ c.condition_color }}"></span>
@@ -50,13 +43,15 @@
     {% endfor %}
   </div>
   {% if table.pagination.links %}
-  <nav class="pagination" style="align-self:center">
+  <div class="table-foot"><span></span>
+  <nav class="pagination">
     {% for l in table.pagination.links %}{% if l.url %}<a href="{{ l.url }}" class="{{ 'current' if l.current }}">{{ l.label }}</a>{% else %}<span class="disabled">{{ l.label }}</span>{% endif %}{% endfor %}
-  </nav>
+  </nav></div>
   {% endif %}
   {% else %}
-  <div class="card empty"><div class="icon-wrap">{{ icon('brand-docker', 'icon-lg') }}</div><h3>{{ table.empty_heading }}</h3></div>
+  <div class="empty"><div class="icon-wrap">{{ icon('brand-docker', 'icon-lg') }}</div><h3>{{ table.empty_heading }}</h3></div>
   {% endif %}
+  </div>
 </div>
 {% else %}
 {{ tbl.render(table, csrf) }}

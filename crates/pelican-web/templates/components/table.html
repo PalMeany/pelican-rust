@@ -43,33 +43,49 @@
 {% endif %}
 {% endmacro %}
 
+{# Filament's filters dropdown: the funnel button with the number of active filters, the
+   filters' fields and "Reset". `base` is where the form's htmx requests go. #}
+{% macro filters_dropdown(id, filters, base) %}
+{% set active = filters | selectattr('value') | list | length %}
+<details class="dropdown table-filters">
+  <summary class="icon-btn filter-btn" aria-label="{{ trans('filament-tables::table.actions.filter.label') }}">{{ icon('filters', 'icon') }}<span class="filter-count">{{ active }}</span></summary>
+  <div class="dropdown-menu filters-menu">
+    <div class="filters-head"><strong>{{ trans('filament-tables::table.filters.heading') }}</strong>
+      <button type="button" class="btn-link danger" onclick="const f=this.closest('form');f.querySelectorAll('select[name^=filter]').forEach(s=>s.value='');const s=f.querySelector('select[name^=filter]');if(s)htmx.trigger(s,'change')">{{ trans('filament-tables::table.filters.actions.reset.label') }}</button></div>
+    {% for f in filters %}
+    <label class="field"><span class="label">{{ f.label }}</span>
+      <select class="select" id="{{ id }}-filter-{{ f.name }}" name="filter[{{ f.name }}]"
+        hx-get="{{ base }}" hx-trigger="change" hx-include="closest form" hx-push-url="true">
+        <option value="">{{ trans('filament-tables::table.filters.select.placeholder') }}</option>
+        {% for o in f.options %}<option value="{{ o[0] }}"{% if o[0] == f.value %} selected{% endif %}>{{ o[1] }}</option>{% endfor %}
+      </select>
+    </label>
+    {% endfor %}
+  </div>
+</details>
+{% endmacro %}
+
+{% macro tabs(list) %}
+<div class="tabs-row"><nav class="tabs">
+  {% for tab in list %}<a href="{{ tab.url }}" class="{{ 'active' if tab.active }}">{{ tab.label }}{% if tab.badge is not none %}<span class="badge badge-primary">{{ tab.badge }}</span>{% endif %}</a>{% endfor %}
+</nav></div>
+{% endmacro %}
+
 {% macro render(t, csrf) %}
 <div id="{{ t.id }}" class="stack" hx-boost="true" hx-target="#{{ t.id }}" hx-select="#{{ t.id }}" hx-swap="outerHTML"
   {%- if t.poll %} hx-get="{{ t.current_url }}" hx-trigger="every {{ t.poll }}"{% endif %}>
-  {% if t.tabs %}
-  <div><nav class="tabs">
-    {% for tab in t.tabs %}<a href="{{ tab.url }}" class="{{ 'active' if tab.active }}">{{ tab.label }}{% if tab.badge is not none %}<span class="badge{{ ' badge-primary' if tab.active }}">{{ tab.badge }}</span>{% endif %}</a>{% endfor %}
-  </nav></div>
-  {% endif %}
+  {% if t.tabs %}{{ tabs(t.tabs) }}{% endif %}
   <div class="card table-card">
     {% if t.searchable or t.filters %}
     <form class="table-toolbar" method="get" action="{{ t.base_url }}">
       {% for k in t.keep %}<input type="hidden" name="{{ k[0] }}" value="{{ k[1] }}">{% endfor %}
       <input type="hidden" name="per_page" value="{{ t.pagination.per_page }}">
-      {% for f in t.filters %}
-      <label class="row small" style="gap:0.5rem">{{ f.label }}
-        <select class="select" id="{{ t.id }}-filter-{{ f.name }}" name="filter[{{ f.name }}]" style="width:auto;min-width:10rem"
-          hx-get="{{ t.base_url }}" hx-trigger="change" hx-include="closest form" hx-push-url="true">
-          <option value="">{{ trans('filament-tables::table.filters.select.placeholder') }}</option>
-          {% for o in f.options %}<option value="{{ o[0] }}"{% if o[0] == f.value %} selected{% endif %}>{{ o[1] }}</option>{% endfor %}
-        </select>
-      </label>
-      {% endfor %}
       <div class="spacer"></div>
       {% if t.searchable %}
       <input class="input search" id="{{ t.id }}-search" type="search" name="search" value="{{ t.search }}"
         hx-get="{{ t.base_url }}" hx-trigger="input changed delay:400ms, search" hx-include="closest form" hx-push-url="true" placeholder="{{ t.search_placeholder or trans('filament-tables::table.fields.search.placeholder') }}" aria-label="{{ trans('filament-tables::table.fields.search.label') }}">
       {% endif %}
+      {% if t.filters %}{{ filters_dropdown(t.id, t.filters, t.base_url) }}{% endif %}
     </form>
     {% endif %}
     {% if t.rows and t.bulk %}

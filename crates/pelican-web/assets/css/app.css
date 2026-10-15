@@ -267,7 +267,10 @@ details.nav-group:not([open]) .nav-group-chevron { transform: rotate(180deg); }
 .form-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
 
 /* ---------- tables ---------- */
-.table-card { overflow: hidden; }
+.table-card { overflow: visible; }
+.table-card > :first-child { border-top-left-radius: inherit; border-top-right-radius: inherit; }
+.table-card > :last-child { border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
+.table-card .table-wrap { overflow-x: auto; }
 .table-toolbar { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .table-toolbar .spacer { flex: 1; }
 .table-toolbar .search { max-width: 18rem; }
@@ -386,7 +389,13 @@ dialog.modal::backdrop { background: rgb(9 9 11 / 0.5); }
 .server-card-stats > div { min-width: 0; overflow-wrap: anywhere; }
 
 /* ---------- server console ---------- */
-.btn-group { display: inline-flex; gap: 0.5rem; flex-wrap: wrap; }
+/* Joined buttons (Filament's button group: the console's power actions). */
+.btn-group { display: inline-flex; flex-wrap: nowrap; border-radius: var(--radius-sm); box-shadow: var(--shadow); }
+.btn-group > .btn { border-radius: 0; box-shadow: none; }
+.btn-group > .btn + .btn { margin-left: -1px; }
+.btn-group > .btn:first-child { border-top-left-radius: var(--radius-sm); border-bottom-left-radius: var(--radius-sm); }
+.btn-group > .btn:last-child, .btn-group > .btn:has(+ .btn[hidden]:last-child) { border-top-right-radius: var(--radius-sm); border-bottom-right-radius: var(--radius-sm); }
+.btn-group > .btn:disabled { opacity: 0.7; }
 .stat-blocks { gap: 1rem; }
 .stat-sm { padding: 0.875rem 1rem; }
 .stat-sm .label { font-size: 0.8125rem; color: var(--text-2); }
@@ -469,3 +478,24 @@ html.nav-loading::before { content: ""; position: fixed; inset: 0 0 auto 0; heig
 
 /* A PHP plugin's Filament page inside our layout: our content area already pads and centers it. */
 .sidecar-page > .fi-main { padding: 0; margin: 0; max-width: none; width: 100%; }
+
+/* Filament list tabs (centered) and the filters dropdown of tables. */
+.tabs-row { display: flex; justify-content: center; }
+.table-filters { position: relative; }
+.filter-btn { position: relative; }
+.filter-count { position: absolute; top: -0.125rem; right: -0.125rem; min-width: 1rem; height: 1rem; padding: 0 0.25rem; border-radius: 9999px;
+  background: rgb(59 130 246 / 0.1); color: var(--primary-600); font-size: 0.625rem; font-weight: 600; line-height: 1rem; text-align: center; }
+.filters-menu { width: 20rem; padding: 1rem; display: flex; flex-direction: column; gap: 1rem; }
+.filters-head { display: flex; align-items: center; justify-content: space-between; }
+.filters-menu .field { display: flex; flex-direction: column; gap: 0.5rem; }
+.filters-menu .field .label { font-size: 0.875rem; font-weight: 500; }
+.filters-menu .select { width: 100%; }
+.server-grid { padding: 1rem; }
+.dropdown-menu .filters-head .btn-link { width: auto; padding: 0; }
+/* Alert banners as Filament callouts: a lighter title, muted body, the icon in the status colour. */
+.banner strong { font-weight: 500; }
+.banner strong + div { color: var(--text-2); margin-top: 0.125rem; }
+.banner.warning > .icon { color: var(--warning-500); }
+.banner.danger > .icon { color: var(--danger-500); }
+.banner.success > .icon { color: var(--success-500); }
+.banner.info > .icon { color: var(--info-500); }
