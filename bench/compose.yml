@@ -1,0 +1,70 @@
+# Load-test stand (bench/README.md): the original panel and pelican-rs on the same
+# MariaDB data, each limited to the same CPU and memory, measured one at a time.
+x-panel-env: &panel-env
+  APP_ENV: "production"
+  APP_DEBUG: "false"
+  APP_URL: "http://panel"
+  # The difftest key: fixture API keys and node tokens are encrypted with it.
+  APP_KEY: "base64:Rm9yRGlmZmVyZW50aWFsVGVzdGluZ09ubHkhIDMyQiE="
+  APP_INSTALLED: "true"
+  APP_TIMEZONE: "UTC"
+  DB_CONNECTION: "mariadb"
+  DB_HOST: "mariadb"
+  DB_PORT: "3306"
+  DB_DATABASE: "panel"
+  DB_USERNAME: "root"
+  DB_PASSWORD: "root"
+  # The original's documented production defaults (.env.example / installer).
+  CACHE_STORE: "file"
+  SESSION_DRIVER: "file"
+  QUEUE_CONNECTION: "sync"
+  MAIL_MAILER: "log"
+  TRUSTED_PROXIES: "0.0.0.0/0"
+
+services:
+  mariadb:
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: panel
+    command: ["--max-connections=500", "--innodb-buffer-pool-size=512M"]
+    tmpfs: ["/var/lib/mysql"]
+    cpus: 2
+    mem_limit: 1536m
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      retries: 60
+
+  panel-orig:
+    image: pelican-orig:dev
+    environment:
+      <<: *panel-env
+      XDG_DATA_HOME: /pelican-data
+      CADDY_APP_URL: ":80"
+    # The official entrypoint (migrations, filament:optimize, view:cache), then php-fpm + Caddy
+    # without the cron/queue workers (nothing in the background while measuring).
+    command: ["sh", "-c", "php-fpm -D && exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"]
+    cpus: 2
+    mem_limit: 1g
+    depends_on:
+      mariadb: { condition: service_healthy }
+
+  panel-rs:
+    image: pelican-rs-dev:latest
+    environment:
+      <<: *panel-env
+      RUST_LOG: "warn"
+    volumes:
+      - target:/target
+      - ${BENCH_DATA:?}:/data
+    command: ["/target/release/pelican", "--path", "/data", "serve", "--listen", "0.0.0.0:80"]
+    cpus: 2
+    mem_limit: 1g
+    depends_on:
+      mariadb: { condition: service_healthy }
+
+volumes:
+  target:
+    name: ${PELICAN_TARGET_VOLUME:-pelican-rs-target-main}
+    external: true

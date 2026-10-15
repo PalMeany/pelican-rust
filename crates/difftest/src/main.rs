@@ -40,6 +40,10 @@ struct Args {
     /// Reset the database, load these fixtures (comma list) and exit (dev/UI data).
     #[arg(long)]
     seed: Option<String>,
+    /// With `--seed`: add load-test data, this many times 1000 users / 5000 servers /
+    /// 100000 activity entries (`bench/`).
+    #[arg(long)]
+    bench_scale: Option<usize>,
 }
 
 #[tokio::main]
@@ -62,6 +66,12 @@ async fn main() -> Result<()> {
         db.reset().await?;
         db.load(&rows, &enc, chrono::Utc::now().naive_utc()).await?;
         println!("seeded {} tables", rows.len());
+        if let Some(scale) = args.bench_scale {
+            let extra = difftest::bench::scale_rows(&rows, scale);
+            let count: usize = extra.values().map(Vec::len).sum();
+            db.load_bulk(&extra, &enc, chrono::Utc::now().naive_utc(), 500).await?;
+            println!("added {count} load-test rows");
+        }
         return Ok(());
     }
     let wings = MockWings::start().await.context("starting mock wings on :8080")?;

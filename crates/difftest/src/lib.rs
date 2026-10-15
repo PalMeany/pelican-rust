@@ -1,5 +1,6 @@
 //! Differential testing harness (ADR-0007).
 
+pub mod bench;
 pub mod db;
 pub mod docker;
 pub mod mock_wings;

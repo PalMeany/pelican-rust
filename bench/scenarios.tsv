@@ -1,0 +1,10 @@
+# name	method	path	auth	note
+client-servers	GET	/api/client	client	server list of a user with 50 servers
+client-server	GET	/api/client/servers/b0000000	client	one server (Client API view)
+client-activity	GET	/api/client/account/activity	client	account activity (paginated, ~10k rows)
+app-servers	GET	/api/application/servers?per_page=50	app	Application API server list
+app-users	GET	/api/application/users?per_page=50	app	Application API user list
+app-server	GET	/api/application/servers/10000?include=allocations,user,variables	app	one server with includes
+remote-servers	GET	/api/remote/servers?per_page=50	node	Wings boot: server configurations of a node (500 servers)
+remote-server	GET	/api/remote/servers/be0c0003-0000-4000-8000-000000000000	node	one server configuration
+web-login	GET	/login	none	login page (server-side render)

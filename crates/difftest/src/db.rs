@@ -159,6 +159,56 @@ impl TestDb {
         Ok(())
     }
 
+    /// [`TestDb::load`] for large row sets: multi-row INSERTs of up to `chunk` rows with the
+    /// same columns (load-test data, `bench/`).
+    pub async fn load_bulk(&self, rows: &Rows, enc: &Encrypter, now: chrono::NaiveDateTime, chunk: usize) -> Result<()> {
+        let txn = self.db.begin().await?;
+        if self.backend == DbBackend::MySql {
+            txn.execute_unprepared("SET FOREIGN_KEY_CHECKS=0").await?;
+        } else if self.backend == DbBackend::Postgres {
+            txn.execute_unprepared("SET LOCAL session_replication_role = replica").await?;
+        } else if self.backend == DbBackend::Sqlite {
+            txn.execute_unprepared("PRAGMA defer_foreign_keys = ON").await?;
+        }
+        for (table, list) in rows {
+            for part in list.chunks(chunk.max(1)) {
+                let Some(first) = part.first() else { continue };
+                let cols: Vec<&String> = first.keys().collect();
+                let mut tuples = Vec::with_capacity(part.len());
+                for row in part {
+                    let mut vals = Vec::with_capacity(cols.len());
+                    for col in &cols {
+                        let v = row.get(*col).cloned().unwrap_or(serde_yaml::Value::Null);
+                        let lit = fixture_value(&v, enc, now).with_context(|| format!("{table}.{col}"))?;
+                        vals.push(match lit {
+                            None => "NULL".to_string(),
+                            Some(s) => self.literal(&s),
+                        });
+                    }
+                    tuples.push(format!("({})", vals.join(", ")));
+                }
+                let names = cols.iter().map(|c| self.q(c)).collect::<Vec<_>>().join(", ");
+                let sql = format!("INSERT INTO {} ({names}) VALUES {}", self.q(table), tuples.join(", "));
+                txn.execute_unprepared(&sql).await.with_context(|| format!("bulk insert into {table}"))?;
+            }
+        }
+        if self.backend == DbBackend::MySql {
+            txn.execute_unprepared("SET FOREIGN_KEY_CHECKS=1").await?;
+        }
+        if self.backend == DbBackend::Postgres {
+            for table in rows.keys() {
+                let sql = format!(
+                    "SELECT setval(pg_get_serial_sequence('{table}', 'id'), COALESCE((SELECT MAX(id) FROM {}), 0) + 1, false) \
+                     WHERE pg_get_serial_sequence('{table}', 'id') IS NOT NULL",
+                    self.q(table)
+                );
+                txn.execute_unprepared(&sql).await.with_context(|| sql.clone())?;
+            }
+        }
+        txn.commit().await?;
+        Ok(())
+    }
+
     fn literal(&self, s: &str) -> String {
         let mut out = String::with_capacity(s.len() + 2);
         out.push('\'');
