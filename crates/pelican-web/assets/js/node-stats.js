@@ -34,39 +34,7 @@
       g.font = '11px ' + (css('--font') || 'sans-serif');
       return { g, w, h };
     }
-    // A Chart.js-like filled line: y from 0 with ~10 ticks, the sample times under the x axis.
-    function line(id, data) {
-      const c = canvas(id); if (!c) return;
-      const { g, w, h } = c;
-      const top = Math.max(...data, 0) || 1;
-      const step = Math.pow(10, Math.floor(Math.log10(top / 10)));
-      const tick = [1, 2, 2.5, 5, 10].map((m) => m * step).find((t) => top / t <= 10) || step * 10;
-      const max = Math.ceil(top / tick) * tick;
-      // Chart.js formats ticks in the browser's locale with the step's decimals.
-      const digits = Math.max(0, Math.min(20, -Math.floor(Math.log10(tick))));
-      const tickLabel = (v) => Number(v).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
-      const left = 34, bottom = 40, right = 8, topPad = 8;
-      const ph = h - bottom - topPad, pw = w - left - right;
-      g.strokeStyle = css('--border'); g.fillStyle = css('--text-2'); g.lineWidth = 1; g.textAlign = 'right'; g.textBaseline = 'middle';
-      for (let v = 0; v <= max + tick / 2; v += tick) {
-        const y = topPad + ph - (v / max) * ph;
-        g.beginPath(); g.moveTo(left, y); g.lineTo(w - right, y); g.stroke();
-        g.fillText(tickLabel(v), left - 6, y);
-      }
-      if (!data.length) return;
-      const x = (i) => left + (data.length === 1 ? pw / 2 : (i / (data.length - 1)) * pw);
-      const y = (v) => topPad + ph - (v / max) * ph;
-      g.save(); g.textAlign = 'right'; g.textBaseline = 'middle';
-      const every = Math.max(1, Math.ceil(data.length / Math.max(1, Math.floor(pw / 24))));
-      times.forEach((t, i) => { if (i % every) return; g.save(); g.translate(x(i), topPad + ph + 6); g.rotate(-Math.PI / 4); g.fillText(t, 0, 0); g.restore(); });
-      g.restore();
-      g.beginPath(); data.forEach((v, i) => { if (i === 0) g.moveTo(x(i), y(v)); else g.lineTo(x(i), y(v)); });
-      g.strokeStyle = 'rgba(54, 162, 235, 1)'; g.lineWidth = 2; g.stroke();
-      g.lineTo(x(data.length - 1), y(0)); g.lineTo(x(0), y(0)); g.closePath();
-      g.fillStyle = 'rgba(96, 165, 250, 0.3)'; g.fill();
-      g.fillStyle = 'rgba(54, 162, 235, 1)';
-      data.forEach((v, i) => { g.beginPath(); g.arc(x(i), y(v), 2.5, 0, Math.PI * 2); g.fill(); });
-    }
+    const line = (id, data) => window.PelicanChart?.line(document.getElementById(id), { series: [{ data }], labels: times, showX: true });
     // Chart.js pie with its legend on top: used (blue) and unused (green).
     function pie(id, used, unused) {
       const c = canvas(id); if (!c) return;

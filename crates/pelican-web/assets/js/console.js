@@ -46,11 +46,19 @@
     const strip = (l) => String(l).replace(/(?:\r\n|\r|\n)$/im, '');
     const out = (line, prelude) => term.writeln((prelude ? PRELUDE : '') + strip(line) + '\u001b[0m');
 
-    // ----- stats -----
-    let state = cfg.statusIsLive ? cfg.status : cfg.status;
+    // ----- stats (resources/js/console.js ServerStats of the original) -----
+    // Raw Wings frames, at most 120 kept for this browser session so the charts don't start empty
+    // on every visit; the charts show the last `period` of them (console_graph_period).
+    let state = cfg.status;
     let statusIsLive = cfg.statusIsLive;
-    const samples = [];
-    let lastNet = null;
+    const MAX_SAMPLES = 120, MAX_SAMPLE_GAP = 5000;
+    const storageKey = 'pelican:console-stats:' + cfg.uuid;
+    let samples = [];
+    try {
+      const now = Date.now();
+      samples = JSON.parse(sessionStorage.getItem(storageKey) || '[]')
+        .filter((x) => Number.isFinite(x && x.t) && x.t >= now - MAX_SAMPLES * 1000 && x.t <= now);
+    } catch (_) { samples = []; }
     const units = cfg.binaryPrefix ? ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'] : ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'];
     const base = cfg.binaryPrefix ? 1024 : 1000;
     function bytes(n) {
@@ -58,12 +66,27 @@
       const e = Math.min(Math.floor(Math.log(n) / Math.log(base)), units.length - 1);
       return (n / Math.pow(base, e)).toFixed(2) + ' ' + units[e];
     }
+    // ServerNetworkChart's y ticks: always 1024-based.
+    function tickBytes(v) {
+      if (v < 1) return '0 Bytes';
+      const i = Math.floor(Math.log(v) / Math.log(1024));
+      return Number((v / Math.pow(1024, i)).toFixed(2)) + ' ' + ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB'][i];
+    }
     const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    const round2 = (v) => Math.round(v * 100) / 100;
 
     function render() {
       const latest = samples[samples.length - 1];
+      const win = samples.slice(-cfg.period);
+      // Network: deltas of the cumulative counters, skipping pairs too far apart (restored history).
+      const rx = [], tx = [];
+      for (let i = 1; i < win.length; i++) {
+        if (win[i].t - win[i - 1].t > MAX_SAMPLE_GAP) continue;
+        rx.push(Math.max(0, win[i].rx - win[i - 1].rx));
+        tx.push(Math.max(0, win[i].tx - win[i - 1].tx));
+      }
       if (latest) {
-        setText('server-network-heading', '- ↓' + bytes(latest.rx) + ' - ↑' + bytes(latest.tx));
+        setText('server-network-heading', '- ↓' + bytes(rx.length ? rx[rx.length - 1] : 0) + ' - ↑' + bytes(tx.length ? tx[tx.length - 1] : 0));
         setText('server-stat-disk', latest.disk === 0 ? cfg.unknown : bytes(latest.disk));
       }
       const usage = (id, fmt) => {
@@ -72,58 +95,33 @@
         if (state === 'offline') { el.textContent = cfg.offlineLabel; return; }
         el.textContent = (state === null || !latest ? cfg.unknown : fmt(latest)) + (el.dataset.limit || '');
       };
-      usage('server-stat-cpu', (s) => s.cpu.toFixed(2) + ' %');
-      usage('server-stat-memory', (s) => bytes(s.memory));
+      usage('server-stat-cpu', (x) => x.cpu.toFixed(2) + ' %');
+      usage('server-stat-memory', (x) => bytes(x.memory));
       if (statusIsLive) setText('server-stat-status', state ? (cfg.statusLabels[state] || state) : cfg.unknown);
-      chart('chart-cpu', [samples.map((s) => s.cpu)], (v) => v.toFixed(1) + ' %');
-      chart('chart-memory', [samples.map((s) => s.memory)], bytes);
-      chart('chart-network', [samples.map((s) => s.rx), samples.map((s) => s.tx)], bytes);
-    }
-
-    function chart(id, series, fmt) {
-      const c = document.getElementById(id);
-      if (!c) return;
-      const dpr = window.devicePixelRatio || 1;
-      const w = c.clientWidth, h = c.clientHeight;
-      if (c.width !== w * dpr) { c.width = w * dpr; c.height = h * dpr; }
-      const g = c.getContext('2d');
-      g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      g.clearRect(0, 0, w, h);
-      const max = Math.max(1, ...series.flat());
-      const style = getComputedStyle(document.documentElement);
-      g.strokeStyle = style.getPropertyValue('--border') || 'rgba(128,128,128,.2)';
-      g.lineWidth = 1;
-      for (let i = 0; i <= 4; i++) { const y = Math.round((h - 1) * i / 4) + 0.5; g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
-      const colors = ['#3b82f6', '#22c55e'];
-      series.forEach((data, si) => {
-        if (data.length < 2) return;
-        g.strokeStyle = colors[si % colors.length];
-        g.fillStyle = colors[si % colors.length] + '22';
-        g.lineWidth = 2;
-        g.beginPath();
-        const step = w / Math.max(cfg.period - 1, 1);
-        const x0 = w - (data.length - 1) * step;
-        data.forEach((v, i) => { const x = x0 + i * step, y = h - 2 - (v / max) * (h - 6); if (i === 0) g.moveTo(x, y); else g.lineTo(x, y); });
-        g.stroke();
-        g.lineTo(w, h); g.lineTo(x0, h); g.closePath(); g.fill();
+      const chart = window.PelicanChart ? window.PelicanChart.line : () => {};
+      chart(document.getElementById('chart-cpu'), { series: [{ data: win.map((x) => round2(x.cpu)) }] });
+      chart(document.getElementById('chart-memory'), { series: [{ data: win.map((x) => round2(x.memory / Math.pow(base, 3))) }] });
+      chart(document.getElementById('chart-network'), {
+        series: [{ data: rx, stroke: 'rgba(74, 222, 128, 1)', fill: 'rgba(100, 255, 105, 0.5)' }, { data: tx }],
+        tick: tickBytes,
       });
-      g.fillStyle = style.getPropertyValue('--text-2') || '#888';
-      g.font = '11px ' + (style.getPropertyValue('--font') || 'sans-serif');
-      g.fillText(fmt(max), 4, 12);
     }
 
     function pushStats(raw) {
-      let s;
-      try { s = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (_) { return; }
-      const net = s.network || {};
-      let rx = 0, tx = 0;
-      if (lastNet) { rx = Math.max(0, (net.rx_bytes || 0) - lastNet.rx); tx = Math.max(0, (net.tx_bytes || 0) - lastNet.tx); }
-      lastNet = { rx: net.rx_bytes || 0, tx: net.tx_bytes || 0 };
-      samples.push({ cpu: s.cpu_absolute || 0, memory: s.memory_bytes || 0, disk: s.disk_bytes || 0, rx, tx });
-      while (samples.length > cfg.period) samples.shift();
-      if (s.state) setState(s.state, false);
+      let x;
+      try { x = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (_) { return; }
+      if (x === null || Array.isArray(x) || typeof x !== 'object') return;
+      const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+      samples.push({
+        t: Date.now(), cpu: num(x.cpu_absolute), memory: num(x.memory_bytes), disk: num(x.disk_bytes),
+        rx: num(x.network && x.network.rx_bytes), tx: num(x.network && x.network.tx_bytes), uptime: num(x.uptime),
+      });
+      if (samples.length > MAX_SAMPLES) samples.splice(0, samples.length - MAX_SAMPLES);
+      try { sessionStorage.setItem(storageKey, JSON.stringify(samples)); } catch (_) { /* ignore */ }
+      if (x.state) setState(x.state, false);
       render();
     }
+    if (samples.length) setTimeout(render);
 
     // ----- power buttons & command input -----
     const startable = (s) => !['running', 'starting', 'stopping', 'restarting', 'missing'].includes(s);

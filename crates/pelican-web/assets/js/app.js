@@ -164,6 +164,64 @@
       });
   });
 
+  // ----- Chart.js-like line charts (Filament chart widgets: console, node overview) -----
+  // series: [{ data, stroke, fill }]; the points span the width, y starts at 0 with about ten ticks
+  // in the browser's locale (or `tick(v)`), x labels only with `labels` + `showX`; tension 0.3.
+  window.PelicanChart = {
+    line(canvas, opts) {
+      if (!canvas) return;
+      const dpr = window.devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
+      if (canvas.width !== w * dpr || canvas.height !== h * dpr) { canvas.width = w * dpr; canvas.height = h * dpr; }
+      const g = canvas.getContext('2d');
+      g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+      const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+      g.font = '11px ' + (css('--font') || 'sans-serif');
+      const series = (opts.series || []).filter((s) => s && s.data);
+      const top = Math.max(0, ...series.flatMap((s) => s.data)) || 1;
+      const step = Math.pow(10, Math.floor(Math.log10(top / 10)));
+      const tick = [1, 2, 2.5, 5, 10].map((m) => m * step).find((t) => top / t <= 10) || step * 10;
+      const max = Math.ceil(top / tick - 1e-9) * tick;
+      const digits = Math.max(0, Math.min(20, -Math.floor(Math.log10(tick))));
+      const label = opts.tick || ((v) => Number(v).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits }));
+      const ticks = [];
+      for (let v = 0; v <= max + tick / 2; v += tick) ticks.push(v);
+      const left = 8 + Math.max(...ticks.map((v) => g.measureText(label(v)).width)), right = 8, topPad = 8;
+      const bottom = opts.showX ? 40 : 6, ph = h - bottom - topPad, pw = w - left - right;
+      const y = (v) => topPad + ph - (v / max) * ph;
+      g.strokeStyle = css('--border'); g.fillStyle = css('--text-2'); g.lineWidth = 1; g.textAlign = 'right'; g.textBaseline = 'middle';
+      ticks.forEach((v) => { g.beginPath(); g.moveTo(left, y(v)); g.lineTo(w - right, y(v)); g.stroke(); g.fillText(label(v), left - 6, y(v)); });
+      const n = Math.max(0, ...series.map((s) => s.data.length));
+      if (!n) return;
+      const x = (i) => left + (n === 1 ? pw / 2 : (i / (n - 1)) * pw);
+      if (opts.showX && opts.labels) {
+        const every = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(pw / 24))));
+        opts.labels.forEach((t, i) => { if (i % every) return; g.save(); g.translate(x(i), topPad + ph + 6); g.rotate(-Math.PI / 4); g.fillText(t, 0, 0); g.restore(); });
+      }
+      series.forEach((s) => {
+        const pts = s.data.map((v, i) => [x(i), y(v)]);
+        const path = () => {
+          g.moveTo(pts[0][0], pts[0][1]);
+          for (let i = 1; i < pts.length; i++) {
+            // Chart.js splineCurve, tension 0.3
+            const cp = (k) => {
+              const p0 = pts[Math.max(0, k - 1)], p1 = pts[k], p2 = pts[Math.min(pts.length - 1, k + 1)];
+              const d01 = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]), d12 = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+              const fa = d01 + d12 ? 0.3 * d01 / (d01 + d12) : 0, fb = d01 + d12 ? 0.3 * d12 / (d01 + d12) : 0;
+              return { prev: [p1[0] - fa * (p2[0] - p0[0]), p1[1] - fa * (p2[1] - p0[1])], next: [p1[0] + fb * (p2[0] - p0[0]), p1[1] + fb * (p2[1] - p0[1])] };
+            };
+            const a = cp(i - 1).next, b = cp(i).prev;
+            g.bezierCurveTo(a[0], Math.min(a[1], topPad + ph), b[0], Math.min(b[1], topPad + ph), pts[i][0], pts[i][1]);
+          }
+        };
+        g.beginPath(); path(); g.lineTo(pts[pts.length - 1][0], y(0)); g.lineTo(pts[0][0], y(0)); g.closePath();
+        g.fillStyle = s.fill || 'rgba(96, 165, 250, 0.3)'; g.fill();
+        g.beginPath(); path(); g.strokeStyle = s.stroke || 'rgba(54, 162, 235, 1)'; g.lineWidth = 2; g.stroke();
+        g.fillStyle = s.stroke || 'rgba(54, 162, 235, 1)';
+        if (pts.length <= 60) pts.forEach((p) => { g.beginPath(); g.arc(p[0], p[1], 2.5, 0, Math.PI * 2); g.fill(); });
+      });
+    },
+  };
+
   // ----- Filament wizards (create node / server) -----
   // One step at a time; Next validates the step's fields, earlier steps are reachable from the
   // header, Create shows the step of the first invalid field. The step survives htmx refreshes
