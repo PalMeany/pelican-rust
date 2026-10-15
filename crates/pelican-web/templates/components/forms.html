@@ -20,10 +20,11 @@
 </div>
 {% endmacro %}
 
-{% macro password(name, label, errors={}, required=false, autocomplete='current-password', hint='', autofocus=false) %}
+{% macro password(name, label, errors={}, required=false, autocomplete='current-password', hint='', autofocus=false, prefix_icon='') %}
 <div class="field{% if errors[name] %} has-error{% endif %}">
   <label for="f-{{ name }}">{{ label }}{% if required %}<span class="req">*</span>{% endif %}</label>
   <div class="input-group">
+    {% if prefix_icon %}<span class="addon addon-icon">{{ icon(prefix_icon, 'icon') }}</span>{% endif %}
     <input class="input" id="f-{{ name }}" name="{{ name }}" type="password" autocomplete="{{ autocomplete }}"{% if required %} required{% endif %}{% if autofocus %} autofocus{% endif %}>
     <button type="button" class="addon icon-btn" style="width:auto;height:auto" data-reveal="f-{{ name }}" aria-label="Show password">{{ icon('eye', 'icon-sm') }}</button>
   </div>

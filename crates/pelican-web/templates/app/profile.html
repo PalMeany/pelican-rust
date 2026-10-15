@@ -31,14 +31,14 @@
       </div>
     </div>
     {% endif %}
-    {{ f.text('username', trans('profile.username'), v.username, errors, required=true, disabled=managed, attrs='maxlength="255"', autocomplete='username') }}
-    {{ f.text('email', trans('profile.email'), v.email, errors, type='email', required=true, disabled=managed, attrs='maxlength="255"', autocomplete='email') }}
+    {{ f.text('username', trans('profile.username'), v.username, errors, required=true, disabled=managed, attrs='maxlength="255"', autocomplete='username', prefix_icon='user') }}
+    {{ f.text('email', trans('profile.email'), v.email, errors, type='email', required=true, disabled=managed, attrs='maxlength="255"', autocomplete='email', prefix_icon='mail') }}
     {% if not managed %}
-    {{ f.password('password', trans('profile.password'), errors, autocomplete='new-password') }}
-    {{ f.password('passwordConfirmation', trans('profile.password_confirmation'), errors, autocomplete='new-password') }}
+    {{ f.password('password', trans('profile.password'), errors, autocomplete='new-password', prefix_icon='password') }}
+    {{ f.password('passwordConfirmation', trans('profile.password_confirmation'), errors, autocomplete='new-password', prefix_icon='password-fingerprint') }}
     {% endif %}
-    {{ f.select('timezone', trans('profile.timezone'), timezones, v.timezone, errors, required=true) }}
-    {{ f.select('language', trans('profile.language'), languages, v.language, errors, required=true, hint=language_help or '') }}
+    {{ f.select('timezone', trans('profile.timezone'), timezones, v.timezone, errors, required=true, prefix_icon='clock-pin') }}
+    {{ f.select('language', trans('profile.language'), languages, v.language, errors, required=true, hint=language_help or '', prefix_icon='flag') }}
   </section>
   <section class="stack" data-tab-panel="customization"{% if tab != 'customization' %} hidden{% endif %}>
     <fieldset class="card card-body form" style="margin:0">

@@ -139,7 +139,7 @@ details.nav-group:not([open]) .nav-group-chevron { transform: rotate(180deg); }
 .topbar .notifications-btn:hover { background: var(--hover); color: var(--text-2); }
 .topbar .notifications-label { display: none; }
 /* The collapsible admin sidebar: collapse/expand buttons on desktop, a 4.5rem rail of icons when collapsed. */
-.sidebar-collapse, .sidebar-expand { display: none; }
+.shell .sidebar-collapse, .shell .sidebar-expand { display: none; }
 @media (min-width: 1024px) {
   .shell.collapsible .sidebar-collapse { display: inline-flex; }
   :root.sidebar-collapsed .shell.collapsible .sidebar-collapse { display: none; }

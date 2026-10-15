@@ -73,9 +73,9 @@
   </fieldset>
   <fieldset class="fieldset"><legend>{{ trans(S ~ '.feature_limits') }}</legend>
     <div class="grid grid-3">
-      {{ f.text('allocation_limit', trans(S ~ '.allocations'), s.allocation_limit, errors, type='number', required=true, attrs='min="0"') }}
-      {{ f.text('database_limit', trans(S ~ '.databases'), s.database_limit, errors, type='number', required=true, attrs='min="0"') }}
-      {{ f.text('backup_limit', trans(S ~ '.backups'), s.backup_limit, errors, type='number', required=true, attrs='min="0"') }}
+      {{ f.text('allocation_limit', trans(S ~ '.allocations'), s.allocation_limit, errors, type='number', required=true, attrs='min="0"', suffix_icon='network') }}
+      {{ f.text('database_limit', trans(S ~ '.databases'), s.database_limit, errors, type='number', required=true, attrs='min="0"', suffix_icon='database') }}
+      {{ f.text('backup_limit', trans(S ~ '.backups'), s.backup_limit, errors, type='number', required=true, attrs='min="0"', suffix_icon='copy-check') }}
     </div>
   </fieldset>
   <fieldset class="fieldset"><legend>{{ trans(S ~ '.docker_settings') }}</legend>
@@ -101,7 +101,7 @@
 <section class="card card-body form" data-tab-panel="egg"{% if tab != 'egg' %} hidden{% endif %}>
   <div class="grid grid-3">
     <div class="field span-2"><label>{{ trans(S ~ '.name') }}</label>
-      <div class="row"><input class="input" disabled value="{{ s.egg }}" style="flex:1">{% if not readonly %}<button type="button" class="btn btn-gray" data-modal-open="change-egg">{{ trans(S ~ '.change_egg') }}</button>{% endif %}</div></div>
+      <div class="row"><div class="input-group" style="flex:1"><span class="addon addon-icon">{{ icon('egg', 'icon') }}</span><input class="input" disabled value="{{ s.egg }}"></div>{% if not readonly %}<button type="button" class="btn btn-gray" data-modal-open="change-egg">{{ trans(S ~ '.change_egg') }}</button>{% endif %}</div></div>
     {{ f.radios('skip_scripts', trans(S ~ '.install_script'), [['0', trans(S ~ '.yes')], ['1', trans(S ~ '.skip')]], s.skip_scripts, errors, inline=true) }}
   </div>
   <div class="field"><label for="f-select_startup">{{ trans(S ~ '.startup_cmd') }}</label>

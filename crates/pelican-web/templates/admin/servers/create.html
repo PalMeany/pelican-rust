@@ -11,9 +11,9 @@
   {{ csrf_field() }}
   <fieldset class="fieldset"><legend>{{ icon('info-circle', 'icon-sm') }} {{ trans(S ~ '.tabs.information') }}</legend>
     <div class="grid grid-2">
-      {{ f.text('name', trans(S ~ '.name'), v.name, errors, required=true, attrs='maxlength="255"') }}
+      {{ f.text('name', trans(S ~ '.name'), v.name, errors, required=true, attrs='maxlength="255"', prefix_icon='server') }}
       {{ f.text('external_id', trans(S ~ '.external_id'), v.external_id, errors, attrs='maxlength="255"') }}
-      {{ f.select('node_id', trans(S ~ '.node'), nodes, v.node_id, errors, required=true, attrs=refresh) }}
+      {{ f.select('node_id', trans(S ~ '.node'), nodes, v.node_id, errors, required=true, attrs=refresh, prefix_icon='server-2') }}
       {# owner_id + its create-option action (CreateServer.php, `createOptionForm`) #}
       <div class="field{% if errors.owner_id %} has-error{% endif %}">
         <label for="f-owner_id">{{ trans(S ~ '.owner') }}<span class="req">*</span></label>
@@ -44,7 +44,7 @@
 
   <fieldset class="fieldset"><legend>{{ icon('egg', 'icon-sm') }} {{ trans(S ~ '.tabs.egg_configuration') }}</legend>
     <div class="grid grid-3">
-      <div class="span-2">{{ f.select('egg_id', trans(S ~ '.egg'), eggs, v.egg_id, errors, required=true, placeholder='', attrs=refresh) }}</div>
+      <div class="span-2">{{ f.select('egg_id', trans(S ~ '.egg'), eggs, v.egg_id, errors, required=true, placeholder='', attrs=refresh, prefix_icon='egg') }}</div>
       {{ f.radios('skip_scripts', trans(S ~ '.install_script'), [['0', trans(S ~ '.yes')], ['1', trans(S ~ '.skip')]], v.skip_scripts, errors, inline=true) }}
     </div>
     {{ f.radios('start_on_completion', trans(S ~ '.start_after'), [['1', trans(S ~ '.yes')], ['0', trans(S ~ '.no')]], v.start_on_completion, errors, inline=true) }}
@@ -70,9 +70,9 @@
     </div>
     {{ f.radios('oom_killer', trans(S ~ '.oom'), [['0', trans(S ~ '.disabled')], ['1', trans(S ~ '.enabled')]], v.oom_killer, errors, inline=true) }}
     <div class="grid grid-3">
-      {{ f.text('allocation_limit', trans(S ~ '.allocations'), v.allocation_limit, errors, type='number', required=true, attrs='min="0"') }}
-      {{ f.text('database_limit', trans(S ~ '.databases'), v.database_limit, errors, type='number', required=true, attrs='min="0"') }}
-      {{ f.text('backup_limit', trans(S ~ '.backups'), v.backup_limit, errors, type='number', required=true, attrs='min="0"') }}
+      {{ f.text('allocation_limit', trans(S ~ '.allocations'), v.allocation_limit, errors, type='number', required=true, attrs='min="0"', suffix_icon='network') }}
+      {{ f.text('database_limit', trans(S ~ '.databases'), v.database_limit, errors, type='number', required=true, attrs='min="0"', suffix_icon='database') }}
+      {{ f.text('backup_limit', trans(S ~ '.backups'), v.backup_limit, errors, type='number', required=true, attrs='min="0"', suffix_icon='copy-check') }}
     </div>
     <div class="grid grid-2">
       <div class="field"><label for="f-select_image">{{ trans(S ~ '.image_name') }}</label>

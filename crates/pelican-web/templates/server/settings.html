@@ -79,13 +79,13 @@
     <div class="grid grid-3">
       <div class="field">
         <label for="f-sftp-conn">{{ trans(SI ~ '.sftp.connection') }}</label>
-        <input class="input copyable mono" id="f-sftp-conn" readonly value="{{ sftp_conn }}" data-copy="{{ sftp_conn }}">
+        <div class="input-group"><input class="input mono" id="f-sftp-conn" readonly value="{{ sftp_conn }}"><span class="addon addon-actions"><button type="button" class="icon-btn" data-copy="{{ sftp_conn }}" title="{{ trans('filament-forms::components.text_input.actions.copy.label') }}" aria-label="{{ trans('filament-forms::components.text_input.actions.copy.label') }}">{{ icon('copy', 'icon-sm') }}</button></span></div>
         {# ConnectSftpAction hint: a direct link to the same sftp:// URL. #}
         <p class="hint"><a class="btn-link" href="{{ sftp_conn }}">{{ icon('plug', 'icon-sm') }}{{ trans(SI ~ '.sftp.action') }}</a></p>
       </div>
       <div class="field">
         <label for="f-sftp-user">{{ trans(SI ~ '.sftp.username') }}</label>
-        <input class="input copyable mono" id="f-sftp-user" readonly value="{{ sftp_user }}" data-copy="{{ sftp_user }}">
+        <div class="input-group"><input class="input mono" id="f-sftp-user" readonly value="{{ sftp_user }}"><span class="addon addon-actions"><button type="button" class="icon-btn" data-copy="{{ sftp_user }}" title="{{ trans('filament-forms::components.text_input.actions.copy.label') }}" aria-label="{{ trans('filament-forms::components.text_input.actions.copy.label') }}">{{ icon('copy', 'icon-sm') }}</button></span></div>
       </div>
       {# TextEntry 'password': informational only. #}
       <div class="field">
