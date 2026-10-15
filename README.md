@@ -23,7 +23,7 @@ pelican-rust in Docker on all four databases, and responses, database changes an
 ## Status
 
 Milestones M1–M7 (database layer, auth, Remote/Client/Application APIs, web UI, WASM plugins, model events)
-are implemented (M7 lives on the `m7` branch until its full differential run completes); M8 (PHP plugin
+are on `main`, verified by the full differential run on all four databases. M8 (original PHP plugins through a
 sidecar) is on the `m8` branch. See `PLAN.md` and `PROGRESS.md` (in Russian), and
 the architecture decision records in `docs/decisions/`.
 
