@@ -1,5 +1,6 @@
 {% extends "layouts/panel.html" %}
 {% import "components/forms.html" as f %}
+{% import "components/icon_upload.html" as iu %}
 {% import "admin/eggs/_import.html" as imp %}
 {% set N = 'admin/egg' %}
 {% block head %}
@@ -81,10 +82,16 @@
     <div class="span-full">{{ f.textarea('description', trans(N ~ '.description'), v.description, errors, rows=2, hint=trans(N ~ '.description_help')) }}</div>
   </div>
   {% else %}
-  <div class="grid grid-3">
-    {% if egg_icon %}<div class="span-full"><img src="{{ egg_icon }}" alt="" style="width:150px;height:150px;object-fit:contain"></div>{% endif %}
-    {{ f.text('name', trans(N ~ '.name'), v.name, errors, required=true, hint=trans(N ~ '.name_help'), attrs='maxlength="255"') }}
-    <div class="span-2">{{ f.textarea('description', trans(N ~ '.description'), v.description, errors, rows=3, hint=trans(N ~ '.description_help')) }}</div>
+  <div class="grid" style="grid-template-columns: 10rem minmax(0, 1fr); gap: 1.5rem">
+    {# Image + UploadIcon/DeleteIcon (EggResource). #}
+    <div class="stack" style="align-items:center;gap:0.5rem">
+      {% if egg_icon %}<img src="{{ egg_icon }}" alt="" width="150" height="150" style="object-fit:contain;border-radius:var(--radius)">{% endif %}
+      {% if not readonly %}{{ iu.buttons('/admin/eggs/' ~ egg.id, egg_icon) }}{% endif %}
+    </div>
+    <div class="grid grid-2" style="align-content:start">
+      {{ f.text('name', trans(N ~ '.name'), v.name, errors, required=true, hint=trans(N ~ '.name_help'), attrs='maxlength="255"') }}
+      {{ f.textarea('description', trans(N ~ '.description'), v.description, errors, rows=3, hint=trans(N ~ '.description_help')) }}
+    </div>
   </div>
   <div class="grid grid-3">
     <div class="field"><label>{{ trans(N ~ '.egg_id') }}</label><input class="input" disabled value="{{ egg.id }}"></div>
@@ -158,5 +165,6 @@
 {% endif %}
 </div>
 {% if can_import %}{{ imp.modal(false, egg.update_url or '') }}{% endif %}
+{% if egg and not readonly %}{{ iu.dialog('/admin/eggs/' ~ egg.id) }}{% endif %}
 <script type="application/json" id="egg-strings">{{ {"new_variable": trans(N ~ '.add_new_variable')} | tojson }}</script>
 {% endblock %}

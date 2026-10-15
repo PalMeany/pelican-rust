@@ -41,6 +41,43 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/eggs/{id}/action", post(action))
         .route("/admin/eggs/bulk-delete", post(bulk_delete))
         .route("/admin/eggs/bulk-update", post(bulk_update))
+        .route("/admin/eggs/{id}/icon/url", post(icon_url))
+        .route("/admin/eggs/{id}/icon/file", post(icon_file))
+        .route("/admin/eggs/{id}/icon/delete", post(icon_delete))
+}
+
+// UploadIcon / DeleteIcon on the edit page (`update egg`), the server settings' code.
+
+async fn egg_uuid(admin: &Admin, id: i64) -> Result<String, WebError> {
+    admin.authorize("update egg")?;
+    let e = eggs::Entity::find_by_id(id).one(&admin.st.db).await?.ok_or(WebError::NotFound)?;
+    e.uuid.ok_or(WebError::NotFound)
+}
+
+async fn icon_url(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
+    let uuid = egg_uuid(&admin, id).await?;
+    let url = form.get("icon_url").trim().to_string();
+    if url.is_empty() {
+        admin.session.flash("warning", admin.t("admin/egg.import.no_icon"), None);
+    } else {
+        match crate::server::settings::fetch_icon_from_url(&admin.st, "egg", &admin.locale(), &url, &uuid).await {
+            Ok(()) => admin.flash_success(admin.t("admin/egg.import.icon_updated")),
+            Err(msg) => admin.flash_danger(msg, None),
+        }
+    }
+    Ok(admin.redirect(&format!("/admin/eggs/{id}/edit")))
+}
+
+async fn icon_file(admin: Admin, Path(id): Path<i64>, req: axum::extract::Request) -> WebResult {
+    let uuid = egg_uuid(&admin, id).await?;
+    Ok(crate::server::settings::upload_icon_file(&admin.st, "egg", &admin.locale(), req, &uuid).await)
+}
+
+async fn icon_delete(admin: Admin, Path(id): Path<i64>) -> WebResult {
+    let uuid = egg_uuid(&admin, id).await?;
+    crate::server::settings::delete_icon(&admin.st, "egg", &uuid).await;
+    admin.flash_success(admin.t("admin/egg.import.icon_deleted"));
+    Ok(admin.redirect(&format!("/admin/eggs/{id}/edit")))
 }
 
 /// Server counts per egg id (`servers_count`).

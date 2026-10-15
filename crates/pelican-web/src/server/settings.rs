@@ -71,7 +71,7 @@ fn api_ctx(p: &ServerPanel) -> Result<Ctx, WebError> {
     })
 }
 
-const ICON_DIR: &str = "icons/server"; // Server::getIconStoragePath()
+const ICON_KIND: &str = "server"; // Server::getIconStoragePath() = icons/server
 /// HasIcon::$iconFormats keys (`DeleteIcon::getIconFormats()`).
 const ICON_FORMATS: [&str; 3] = ["png", "jpg", "webp"];
 /// The sweep list of `HasIcon::writeIcon()`.
@@ -477,14 +477,14 @@ enum WriteErr {
 
 /// `HasIcon::writeIcon`: normalized file under `storage/app/public/icons/server/`,
 /// other extensions of the same uuid swept away.
-async fn write_icon(st: &AppState, ext: &str, bytes: &[u8], uuid: &str) -> Result<(), WriteErr> {
+async fn write_icon(st: &AppState, kind: &str, ext: &str, bytes: &[u8], uuid: &str) -> Result<(), WriteErr> {
     let ext = match ext.to_lowercase().as_str() {
         "jpeg" | "jpg" => "jpg",
         "png" => "png",
         "webp" => "webp",
         _ => return Err(WriteErr::UnknownExtension(ext.to_string())),
     };
-    let dir = crate::models::public_disk(st).join(ICON_DIR); // Storage::disk('public')->put()
+    let dir = crate::models::public_disk(st).join("icons").join(kind); // Storage::disk('public')->put()
     tokio::fs::create_dir_all(&dir).await.map_err(|_| WriteErr::Io)?;
     tokio::fs::write(dir.join(format!("{uuid}.{ext}")), bytes).await.map_err(|_| WriteErr::Io)?;
     for other in SWEEP_FORMATS {
@@ -511,7 +511,7 @@ async fn icon_url(p: ServerPanel, form: Form) -> WebResult<Response> {
         p.session.flash("warning", p.t("admin/egg.import.no_icon"), None);
         return Ok(p.redirect(&back));
     }
-    match fetch_icon_from_url(&p.st, &locale, &url, &p.server.uuid).await {
+    match fetch_icon_from_url(&p.st, ICON_KIND, &locale, &url, &p.server.uuid).await {
         Ok(()) => p.session.flash("success", p.t("admin/egg.import.icon_updated"), None),
         Err(msg) => p.session.flash("danger", msg, None),
     }
@@ -520,7 +520,13 @@ async fn icon_url(p: ServerPanel, form: Form) -> WebResult<Response> {
 
 /// `validateIconUrl` + `Http::…()->body()` + extension check + writeIcon.
 /// Fetch errors surface exactly like Filament's exception notifications.
-pub(crate) async fn fetch_icon_from_url(st: &AppState, locale: &str, url: &str, uuid: &str) -> Result<(), String> {
+pub(crate) async fn fetch_icon_from_url(
+    st: &AppState,
+    kind: &str,
+    locale: &str,
+    url: &str,
+    uuid: &str,
+) -> Result<(), String> {
     let msg = |key: &str, params: &[(&str, &str)]| -> String {
         let owned: Vec<(String, String)> = params.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
         crate::i18n::trans(locale, key, &owned)
@@ -558,7 +564,7 @@ pub(crate) async fn fetch_icon_from_url(st: &AppState, locale: &str, url: &str, 
     if ext.is_empty() {
         return Err(invalid());
     }
-    write_icon(st, &ext, &content, uuid).await.map_err(|e| match e {
+    write_icon(st, kind, &ext, &content, uuid).await.map_err(|e| match e {
         WriteErr::UnknownExtension(ext) => msg("admin/egg.import.unknown_extension", &[("extension", &ext)]),
         WriteErr::Io => msg("admin/egg.import.could_not_write", &[]),
     })
@@ -597,10 +603,10 @@ fn is_public_ip(ip: IpAddr) -> bool {
     }
 }
 
-/// DeleteIcon: every stored format of the server's icon.
-pub(crate) async fn delete_icon(st: &AppState, uuid: &str) {
+/// DeleteIcon: every stored format of a server's or egg's (`kind`) icon.
+pub(crate) async fn delete_icon(st: &AppState, kind: &str, uuid: &str) {
     for ext in ICON_FORMATS {
-        let path = crate::models::public_disk(st).join(ICON_DIR).join(format!("{uuid}.{ext}"));
+        let path = crate::models::public_disk(st).join("icons").join(kind).join(format!("{uuid}.{ext}"));
         if tokio::fs::try_exists(&path).await.unwrap_or(false) {
             tokio::fs::remove_file(&path).await.ok();
         }
@@ -705,12 +711,12 @@ async fn icon_file(p: ServerPanel, req: Request) -> Response {
     if !p.can("settings.change-icon") {
         return (axum::http::StatusCode::FORBIDDEN, axum::Json(json!({"ok": false}))).into_response();
     }
-    upload_icon_file(&p.st, &p.locale(), req, &p.server.uuid).await
+    upload_icon_file(&p.st, ICON_KIND, &p.locale(), req, &p.server.uuid).await
 }
 
-/// The multipart icon upload of a server (UploadIcon's file tab), answered as JSON; shared
-/// with the admin's server edit page.
-pub(crate) async fn upload_icon_file(st: &AppState, locale: &str, req: Request, uuid: &str) -> Response {
+/// The multipart icon upload of a server or egg (`kind`; UploadIcon's file tab), answered as
+/// JSON; shared with the admin's server and egg edit pages.
+pub(crate) async fn upload_icon_file(st: &AppState, kind: &str, locale: &str, req: Request, uuid: &str) -> Response {
     let too_large = || {
         (
             StatusCode::UNPROCESSABLE_ENTITY,
@@ -740,7 +746,7 @@ pub(crate) async fn upload_icon_file(st: &AppState, locale: &str, req: Request, 
         return (StatusCode::UNPROCESSABLE_ENTITY, axum::Json(json!({"ok": false}))).into_response();
     };
     let ext = file.filename.rsplit_once('.').map(|(_, e)| e.to_lowercase()).unwrap_or_default();
-    let result = write_icon(st, &ext, &file.bytes, uuid).await.map_err(|e| match e {
+    let result = write_icon(st, kind, &ext, &file.bytes, uuid).await.map_err(|e| match e {
         WriteErr::UnknownExtension(ext) => {
             crate::i18n::trans(locale, "admin/egg.import.unknown_extension", &[("extension".to_string(), ext)])
         }
@@ -758,7 +764,7 @@ pub(crate) async fn upload_icon_file(st: &AppState, locale: &str, req: Request, 
 async fn icon_delete(p: ServerPanel, form: Form) -> WebResult<Response> {
     p.authorize("settings.change-icon")?;
     let back = back_url(&form, &p);
-    delete_icon(&p.st, &p.server.uuid).await;
+    delete_icon(&p.st, ICON_KIND, &p.server.uuid).await;
     p.session.flash("success", p.t("admin/egg.import.icon_deleted"), None);
     Ok(p.redirect(&back))
 }

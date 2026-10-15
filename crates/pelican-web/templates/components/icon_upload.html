@@ -1,0 +1,37 @@
+{# UploadIcon / DeleteIcon (app/Filament/Components/Actions) for a record's icon; `base` is the
+   record's URL with …/icon/url, …/icon/file and …/icon/delete under it (app.js uploads files). #}
+{% set EI = 'admin/egg.import' %}
+{% macro buttons(base, own) %}
+<div class="row" style="gap:0.25rem">
+  <button type="button" class="icon-btn text-primary" data-modal-open="upload-icon" title="{{ trans('admin/egg.import.import_icon') }}" aria-label="{{ trans('admin/egg.import.import_icon') }}">{{ icon('photo-up', 'icon-lg') }}</button>
+  {% if own %}<button type="submit" form="icon-delete" class="icon-btn danger" title="{{ trans('admin/egg.import.delete_icon') }}" aria-label="{{ trans('admin/egg.import.delete_icon') }}">{{ icon('trash', 'icon-lg') }}</button>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro dialog(base) %}
+<form id="icon-delete" method="post" action="{{ base }}/icon/delete" hidden>{{ csrf_field() }}</form>
+<dialog id="upload-icon" class="modal">
+  <div class="modal-body stack" data-tabs-root>
+    <nav class="tabs">
+      <button type="button" data-tab="icon-url" class="active">{{ icon('world-upload', 'icon-sm') }}{{ trans('admin/egg.import.url') }}</button>
+      <button type="button" data-tab="icon-file">{{ icon('photo-up', 'icon-sm') }}{{ trans('admin/egg.import.file') }}</button>
+    </nav>
+    <section class="stack" data-tab-panel="icon-url">
+      <form method="post" action="{{ base }}/icon/url" hx-boost="false">
+        {{ csrf_field() }}
+        <div class="field"><label for="f-icon_url">{{ trans('admin/egg.import.icon_url') }}</label><input class="input" id="f-icon_url" name="icon_url" type="url" placeholder="https://…" autocomplete="off"></div>
+        <div class="row" style="justify-content:flex-end"><button type="submit" class="btn">{{ trans('admin/egg.import.import_icon') }}</button></div>
+      </form>
+    </section>
+    <section class="stack" data-tab-panel="icon-file" hidden>
+      <form method="post" action="{{ base }}/icon/file" enctype="multipart/form-data" data-icon-upload>
+        {{ csrf_field() }}
+        <div class="field"><input class="input" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" name="icon"></div>
+        <p class="error" data-upload-error hidden></p>
+        <div class="row" style="justify-content:flex-end"><button type="submit" class="btn">{{ trans('admin/egg.import.import_icon') }}</button></div>
+      </form>
+    </section>
+  </div>
+  <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button></div>
+</dialog>
+{% endmacro %}

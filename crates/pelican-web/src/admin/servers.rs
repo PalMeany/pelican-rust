@@ -57,7 +57,7 @@ async fn icon_url(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
     if url.is_empty() {
         admin.session.flash("warning", admin.t("admin/egg.import.no_icon"), None);
     } else {
-        match crate::server::settings::fetch_icon_from_url(&admin.st, &admin.locale(), &url, &s.uuid).await {
+        match crate::server::settings::fetch_icon_from_url(&admin.st, "server", &admin.locale(), &url, &s.uuid).await {
             Ok(()) => admin.flash_success(admin.t("admin/egg.import.icon_updated")),
             Err(msg) => admin.flash_danger(msg, None),
         }
@@ -70,7 +70,7 @@ async fn icon_file(admin: Admin, Path(id): Path<i64>, req: axum::extract::Reques
     if !admin.user.can_update_server(s.node_id.0) {
         return Err(WebError::Forbidden);
     }
-    Ok(crate::server::settings::upload_icon_file(&admin.st, &admin.locale(), req, &s.uuid).await)
+    Ok(crate::server::settings::upload_icon_file(&admin.st, "server", &admin.locale(), req, &s.uuid).await)
 }
 
 async fn icon_delete(admin: Admin, Path(id): Path<i64>) -> WebResult {
@@ -78,7 +78,7 @@ async fn icon_delete(admin: Admin, Path(id): Path<i64>) -> WebResult {
     if !admin.user.can_update_server(s.node_id.0) {
         return Err(WebError::Forbidden);
     }
-    crate::server::settings::delete_icon(&admin.st, &s.uuid).await;
+    crate::server::settings::delete_icon(&admin.st, "server", &s.uuid).await;
     admin.flash_success(admin.t("admin/egg.import.icon_deleted"));
     Ok(admin.redirect(&format!("/admin/servers/{id}/edit")))
 }
