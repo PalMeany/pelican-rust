@@ -1,0 +1,9 @@
+{# Plugin-registered server feature (registration.features): the plugin's own
+   `feature-{id}` page rendered as a modal body, closed via Close only. #}
+<dialog id="feature-modal" class="modal wide">
+  <div data-feature-page>
+    <div class="modal-head"><h2>{{ heading }}</h2></div>
+    <div class="modal-body">{{ html | safe }}</div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('server/feature.close') }}</button></div>
+  </div>
+</dialog>

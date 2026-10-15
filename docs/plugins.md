@@ -69,7 +69,7 @@ pelican_plugin_sdk::plugin!(Ping);
 | `pages` | страницы в оболочке панели: admin `/admin/plugins/<id>/page/<page>`, server `/server/{server}/plugins/<id>/<page>`, app `/plugins/<id>/pages/<page>`; тело — HTML-фрагмент из `render_page`; `permission` — право админа (`viewList thing`) или сабюзера (`group.action`) |
 | `navigation` | пункты меню admin/server для страниц (`group`: `server`/`user`/`advanced` или своя группа) |
 | `tasks` | типы задач расписаний (форма расписания панели и раннер вызывают `run_task`) |
-| `features` | server features: Wings получает `listeners`, при совпадении консоль показывает страницу `feature-<id>` |
+| `features` | server features: Wings получает `listeners` (для яиц, у которых id есть в `features` или `features` пуст), при совпадении строки консоли открывается модалка со страницей `feature-<id>` (зарегистрируйте её как server-страницу, чтобы задать заголовок) |
 | `avatars` | провайдеры аватаров (выбор в настройках, URL из `avatar_url`) |
 | `admin_permissions` | права ролей админов `<prefix> <model>` |
 | `subuser_permissions` | группы прав сабюзеров `<name>.<permission>` |

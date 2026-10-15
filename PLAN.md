@@ -162,7 +162,7 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] SDK `pelican-plugin-sdk` + пример `examples/plugins/hello` (`scripts/build-plugin`), тест рантайма, E2E в dev-панели
 - [x] Аватары от плагинов (провайдер в настройках, avatar-url с кэшем 10 мин)
 - [x] Права от плагинов: модели ролей (только свои префиксы), группы прав сабюзеров, ресурсы API-ключей
-- [~] Server features: listeners плагинов в конфиг Wings — готово; модалки на консоли (встроенные eula/java/gsl/pid/steam + плагинные) — воркер B5
+- [x] Server features: listeners плагинов в конфиг Wings; модалки на консоли по `feature match` (eula/java_version/gsl_token с валидацией и рестартом, pid_limit/steam_disk_space, плагинные `feature-<id>`), E2E с Wings
 - [x] Возможность `api`: собственный application-ключ плагина (виден в админке), обычный конвейер Application API
 - [ ] События моделей `eloquent.*` (общая шина с вебхуками — хвост M5)
 - [x] Документация для авторов плагинов (docs/plugins.md); шаблон — examples/plugins/hello

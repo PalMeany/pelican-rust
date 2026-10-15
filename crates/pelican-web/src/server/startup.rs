@@ -36,7 +36,7 @@ pub fn routes() -> Router<AppState> {
 
 /// A client-API `Ctx` for the domain functions (`server_saved`): ip and actor
 /// like this web session, default subject = the server.
-fn api_ctx(p: &ServerPanel) -> Result<Ctx, WebError> {
+pub(crate) fn api_ctx(p: &ServerPanel) -> Result<Ctx, WebError> {
     let ip: IpAddr = p.ip.parse().map_err(|_| WebError::internal("invalid request ip"))?;
     Ok(Ctx {
         ip,
@@ -48,12 +48,12 @@ fn api_ctx(p: &ServerPanel) -> Result<Ctx, WebError> {
     })
 }
 
-fn ts_now() -> Timestamp {
+pub(crate) fn ts_now() -> Timestamp {
     Timestamp(pelican_core::time::now())
 }
 
 /// `StartupCommandService`'s bundle of this panel's server.
-async fn bundle(p: &ServerPanel) -> Result<ServerBundle, WebError> {
+pub(crate) async fn bundle(p: &ServerPanel) -> Result<ServerBundle, WebError> {
     let server = p.server.clone();
     ServerBundle::load(&p.st.db, server).await.map_err(|e| match e {
         pelican_core::server_config::ConfigError::Db(d) => d.into(),
@@ -64,7 +64,7 @@ async fn bundle(p: &ServerPanel) -> Result<ServerBundle, WebError> {
 /// PHP `array_flip` over an egg JSON map/list: object `{label: value}` yields
 /// `(value, label)` select options in insertion order; a plain list maps each
 /// entry to itself.
-fn flip_options(j: &Value) -> Vec<(String, String)> {
+pub(crate) fn flip_options(j: &Value) -> Vec<(String, String)> {
     match php_assoc(j.clone()) {
         Value::Object(m) => m.into_iter().map(|(k, v)| (pelican_core::php::string(&v), k)).collect(),
         Value::Array(a) => a
@@ -84,7 +84,7 @@ fn option_label(options: &[(String, String)], value: &str) -> String {
 }
 
 /// The egg behind the panel's server (`ErrorException` when missing).
-async fn egg_of(p: &ServerPanel) -> Result<pelican_db::entities::eggs::Model, WebError> {
+pub(crate) async fn egg_of(p: &ServerPanel) -> Result<pelican_db::entities::eggs::Model, WebError> {
     use pelican_db::entities::eggs;
     eggs::Entity::find_by_id(p.server.egg_id).one(&p.st.db).await?.ok_or(WebError::internal("ErrorException"))
 }
@@ -227,7 +227,11 @@ async fn page(p: ServerPanel) -> WebResult {
 }
 
 /// `forceFill([...])->saveOrFail()` on this server plus its `saved` hook.
-async fn save_server_field(p: &ServerPanel, startup: Option<String>, image: Option<String>) -> Result<(), WebError> {
+pub(crate) async fn save_server_field(
+    p: &ServerPanel,
+    startup: Option<String>,
+    image: Option<String>,
+) -> Result<(), WebError> {
     use pelican_db::entities::servers;
     let now = ts_now();
     let am = servers::ActiveModel {

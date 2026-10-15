@@ -185,6 +185,62 @@
       }
     });
 
+    // ----- feature modals (`Console::mountFeature()`) -----
+    const featureUrl = (key) => cfg.websocket.replace(/\/websocket$/, '') + '/feature/' + encodeURIComponent(key);
+
+    // The loaded fragment replaces an already open modal (replaceMountedAction).
+    function installModal(html) {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = html.trim();
+      const dialog = tpl.content.querySelector('dialog');
+      if (!dialog) return;
+      document.getElementById('feature-modal')?.remove();
+      document.body.appendChild(dialog);
+      window.openModal('feature-modal');
+    }
+
+    async function mountFeature(data) {
+      let d;
+      try { d = typeof data === 'string' ? JSON.parse(data) : data; } catch (_) { return; }
+      const key = d && d.key;
+      if (!key) return;
+      try {
+        const r = await fetch(featureUrl(key), { credentials: 'same-origin', headers: { Accept: 'text/html' } });
+        if (r.ok) installModal(await r.text());
+      } catch (_) { /* offline: nothing to mount */ }
+    }
+
+    // One delegated submit handler for every feature modal (guarded so htmx
+    // re-navigations don't stack listeners).
+    if (!window.__featureFormSubmit) {
+      window.__featureFormSubmit = true;
+      document.addEventListener('submit', async (e) => {
+        const form = e.target.closest('[data-feature-form]');
+        if (!form) return;
+        e.preventDefault();
+        try {
+          const r = await fetch(form.action, {
+            method: 'POST', body: new URLSearchParams(new FormData(form)), credentials: 'same-origin',
+            headers: {
+              Accept: 'application/json',
+              'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+            },
+          });
+          if ((r.headers.get('Content-Type') || '').includes('application/json')) {
+            const n = await r.json();
+            if (n.title) window.notify?.(n);
+            closeModalNow();
+          } else if (r.ok) {
+            installModal(await r.text());
+          }
+        } catch (_) { /* network error: leave the modal open */ }
+      });
+    }
+    function closeModalNow() {
+      document.getElementById('feature-modal')?.close();
+      document.getElementById('feature-modal')?.remove();
+    }
+
     // ----- websocket -----
     let socket = null, authenticated = false, attempts = 0, tornDown = false;
     const pending = [];
@@ -235,6 +291,9 @@
             break;
           case 'stats':
             pushStats(args[0]);
+            break;
+          case 'feature match':
+            mountFeature(args[0]);
             break;
           case 'auth success':
             attempts = 0;

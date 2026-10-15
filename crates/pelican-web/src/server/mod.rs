@@ -5,6 +5,7 @@ mod activity;
 mod backups;
 mod console;
 mod databases;
+mod features;
 mod files;
 mod mounts;
 mod network;
@@ -36,6 +37,7 @@ pub fn routes() -> Router<AppState> {
         .merge(backups::routes())
         .merge(console::routes())
         .merge(databases::routes())
+        .merge(features::routes())
         .merge(files::routes())
         .merge(mounts::routes())
         .merge(network::routes())

@@ -1,0 +1,29 @@
+{% import "components/forms.html" as f %}
+{# Console feature modal fragment (app/Extensions/Features/Schemas/*): loaded
+   by the console on the websocket's `feature match` event. #}
+<dialog id="feature-modal" class="modal wide">
+  {% if kind_sel == 'info' %}
+  <div data-feature-info>
+    <div class="modal-head"><h2>{{ heading }}</h2></div>
+    <div class="modal-body">{% if description_html %}{{ description_html | safe }}{% endif %}</div>
+    <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('server/feature.close') }}</button></div>
+  </div>
+  {% else %}
+  <form method="post" action="{{ action }}" data-feature-form>
+    {{ csrf_field() }}
+    <div class="modal-head"><h2>{{ heading }}</h2></div>
+    <div class="modal-body stack">
+      {% if description_html %}<div>{{ description_html | safe }}</div>{% endif %}
+      {% if kind_sel == 'java' %}
+        {{ f.select('image', trans('server/feature.java_version.docker_image'), options, current, errors, required=true, disabled=select_disabled) }}
+      {% elif kind_sel == 'gsl' %}
+        {{ f.text('gsltoken', field_label, field_value, errors, required=false, hint=field_hint, prefix='{{' ~ env ~ '}}') }}
+      {% endif %}
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-gray" data-modal-close>{{ trans('server/feature.close') }}</button>
+      {% if submit %}<button type="submit" class="btn">{{ submit }}</button>{% endif %}
+    </div>
+  </form>
+  {% endif %}
+</dialog>

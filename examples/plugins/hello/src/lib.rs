@@ -3,7 +3,7 @@
 //! settings form (greeting) and a `hello-log` schedule task.
 
 use pelican_plugin_sdk::{
-    AdminPermission, AvatarProvider, Field, NavItem, Page, Panel, PelicanPlugin, PermissionGroup, Registration,
+    AdminPermission, AvatarProvider, Feature, Field, NavItem, Page, Panel, PelicanPlugin, PermissionGroup, Registration,
     Request, Response, Route, RouteScope, TaskType, Value, escape, host, json,
 };
 
@@ -39,6 +39,12 @@ impl PelicanPlugin for Hello {
                     title: "hello::hello.title".into(),
                     permission: Some("hello.view".into()),
                 },
+                Page {
+                    panel: Panel::Server,
+                    id: "feature-hello_wave".into(),
+                    title: "hello::hello.wave".into(),
+                    permission: None,
+                },
             ],
             navigation: vec![
                 NavItem {
@@ -64,6 +70,8 @@ impl PelicanPlugin for Hello {
                 payload_label: Some("Message".into()),
                 default_payload: None,
             }],
+            // Console lines containing the listener open the `feature-hello_wave` page in a modal.
+            features: vec![Feature { id: "hello_wave".into(), listeners: vec!["hello plugin wave".into()] }],
             avatars: vec![AvatarProvider { id: "robohash".into(), name: "RoboHash".into() }],
             admin_permissions: vec![AdminPermission {
                 model: "helloGreeting".into(),
@@ -136,6 +144,9 @@ impl PelicanPlugin for Hello {
                     escape(&name),
                     escape(&text)
                 ))
+            }
+            (Panel::Server, "feature-hello_wave") => {
+                Ok(format!("<p>{}, {}! 👋</p>", escape(&greeting()), escape(&who)))
             }
             _ => Err("not found".into()),
         }
