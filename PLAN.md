@@ -160,7 +160,7 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] Интеграция: события активности → on-event; маршруты client/application/web; страницы admin/server/app с
   пунктами меню; настройки в админке; типы задач в форме расписаний и раннере (client API — 4 типа, как оригинал)
 - [x] SDK `pelican-plugin-sdk` + пример `examples/plugins/hello` (`scripts/build-plugin`), тест рантайма, E2E в dev-панели
-- [ ] Аватары от плагинов (выбор провайдера в настройках, avatar-url)
+- [x] Аватары от плагинов (провайдер в настройках, avatar-url с кэшем 10 мин)
 - [ ] Права от плагинов: модели ролей, группы прав сабюзеров, ресурсы API-ключей
 - [ ] Server features (listeners в конфиг Wings, модалка на консоли)
 - [ ] Возможность `api` (вызовы Application API от имени плагина с грантами манифеста)

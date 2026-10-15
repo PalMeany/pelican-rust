@@ -24,7 +24,7 @@ wasmtime::component::bindgen!({
     exports: { default: async },
 });
 
-pub use pelican::plugin::types::{Header, Level, NavItem, Page, Route, RouteScope, TaskType};
+pub use pelican::plugin::types::{AvatarProvider, Header, Level, NavItem, Page, Route, RouteScope, TaskType};
 use pelican::plugin::{host, types};
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -214,6 +214,45 @@ pub fn task_types() -> Vec<(String, pelican::plugin::types::TaskType)> {
             rt.loaded().iter().flat_map(|l| l.registration.tasks.iter().map(|t| (l.id.clone(), t.clone()))).collect()
         })
         .unwrap_or_default()
+}
+
+/// Avatar providers of the loaded plugins: `(plugin, provider)`.
+pub fn avatar_providers() -> Vec<(String, pelican::plugin::types::AvatarProvider)> {
+    global()
+        .map(|rt| {
+            rt.loaded().iter().flat_map(|l| l.registration.avatars.iter().map(|a| (l.id.clone(), a.clone()))).collect()
+        })
+        .unwrap_or_default()
+}
+
+type AvatarKey = (String, i64);
+static AVATARS: std::sync::Mutex<Option<std::collections::HashMap<AvatarKey, (std::time::Instant, Option<String>)>>> =
+    std::sync::Mutex::new(None);
+
+/// A plugin avatar URL from the 10-minute cache; a miss asks the plugin in the background
+/// (this render falls back to the default avatar).
+pub fn cached_avatar(provider: &str, user_id: i64, user_json: String) -> Option<String> {
+    let key = (provider.to_string(), user_id);
+    let hit = AVATARS.lock().ok().and_then(|g| g.as_ref().and_then(|m| m.get(&key).cloned()));
+    if let Some((at, url)) = &hit {
+        if at.elapsed() < Duration::from_secs(600) {
+            return url.clone();
+        }
+    }
+    let owner = avatar_providers().into_iter().find(|(_, a)| a.id == provider).map(|(p, _)| p)?;
+    let rt = global()?;
+    if let Ok(mut g) = AVATARS.lock() {
+        // Mark as in flight so concurrent renders do not ask again.
+        g.get_or_insert_with(Default::default).insert(key.clone(), (std::time::Instant::now(), hit.and_then(|h| h.1)));
+    }
+    let provider = provider.to_string();
+    tokio::spawn(async move {
+        let url = rt.avatar_url(&owner, &provider, &user_json).await.ok().flatten();
+        if let Ok(mut g) = AVATARS.lock() {
+            g.get_or_insert_with(Default::default).insert(key, (std::time::Instant::now(), url));
+        }
+    });
+    None
 }
 
 /// Per-call time budget (in epoch ticks of 10 ms).

@@ -3,8 +3,8 @@
 //! settings form (greeting) and a `hello-log` schedule task.
 
 use pelican_plugin_sdk::{
-    Field, NavItem, Page, Panel, PelicanPlugin, Registration, Request, Response, Route, RouteScope, TaskType, Value,
-    escape, host, json,
+    AvatarProvider, Field, NavItem, Page, Panel, PelicanPlugin, Registration, Request, Response, Route, RouteScope,
+    TaskType, Value, escape, host, json,
 };
 
 struct Hello;
@@ -58,6 +58,7 @@ impl PelicanPlugin for Hello {
                 payload_label: Some("Message".into()),
                 default_payload: None,
             }],
+            avatars: vec![AvatarProvider { id: "robohash".into(), name: "RoboHash".into() }],
             settings: true,
             ..Default::default()
         }
@@ -137,12 +138,22 @@ impl PelicanPlugin for Hello {
         Ok(())
     }
 
+    fn avatar_url(provider: String, user: Value) -> Option<String> {
+        (provider == "robohash").then(|| Hello::robohash(&user)).flatten()
+    }
+
     fn run_task(task: String, payload: String, server: Value) -> Result<(), String> {
         if task != "hello-log" {
             return Err("unknown task".into());
         }
         pelican_plugin_sdk::info(&format!("{} ({}): {payload}", greeting(), server["name"].as_str().unwrap_or("?")));
         Ok(())
+    }
+}
+
+impl Hello {
+    fn robohash(user: &Value) -> Option<String> {
+        user["uuid"].as_str().map(|id| format!("https://robohash.org/{id}?size=128x128"))
     }
 }
 

@@ -103,9 +103,17 @@ pub fn avatar_url(st: &AppState, u: &pelican_db::entities::users::Model) -> Stri
     if st.config.env.bool_or("FILAMENT_UPLOADABLE_AVATARS", false) && avatar_path(st, u.id.0).exists() {
         return format!("/storage/avatars/{}.png", u.id.0);
     }
-    if st.config.env.string_or("FILAMENT_AVATAR_PROVIDER", "gravatar") == "gravatar" {
+    let provider = st.config.env.string_or("FILAMENT_AVATAR_PROVIDER", "gravatar");
+    if provider == "gravatar" {
         use md5::Digest;
         return format!("https://gravatar.com/avatar/{}", hex::encode(md5::Md5::digest(u.email.as_bytes())));
+    }
+    // A plugin's provider (null = Filament's default avatar below).
+    if provider != "uiavatars" {
+        let doc = pelican_api::plugin_routes::user_json(u, false);
+        if let Some(url) = pelican_plugins::runtime::cached_avatar(&provider, u.id.0, doc) {
+            return url;
+        }
     }
     let initials: Vec<String> =
         u.username.trim().split(' ').map(|w| w.chars().next().map(String::from).unwrap_or_default()).collect();
