@@ -64,6 +64,7 @@ async fn page(p: ServerPanel) -> WebResult {
         "rows": custom.get("console_rows").and_then(|v| v.as_i64()).unwrap_or(30),
         "period": custom.get("console_graph_period").and_then(|v| v.as_i64()).unwrap_or(30),
         "binaryPrefix": binary,
+        "locale": &locale,
         "status": status.value(),
         "statusIsLive": p.server.status.is_none(),
         "conflict": p.conflict(),
@@ -106,7 +107,7 @@ async fn page(p: ServerPanel) -> WebResult {
             cfg => cfg.to_string(),
             condition => condition,
             address => address,
-            cpu_limit => if p.server.cpu.0 > 0 { format!(" / {} %", p.server.cpu.0) } else { " / \u{221E}".into() },
+            cpu_limit => if p.server.cpu.0 > 0 { format!(" / {} %", super::settings::format_number(p.server.cpu.0)) } else { " / \u{221E}".into() },
             memory_limit => limit_text(p.server.memory.0, binary),
             disk_limit => limit_text(p.server.disk.0, binary),
             can => context! {

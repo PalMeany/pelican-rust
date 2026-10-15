@@ -59,12 +59,36 @@
       samples = JSON.parse(sessionStorage.getItem(storageKey) || '[]')
         .filter((x) => Number.isFinite(x && x.t) && x.t >= now - MAX_SAMPLES * 1000 && x.t <= now);
     } catch (_) { samples = []; }
+    const locale = String(cfg.locale || 'en').replace('_', '-');
+    // format_number() in the user's language (falls back to English like the original).
+    function formatNumber(v, decimals, minDecimals) {
+      const o = { minimumFractionDigits: minDecimals || 0, maximumFractionDigits: decimals };
+      try { return new Intl.NumberFormat(locale, o).format(v); } catch (_) { return new Intl.NumberFormat('en', o).format(v); }
+    }
     const units = cfg.binaryPrefix ? ['Bytes', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'] : ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'];
     const base = cfg.binaryPrefix ? 1024 : 1000;
+    // convert_bytes_to_readable()
     function bytes(n) {
       if (!n || n <= 0) return '0 ' + units[0];
-      const e = Math.min(Math.floor(Math.log(n) / Math.log(base)), units.length - 1);
-      return (n / Math.pow(base, e)).toFixed(2) + ' ' + units[e];
+      const from = Math.log(n) / Math.log(base);
+      const e = Math.min(Math.floor(from), units.length - 1);
+      return formatNumber(Math.pow(base, from - e), 2, 2) + ' ' + units[e];
+    }
+    // Carbon's diffForHumans(DIFF_ABSOLUTE, short, parts: 2) through Intl, as the original's console.
+    const SHORT_UNITS = [['year', 31536000000], ['month', 2592000000], ['week', 604800000], ['day', 86400000], ['hour', 3600000], ['minute', 60000], ['second', 1000]];
+    function unitText(v, unit) {
+      const o = { style: 'unit', unit, unitDisplay: 'narrow' };
+      try { return new Intl.NumberFormat(locale, o).format(v); } catch (_) { return new Intl.NumberFormat('en', o).format(v); }
+    }
+    function humanizeShort(ms) {
+      const found = [];
+      let rest = ms;
+      for (const [unit, size] of SHORT_UNITS) {
+        if (found.length >= 2) break;
+        const v = Math.floor(rest / size);
+        if (v > 0) { found.push(unitText(v, unit)); rest -= v * size; }
+      }
+      return found.length ? found.join(' ') : unitText(0, 'second');
     }
     // ServerNetworkChart's y ticks: always 1024-based.
     function tickBytes(v) {
@@ -95,9 +119,13 @@
         if (state === 'offline') { el.textContent = cfg.offlineLabel; return; }
         el.textContent = (state === null || !latest ? cfg.unknown : fmt(latest)) + (el.dataset.limit || '');
       };
-      usage('server-stat-cpu', (x) => x.cpu.toFixed(2) + ' %');
+      usage('server-stat-cpu', (x) => formatNumber(x.cpu, 2, 0) + ' %');
       usage('server-stat-memory', (x) => bytes(x.memory));
-      if (statusIsLive) setText('server-stat-status', state ? (cfg.statusLabels[state] || state) : cfg.unknown);
+      if (statusIsLive) {
+        const label = state ? (cfg.statusLabels[state] || state) : cfg.unknown;
+        const uptime = latest ? latest.uptime : 0;
+        setText('server-stat-status', state && uptime ? label + ' (' + humanizeShort(uptime) + ')' : label);
+      }
       const chart = window.PelicanChart ? window.PelicanChart.line : () => {};
       chart(document.getElementById('chart-cpu'), { series: [{ data: win.map((x) => round2(x.cpu)) }] });
       chart(document.getElementById('chart-memory'), { series: [{ data: win.map((x) => round2(x.memory / Math.pow(base, 3))) }] });
