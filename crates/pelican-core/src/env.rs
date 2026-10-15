@@ -24,17 +24,13 @@ pub enum EnvValue {
 impl Env {
     /// Load `<base>/.env` (if present) under the current process environment.
     pub fn load(base: &Path) -> anyhow::Result<Env> {
-        let mut vars: HashMap<String, String> = HashMap::new();
+        let external: HashMap<String, String> = std::env::vars().collect();
         let file = base.join(".env");
-        if file.exists() {
-            for item in dotenvy::from_path_iter(&file)? {
-                let (k, v) = item?;
-                vars.insert(k, v);
-            }
+        if !file.exists() {
+            return Ok(Env { vars: external });
         }
-        for (k, v) in std::env::vars() {
-            vars.insert(k, v);
-        }
+        let content = std::fs::read_to_string(&file)?;
+        let vars = crate::dotenv::load(&content, &external).map_err(|e| anyhow::anyhow!("{}: {e}", file.display()))?;
         Ok(Env { vars })
     }
 

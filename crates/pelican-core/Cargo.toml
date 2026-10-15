@@ -19,7 +19,6 @@ tokio.workspace = true
 anyhow.workspace = true
 rand.workspace = true
 uuid.workspace = true
-dotenvy = "0.15"
 parking_lot = "0.12"
 md-5 = "0.10"
 sha1 = "0.10"
