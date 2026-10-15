@@ -20,6 +20,9 @@ x-panel-env: &panel-env
   QUEUE_CONNECTION: "sync"
   MAIL_MAILER: "log"
   TRUSTED_PROXIES: "0.0.0.0/0"
+  # The per-user API limits (256/min) would turn the load into 429s; both panels still run the limiter.
+  APP_API_CLIENT_RATELIMIT: "100000000"
+  APP_API_APPLICATION_RATELIMIT: "100000000"
 
 # On a shared server (bench/README.md): BENCH_CPUSET_DB / BENCH_CPUSET_PANEL pin the database and the
 # panels to fixed CPUs, PELICAN_CPU_SHARES lowers their weight against everything else running there.
@@ -52,7 +55,8 @@ services:
     environment:
       <<: *panel-env
       XDG_DATA_HOME: /pelican-data
-      CADDY_APP_URL: ":80"
+      # The entrypoint makes Caddy answer for APP_URL's host only, unless it is behind a proxy (":80").
+      BEHIND_PROXY: "true"
     # The official entrypoint (migrations, filament:optimize, view:cache), then php-fpm + Caddy
     # without the cron/queue workers (nothing in the background while measuring).
     command: ["sh", "-c", "php-fpm -D && exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"]

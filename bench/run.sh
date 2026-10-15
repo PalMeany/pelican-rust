@@ -88,12 +88,13 @@ stats() { # container seconds
 }
 
 secs="${DURATION%s}"
-echo "scenario,panel,status_ok,rps,p50_ms,p95_ms,p99_ms,cpu_pct,peak_mem_mib" > "$OUT/results.csv"
+echo "scenario,panel,check,ok_pct,rps,p50_ms,p95_ms,p99_ms,cpu_pct,peak_mem_mib" > "$OUT/results.csv"
 grep -v '^#' "$REPO/bench/scenarios.tsv" | while IFS=$'\t' read -r name method path auth note; do
   [[ -n "$ONLY" && "$name" != *"$ONLY"* ]] && continue
   for panel in panel-orig panel-rs; do
     hdr="$(auth_header "$auth")"
-    code="$(vm docker run --rm --network "$NET" curlimages/curl:8.11.1 -s -o /dev/null -w '%{http_code}' -X "$method" -H "Accept: application/json" -H "$hdr" "http://$panel$path")"
+    # Status and body size of one request: an empty 200 (e.g. a proxy answering for another host) is no success.
+    code="$(vm docker run --rm --network "$NET" curlimages/curl:8.11.1 -s -o /dev/null -w '%{http_code}/%{size_download}B' -X "$method" -H "Accept: application/json" -H "$hdr" "http://$panel$path")"
     load "$panel" "$method" "$path" "$hdr" > /dev/null 2>&1 || true   # warm-up
     stats "${PROJECT}-${panel}-1" "$secs" > "$OUT/$name.$panel.stats" &
     load "$panel" "$method" "$path" "$hdr" > "$OUT/$name.$panel.json"
@@ -105,7 +106,7 @@ cpu, mem = open(sys.argv[2]).read().split()
 s, p = r["summary"], r["latencyPercentiles"]
 ok = sum(v for k, v in r.get("statusCodeDistribution", {}).items() if k.startswith("2"))
 total = sum(r.get("statusCodeDistribution", {}).values()) or 1
-print(f'{sys.argv[3]},{sys.argv[4]},{sys.argv[5]}:{ok * 100 // total}%,{s["requestsPerSec"]:.1f},'
+print(f'{sys.argv[3]},{sys.argv[4]},{sys.argv[5]},{ok * 100 // total},{s["requestsPerSec"]:.1f},'
       f'{p["p50"] * 1000:.1f},{p["p95"] * 1000:.1f},{p["p99"] * 1000:.1f},{cpu},{mem}')
 PY
     tail -1 "$OUT/results.csv"
