@@ -395,7 +395,13 @@ struct Ctx<'a> {
     readonly: bool,
 }
 
-async fn render_edit(admin: &Admin, c: Ctx<'_>, form: Option<&Form>, errors: &Errors) -> WebResult {
+async fn render_edit(
+    admin: &Admin,
+    c: Ctx<'_>,
+    form: Option<&Form>,
+    errors: &Errors,
+    headers: Option<&axum::http::HeaderMap>,
+) -> WebResult {
     let st = &admin.st;
     let s = c.s;
     let egg = eggs::Entity::find_by_id(s.egg_id.0).one(&st.db).await?.ok_or(WebError::NotFound)?;
@@ -459,7 +465,12 @@ async fn render_edit(admin: &Admin, c: Ctx<'_>, form: Option<&Form>, errors: &Er
         nodes::Entity::find().all(&st.db).await?.into_iter().filter(|n| admin.user.can_target_node(n.id.0)).count();
     let icon = crate::models::icon_url(st, "server", &s.uuid)
         .or_else(|| egg.uuid.as_deref().and_then(|u| crate::models::icon_url(st, "egg", u)));
-    admin
+    // Relation managers PHP plugins add to servers (`ServerResource::registerCustomRelations()`).
+    let (plugin_rel, cookies) = match headers {
+        Some(h) => super::plugin_relations(admin, h, "servers", s.id.0).await,
+        None => (None, Vec::new()),
+    };
+    let mut resp = admin
         .page(
             SLUG,
             "admin/servers/edit.html",
@@ -505,21 +516,28 @@ async fn render_edit(admin: &Admin, c: Ctx<'_>, form: Option<&Form>, errors: &Er
                 binary => st.config.use_binary_prefix,
                 errors => Mj::from_serialize(errors),
                 rel => super::server_relations::context(admin, s, c.node).await?,
+                sidecar_head => plugin_rel.as_ref().map(|t| t.head.clone()),
+                sidecar_main => plugin_rel.as_ref().map(|t| t.main.clone()),
+                sidecar_tail => plugin_rel.as_ref().map(|t| t.tail.clone()),
             },
         )
-        .await
+        .await?;
+    for c in cookies {
+        resp.headers_mut().append(axum::http::header::SET_COOKIE, c);
+    }
+    Ok(resp)
 }
 
 async fn view(admin: Admin, Path(id): Path<i64>) -> WebResult {
     admin.authorize("view server")?;
     let (s, n) = find(&admin, id).await?;
-    render_edit(&admin, Ctx { s: &s, node: &n, readonly: true }, None, &Errors::default()).await
+    render_edit(&admin, Ctx { s: &s, node: &n, readonly: true }, None, &Errors::default(), None).await
 }
 
-async fn edit(admin: Admin, Path(id): Path<i64>) -> WebResult {
+async fn edit(admin: Admin, Path(id): Path<i64>, headers: axum::http::HeaderMap) -> WebResult {
     admin.authorize("update server")?;
     let (s, n) = find(&admin, id).await?;
-    render_edit(&admin, Ctx { s: &s, node: &n, readonly: false }, None, &Errors::default()).await
+    render_edit(&admin, Ctx { s: &s, node: &n, readonly: false }, None, &Errors::default(), Some(&headers)).await
 }
 
 fn num(form: &Form, unlimited_key: &str, key: &str) -> String {
@@ -608,7 +626,7 @@ async fn save(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
         errors.add(&field, msg);
     }
     if !errors.is_empty() {
-        return render_edit(&admin, Ctx { s: &s, node: &n, readonly: false }, Some(&form), &errors).await;
+        return render_edit(&admin, Ctx { s: &s, node: &n, readonly: false }, Some(&form), &errors, None).await;
     }
 
     let int = |k: &str| data[k].as_str().and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) as i64;

@@ -254,6 +254,12 @@ async fn pipeline(
 
     // 1. Route-model binding (SubstituteBindings runs first).
     let bound = binding::resolve(st, group, &params).await?;
+    // Columns plugins added to `nodes`: the Application API serializes whole node rows.
+    if group == Group::Application {
+        if let Err(e) = pelican_db::extra::refresh(&st.db, st.driver, "nodes").await {
+            tracing::warn!(error = %e, "reading plugin columns of nodes failed");
+        }
+    }
 
     if group == Group::Remote {
         let node = daemon_authenticate(st, req.headers()).await?;

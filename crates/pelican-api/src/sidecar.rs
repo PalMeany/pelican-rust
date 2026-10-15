@@ -46,6 +46,14 @@ const BRIDGE_FILES: &[(&str, &str)] = &[
     ),
     ("src/Filament/WidgetsHost.php", include_str!("../../../sidecar/pelican-rs-bridge/src/Filament/WidgetsHost.php")),
     (
+        "src/Filament/RelationsHost.php",
+        include_str!("../../../sidecar/pelican-rs-bridge/src/Filament/RelationsHost.php"),
+    ),
+    (
+        "resources/views/relations.blade.php",
+        include_str!("../../../sidecar/pelican-rs-bridge/resources/views/relations.blade.php"),
+    ),
+    (
         "resources/views/plugin-settings.blade.php",
         include_str!("../../../sidecar/pelican-rs-bridge/resources/views/plugin-settings.blade.php"),
     ),
@@ -206,6 +214,10 @@ pub struct Manifest {
     /// Widgets plugins add to the admin panel's dashboard (shown from `/admin/rs-widgets`).
     #[serde(default)]
     pub admin_widgets: usize,
+    /// Relation managers plugins add to admin resources: resource slug → count
+    /// (shown from `/admin/rs-relations`).
+    #[serde(default)]
+    pub admin_relations: std::collections::HashMap<String, usize>,
     /// Names of the console header actions plugins added (`Console::registerCustomHeaderActions()`).
     #[serde(default)]
     pub console_actions: Vec<String>,

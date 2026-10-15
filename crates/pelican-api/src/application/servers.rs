@@ -404,6 +404,10 @@ pub async fn delete_server(st: &AppState, ctx: &Ctx, s: &servers::Model, force: 
         }
         Err(e) => tracing::warn!(error = %e, "deleting server on wings failed"),
     }
+    // `$server->delete()` fires `eloquent.deleting` while the row still exists: PHP plugins clean up
+    // what belongs to it outside the database (the subdomains plugin's DNS records).
+    crate::sidecar::model_event(st, "eloquent.deleting: App\\Models\\Server", &serde_json::json!({ "id": s.id.0 }))
+        .await;
     let txn = st.db.begin().await?;
     let dbs = databases::Model::find_by_statement(raw::stmt(
         st.db.get_database_backend(),

@@ -467,6 +467,10 @@ pub fn node_attributes(driver: pelican_db::Driver, n: &nodes::Model) -> ApiResul
         };
         a.insert((*c).to_string(), v);
     }
+    // Columns plugins' migrations added to the table, after the core's (`toArray()`).
+    for (k, v) in pelican_db::extra::values("nodes", n.id.0) {
+        a.insert(k, v);
+    }
     Ok(a)
 }
 

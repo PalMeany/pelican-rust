@@ -160,7 +160,7 @@
 </div>
 
 <div id="relations" class="stack" data-tabs-root>
-  <div><nav class="tabs">
+  <div class="tabs-row"><nav class="tabs">
     <button type="button" data-tab="rel-allocations" class="active">{{ icon('network', 'icon-sm') }}{{ trans('admin/server.allocations') }}<span class="badge">{{ rel.allocations | length }}</span></button>
     <button type="button" data-tab="rel-databases">{{ icon('database', 'icon-sm') }}{{ trans('admin/server.databases') }}<span class="badge">{{ rel.databases | length }}</span></button>
   </nav></div>
@@ -231,6 +231,8 @@
     {% else %}<div class="empty"><div class="icon-wrap">{{ icon('database', 'icon-lg') }}</div><h3>{{ trans('admin/server.no_databases') }}</h3></div>{% endif %}
   </section>
 </div>
+{# Relation managers PHP plugins add to servers (subdomains, …), from the PHP sidecar. #}
+{% if sidecar_main %}<div class="sidecar-page">{{ sidecar_main | safe }}</div>{% endif %}
 
 {% if not readonly %}
 <dialog id="alloc-create" class="modal"><form method="post" action="/admin/servers/{{ s.id }}/allocations/create">{{ csrf_field() }}
@@ -258,3 +260,5 @@
 </form></dialog>
 {% endif %}
 {% endblock %}
+{% block head %}{{ sidecar_head | safe if sidecar_head }}{% endblock %}
+{% block body_end %}{{ sidecar_tail | safe if sidecar_tail }}{% endblock %}

@@ -102,6 +102,29 @@ struct Count {
     aggregate: pelican_db::Int,
 }
 
+/// The relation managers PHP plugins add to an admin resource, for one record: the bridge's
+/// `/admin/rs-relations` page cut out for an edit page, and the sidecar's cookies.
+pub async fn plugin_relations(
+    admin: &Admin,
+    headers: &axum::http::HeaderMap,
+    resource: &str,
+    record: i64,
+) -> (Option<crate::sidecar_proxy::Transplant>, Vec<axum::http::HeaderValue>) {
+    if !pelican_api::sidecar::manifest().is_some_and(|m| m.admin_relations.get(resource).is_some_and(|n| *n > 0)) {
+        return (None, Vec::new());
+    }
+    match crate::sidecar_proxy::embedded(
+        admin,
+        headers,
+        &format!("/admin/rs-relations?resource={resource}&record={record}"),
+    )
+    .await
+    {
+        Some((t, c)) => (Some(t), c),
+        None => (None, Vec::new()),
+    }
+}
+
 /// `ApiKeyResource::getNavigationBadge()`: application keys, hidden at zero.
 async fn application_key_count(st: &AppState) -> Option<String> {
     let b = st.db.get_database_backend();

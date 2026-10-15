@@ -37,6 +37,7 @@ class BridgeController extends Controller
             'render_hooks' => array_keys($this->pluginRenderHooks()),
             'boots' => $this->pluginsBootPanels(),
             'admin_widgets' => count(\PelicanRs\Bridge\Filament\WidgetsHost::pluginWidgets(Filament::getPanel('admin'))),
+            'admin_relations' => (object) array_map('count', \PelicanRs\Bridge\Filament\RelationsHost::pluginRelations()),
             'console_actions' => array_map(fn ($a) => $a->getName(), \PelicanRs\Bridge\Filament\ConsoleActionHost::pluginHeaderActions()),
             'tasks' => $this->tasks(),
             'features' => $this->features(),

@@ -7,6 +7,7 @@ pub mod types;
 pub use types::{Bool, Int, Json, SmallBool, Timestamp};
 pub mod column_order;
 pub mod connect;
+pub mod extra;
 pub mod install;
 pub mod raw;
 pub mod write;

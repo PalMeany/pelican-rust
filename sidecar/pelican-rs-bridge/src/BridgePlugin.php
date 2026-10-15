@@ -22,7 +22,7 @@ class BridgePlugin implements Plugin
             $panel->pages([Filament\ConsoleActionHost::class]);
         }
         if ($panel->getId() === 'admin') {
-            $panel->pages([Filament\PluginSettingsHost::class, Filament\WidgetsHost::class]);
+            $panel->pages([Filament\PluginSettingsHost::class, Filament\WidgetsHost::class, Filament\RelationsHost::class]);
         }
     }
 

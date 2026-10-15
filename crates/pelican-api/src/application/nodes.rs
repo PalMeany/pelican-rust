@@ -172,6 +172,9 @@ pub fn raw_attributes(st: &AppState, n: &nodes::Model) -> ApiResult<Map<String, 
         };
         out.insert((*c).to_string(), v);
     }
+    for (k, v) in pelican_db::extra::values("nodes", n.id.0) {
+        out.insert(k, v);
+    }
     Ok(out)
 }
 
