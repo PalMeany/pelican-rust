@@ -81,12 +81,18 @@ async fn page(p: ServerPanel) -> WebResult {
     });
     let power = |perm: &str| p.can(perm);
     // PHP plugins' console actions (ADR-0020): links to the bridge's host page.
+    let sidecar = pelican_api::sidecar::get(&p.st);
     let plugin_actions: Vec<_> = pelican_api::sidecar::console_actions(&p.st, p.user.id(), &p.server.uuid_short)
         .await
         .into_iter()
         .map(|a| {
+            // Signed for this user and server: the action runs on the first click.
+            let run = sidecar
+                .as_ref()
+                .map(|sc| format!("&rs_run={}", sc.console_run_token(p.user.id(), &p.server.uuid_short, &a.name)))
+                .unwrap_or_default();
             context! {
-                url => format!("{}/rs-console-action?action={}", p.base_url(), super::rawurlencode(&a.name)),
+                url => format!("{}/rs-console-action?action={}{run}", p.base_url(), super::rawurlencode(&a.name)),
                 label => a.label,
                 icon => crate::sidecar_proxy::icon(a.icon.as_deref()),
             }

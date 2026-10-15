@@ -124,6 +124,19 @@ pub fn canonical_path(path: &str) -> String {
 }
 
 impl Sidecar {
+    /// A one-click run of a PHP plugin's console action on the bridge's host page:
+    /// `<ts>.<hex hmac("console-action\n<user>\n<server>\n<action>\n<ts>")>` (the bridge's
+    /// `ConsoleActionHost::validRun()`, twelve hours).
+    pub fn console_run_token(&self, user: i64, tenant: &str, action: &str) -> String {
+        let ts = pelican_core::time::now().and_utc().timestamp().to_string();
+        let message =
+            ["console-action".to_string(), user.to_string(), tenant.to_string(), action.to_string(), ts.clone()]
+                .join("\n");
+        let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(&self.secret).expect("HMAC accepts any key length");
+        mac.update(message.as_bytes());
+        format!("{ts}.{}", hex::encode(mac.finalize().into_bytes()))
+    }
+
     /// `X-Pelican-Rs-*` headers for a request (see the bridge's `Signature`).
     pub fn signature(&self, method: &str, path: &str, user: Option<i64>, body: &[u8]) -> Vec<(&'static str, String)> {
         let ts = pelican_core::time::now().and_utc().timestamp().to_string();
