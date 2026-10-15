@@ -132,7 +132,7 @@ pub async fn view(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, In
 }
 
 /// `Node::getConfiguration()` from attribute values (`upload_limit` / `data` keep their raw type).
-fn configuration(st: &AppState, attrs: &Map<String, Value>, token: &str, mounts_: &[mounts::Model]) -> Value {
+pub fn configuration(st: &AppState, attrs: &Map<String, Value>, token: &str, mounts_: &[mounts::Model]) -> Value {
     let get = |k: &str| attrs.get(k).cloned().unwrap_or(Value::Null);
     let fqdn = pelican_core::php::string(&get("fqdn")).to_lowercase();
     let ssl = !bool_cast(&get("behind_proxy")) && get("scheme") == json!("https");
@@ -158,7 +158,7 @@ fn configuration(st: &AppState, attrs: &Map<String, Value>, token: &str, mounts_
 }
 
 /// All columns of a node row as raw attribute values (incl. hidden ones), physical order.
-fn raw_attributes(st: &AppState, n: &nodes::Model) -> ApiResult<Map<String, Value>> {
+pub fn raw_attributes(st: &AppState, n: &nodes::Model) -> ApiResult<Map<String, Value>> {
     let cols = pelican_db::column_order::columns(st.driver, "nodes").unwrap_or(&[]);
     let mut visible = node_attributes(st.driver, n)?;
     let mut out = Map::new();
@@ -176,7 +176,7 @@ fn raw_attributes(st: &AppState, n: &nodes::Model) -> ApiResult<Map<String, Valu
 }
 
 /// Mounts of a node (`morphToMany`), natural order.
-async fn node_mounts<C: ConnectionTrait>(db: &C, node_id: i64) -> ApiResult<Vec<mounts::Model>> {
+pub async fn node_mounts<C: ConnectionTrait>(db: &C, node_id: i64) -> ApiResult<Vec<mounts::Model>> {
     Ok(mounts::Model::find_by_statement(raw::stmt(
         db.get_database_backend(),
         "select {mounts}.* from {mounts} inner join {mountables} on {mounts.id} = {mountables.mount_id} \
@@ -269,41 +269,69 @@ fn set_column(am: &mut nodes::ActiveModel, key: &str, v: &Value) {
     }
 }
 
-/// `POST /nodes`.
-pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, In(input): In) -> ApiResult<Response> {
-    ctx.acl("node", WRITE)?;
-    let data = validate(&input)?;
-    let now = Timestamp(pelican_core::time::now());
-    // Model `$attributes` defaults, then the fill in validated order.
-    let mut attrs = Map::new();
-    for (k, v) in [
-        ("public", json!(true)),
-        ("behind_proxy", json!(false)),
-        ("memory", json!(0)),
-        ("memory_overallocate", json!(0)),
-        ("disk", json!(0)),
-        ("disk_overallocate", json!(0)),
-        ("cpu", json!(0)),
-        ("cpu_overallocate", json!(0)),
-        ("daemon_base", json!(DEFAULT_DAEMON_BASE)),
-        ("daemon_sftp", json!(2022)),
-        ("daemon_listen", json!(8080)),
-        ("daemon_connect", json!(8080)),
-        ("maintenance_mode", json!(false)),
-        ("tags", json!("[]")),
-    ] {
-        attrs.insert(k.into(), v);
-    }
+/// Node `$attributes` defaults in declaration order (raw types; `tags` is the raw
+/// JSON string like Eloquent holds it until a cast reads it).
+fn default_attributes() -> Map<String, Value> {
+    Map::from_iter([
+        ("public".to_string(), json!(true)),
+        ("behind_proxy".to_string(), json!(false)),
+        ("memory".to_string(), json!(0)),
+        ("memory_overallocate".to_string(), json!(0)),
+        ("disk".to_string(), json!(0)),
+        ("disk_overallocate".to_string(), json!(0)),
+        ("cpu".to_string(), json!(0)),
+        ("cpu_overallocate".to_string(), json!(0)),
+        ("daemon_base".to_string(), json!(DEFAULT_DAEMON_BASE)),
+        ("daemon_sftp".to_string(), json!(2022)),
+        ("daemon_listen".to_string(), json!(8080)),
+        ("daemon_connect".to_string(), json!(8080)),
+        ("maintenance_mode".to_string(), json!(false)),
+        ("tags".to_string(), json!("[]")),
+    ])
+}
+
+/// Attributes after applying `Node::casts()` (`HasValidation::validate()` runs its rules
+/// over `addCastAttributesToArray`).
+fn casted(attrs: &Map<String, Value>) -> Map<String, Value> {
+    attrs.iter().filter_map(|(k, v)| cast(k, v.clone()).map(|v| (k.clone(), v))).collect()
+}
+
+/// Result of [`create`]: the inserted row plus the prepared attributes it was rendered from.
+#[derive(Debug)]
+pub struct CreatedNode {
+    pub node: nodes::Model,
+    /// In-memory Eloquent attributes (model defaults + fill + created row), raw values.
+    pub attrs: Map<String, Value>,
+}
+
+/// `Node::create($data)` outside the HTTP pipeline (`p:node:make`), shared with [`store`]:
+/// model defaults + the fillable pairs (validated order), the model-level validation pass,
+/// the creating hook (`uuid`, random `daemon_token`/`daemon_token_id`), insert and
+/// `eloquent.created`. Returns the row and its prepared raw attributes for rendering.
+///
+/// # Errors
+/// Validation errors have the same shape as [`validate`] (ApiError::validation).
+pub async fn create(st: &AppState, data: Vec<(String, Value)>) -> ApiResult<CreatedNode> {
+    // Model `$attributes` defaults, then the fill in given order.
+    let mut attrs = default_attributes();
     for (k, v) in &data {
         attrs.insert(k.clone(), v.clone());
     }
+    // ValidationObserver::saving → HasValidation::validate() — before the creating hook.
+    let attrs_value = Value::Object(casted(&attrs));
+    let mut v = Validator::for_value(&attrs_value);
+    for (k, r) in RULES {
+        v.rules(k, r);
+    }
+    v.validate()?;
     let uuid = uuid::Uuid::new_v4().to_string();
     let token = pelican_wings::jwt::str_random(64);
     let token_id = pelican_wings::jwt::str_random(16);
-    attrs.insert("uuid".into(), json!(uuid));
+    attrs.insert("uuid".into(), json!(uuid.clone()));
     attrs.insert("daemon_token".into(), json!(""));
-    attrs.insert("daemon_token_id".into(), json!(token_id));
+    attrs.insert("daemon_token_id".into(), json!(token_id.clone()));
 
+    let now = Timestamp(pelican_core::time::now());
     let mut am = nodes::ActiveModel {
         public: Set(SmallBool(true)),
         behind_proxy: Set(Bool(false)),
@@ -330,11 +358,45 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         set_column(&mut am, k, v);
     }
     let created = pelican_db::write::insert(&st.db, am).await?;
-    // NodeController::store → Node::create() (eloquent.created)
-    crate::model_events::created(&st, &created).await;
+    crate::model_events::created(st, &created).await;
     attrs.insert("updated_at".into(), ts(Some(&now))?);
     attrs.insert("created_at".into(), ts(Some(&now))?);
     attrs.insert("id".into(), json!(created.id.0));
+    Ok(CreatedNode { node: created, attrs })
+}
+
+/// `json_encode($v, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)`
+/// (`Node::getJsonConfiguration(true)` and `p:node:list --format=json`).
+pub fn pretty_json(v: &Value) -> ApiResult<String> {
+    laravel_compat::json::to_string_with_flags(
+        v,
+        laravel_compat::json::JSON_PRETTY_PRINT | laravel_compat::json::JSON_UNESCAPED_SLASHES,
+    )
+    .map_err(|_| ApiError::internal("JsonException"))
+}
+
+/// `Yaml::dump($v, 4, 2, DUMP_EMPTY_ARRAY_AS_SEQUENCE)` (`Node::getYamlConfiguration()`,
+/// also how the admin UI renders `/etc/pelican/config.yml`).
+pub fn yaml_configuration(v: &Value) -> String {
+    egg_format::yaml::dump_empty_as_sequence(v, 4)
+}
+
+/// The `GET /nodes/{node}/configuration` payload without the HTTP pipeline (ACL, binding):
+/// lets `p:node:configuration` print exactly what the API serves.
+///
+/// # Errors
+/// `DecryptException` when the token cannot be decrypted, database errors otherwise.
+pub async fn node_configuration(st: &AppState, n: &nodes::Model) -> ApiResult<Value> {
+    let token = st.enc.decrypt_string_lenient(&n.daemon_token).map_err(|_| ApiError::internal("DecryptException"))?;
+    let ms = node_mounts(&st.db, n.id.0).await?;
+    Ok(configuration(st, &raw_attributes(st, n)?, &token, &ms))
+}
+
+/// `POST /nodes`.
+pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, In(input): In) -> ApiResult<Response> {
+    ctx.acl("node", WRITE)?;
+    let data = validate(&input)?;
+    let CreatedNode { node: created, attrs } = create(&st, data).await?;
     let mut out = Map::new();
     for (k, v) in attrs {
         if let Some(v) = cast(&k, v) {
