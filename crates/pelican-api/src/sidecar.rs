@@ -240,8 +240,16 @@ pub async fn refresh(st: &AppState) -> ApiResult<()> {
         return Err(fail(format!("sidecar manifest: HTTP {status}")));
     }
     let manifest: Manifest = serde_json::from_value(body).map_err(|e| fail(format!("sidecar manifest: {e}")))?;
+    // The sidecar must be the original of the same version as the schema (ADR-0020).
+    let ours = crate::application::plugins::config(st).panel_version_display;
+    let theirs = manifest.version.clone().unwrap_or_default();
+    let dev = |v: &str| v.is_empty() || v.contains("canary") || v.contains("dev");
+    let accepted = dev(&ours) || dev(&theirs) || theirs.trim_start_matches('v') == ours.trim_start_matches('v');
+    if !accepted {
+        tracing::error!(sidecar = %theirs, panel = %ours, "the PHP sidecar runs another panel version; PHP plugins are off");
+    }
     if let Ok(mut m) = MANIFEST.write() {
-        *m = Some(Arc::new(manifest));
+        *m = accepted.then(|| Arc::new(manifest));
     }
     Ok(())
 }
@@ -513,4 +521,85 @@ pub async fn delegate(
         return Some(Err(e.to_string()));
     }
     Some(lifecycle(st, &p.id, action, extra).await)
+}
+
+/// `Role::registerCustomPermissions()` of WASM and PHP plugins: `(model, prefixes)`.
+pub fn all_admin_permissions() -> Vec<(String, Vec<String>)> {
+    let mut out = pelican_plugins::runtime::admin_permissions();
+    if let Some(Value::Object(models)) = manifest().map(|m| m.admin_permissions.clone()) {
+        for (model, prefixes) in models {
+            let prefixes =
+                prefixes.as_array().map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect());
+            out.push((model, prefixes.unwrap_or_default()));
+        }
+    }
+    out
+}
+
+/// `Subuser::registerCustomPermissions()` of WASM and PHP plugins (hidden groups left out).
+pub fn all_subuser_permissions() -> Vec<pelican_plugins::runtime::PermissionGroup> {
+    let mut out = pelican_plugins::runtime::subuser_permissions();
+    if let Some(m) = manifest() {
+        out.extend(m.subuser_permissions.iter().filter(|g| !g.hidden).map(|g| {
+            pelican_plugins::runtime::PermissionGroup {
+                name: g.name.clone(),
+                permissions: g.permissions.clone(),
+                icon: g.icon.clone(),
+            }
+        }));
+    }
+    out
+}
+
+/// `ApiKey::registerCustomResourceName()` of WASM and PHP plugins.
+pub fn all_api_resources() -> Vec<String> {
+    let mut out = pelican_plugins::runtime::api_resources();
+    if let Some(m) = manifest() {
+        out.extend(m.api_resources.iter().cloned());
+    }
+    out
+}
+
+/// Avatar providers of WASM and PHP plugins: `(plugin, provider)`.
+pub fn all_avatar_providers() -> Vec<(String, pelican_plugins::runtime::AvatarProvider)> {
+    let mut out = pelican_plugins::runtime::avatar_providers();
+    if let Some(m) = manifest() {
+        out.extend(m.avatars.iter().map(|a| {
+            (a.plugin.clone(), pelican_plugins::runtime::AvatarProvider { id: a.id.clone(), name: a.name.clone() })
+        }));
+    }
+    out
+}
+
+type AvatarCache = std::collections::HashMap<(String, i64), (std::time::Instant, Option<String>)>;
+static AVATARS: std::sync::Mutex<Option<AvatarCache>> = std::sync::Mutex::new(None);
+
+/// A PHP plugin's avatar URL for a user (`AvatarSchemaInterface::get()`), cached for ten
+/// minutes and fetched in the background: `None` until known.
+pub fn cached_avatar(st: &AppState, provider: &str, user_id: i64) -> Option<String> {
+    if !manifest().is_some_and(|m| m.avatars.iter().any(|a| a.id == provider)) {
+        return None;
+    }
+    let key = (provider.to_string(), user_id);
+    let hit = AVATARS.lock().ok().and_then(|g| g.as_ref().and_then(|m| m.get(&key).cloned()));
+    if let Some((at, url)) = &hit {
+        if at.elapsed() < Duration::from_secs(600) {
+            return url.clone();
+        }
+    }
+    let sc = get(st)?;
+    if let Ok(mut g) = AVATARS.lock() {
+        g.get_or_insert_with(Default::default).insert(key.clone(), (std::time::Instant::now(), hit.and_then(|h| h.1)));
+    }
+    let body = json!({ "provider": provider, "user": user_id });
+    tokio::spawn(async move {
+        let url = match sc.call(reqwest::Method::POST, "/_bridge/avatar", Some(&body)).await {
+            Ok((200, v)) => v.get("url").and_then(Value::as_str).map(str::to_string),
+            _ => None,
+        };
+        if let Ok(mut g) = AVATARS.lock() {
+            g.get_or_insert_with(Default::default).insert(key, (std::time::Instant::now(), url));
+        }
+    });
+    None
 }

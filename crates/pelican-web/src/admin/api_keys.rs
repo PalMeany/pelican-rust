@@ -33,7 +33,7 @@ const RESOURCES: [&str; 11] =
 /// Core resources, then those plugins register (`ApiKey::registerCustomResourceName`).
 fn resources() -> Vec<String> {
     let mut out: Vec<String> = RESOURCES.iter().map(|r| (*r).to_string()).collect();
-    for r in pelican_plugins::runtime::api_resources() {
+    for r in pelican_api::sidecar::all_api_resources() {
         if !out.contains(&r) {
             out.push(r);
         }

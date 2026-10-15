@@ -79,7 +79,7 @@ fn special_models() -> [&'static str; 5] {
 /// (`Role::registerCustomPermissions`).
 fn all_models() -> Vec<String> {
     let mut out: Vec<String> = MODELS.iter().copied().chain(special_models()).map(str::to_string).collect();
-    for (model, _) in pelican_plugins::runtime::admin_permissions() {
+    for (model, _) in pelican_api::sidecar::all_admin_permissions() {
         if !out.contains(&model) {
             out.push(model);
         }
@@ -112,7 +112,7 @@ fn section_perms(model: &str) -> Vec<String> {
         }
     };
     let mut perms: Vec<String> = list.into_iter().map(|p| format!("{p} {model}")).collect();
-    for (m, prefixes) in pelican_plugins::runtime::admin_permissions() {
+    for (m, prefixes) in pelican_api::sidecar::all_admin_permissions() {
         for p in prefixes.iter().filter(|_| m == model) {
             let name = format!("{p} {model}");
             if !perms.contains(&name) {

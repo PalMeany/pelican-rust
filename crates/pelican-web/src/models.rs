@@ -111,7 +111,9 @@ pub fn avatar_url(st: &AppState, u: &pelican_db::entities::users::Model) -> Stri
     // A plugin's provider (null = Filament's default avatar below).
     if provider != "uiavatars" {
         let doc = pelican_api::plugin_routes::user_json(u, false);
-        if let Some(url) = pelican_plugins::runtime::cached_avatar(&provider, u.id.0, doc) {
+        if let Some(url) = pelican_plugins::runtime::cached_avatar(&provider, u.id.0, doc)
+            .or_else(|| pelican_api::sidecar::cached_avatar(st, &provider, u.id.0))
+        {
             return url;
         }
     }

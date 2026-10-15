@@ -110,7 +110,7 @@ fn all_groups() -> Vec<(String, &'static str, Vec<String>)> {
         .iter()
         .map(|(k, i, perms)| ((*k).to_string(), *i, perms.iter().map(|p| (*p).to_string()).collect()))
         .collect();
-    for g in pelican_plugins::runtime::subuser_permissions() {
+    for g in pelican_api::sidecar::all_subuser_permissions() {
         match out.iter_mut().find(|(k, _, _)| *k == g.name) {
             Some((_, _, perms)) => {
                 perms.extend(g.permissions.into_iter().filter(|p| !perms.contains(p)).collect::<Vec<_>>())

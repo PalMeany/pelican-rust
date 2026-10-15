@@ -89,6 +89,16 @@ class BridgeController extends Controller
         return new JsonResponse(['ok' => true]);
     }
 
+    /** A PHP plugin's avatar URL for a user. */
+    public function avatar(Request $request, AvatarService $avatars): JsonResponse
+    {
+        $schema = $avatars->get((string) $request->input('provider'));
+        abort_if(is_null($schema) || is_null(Origin::pluginOfClass($schema::class)), 404);
+        $user = \App\Models\User::query()->findOrFail((int) $request->input('user'));
+
+        return new JsonResponse(['url' => $schema->get($user)]);
+    }
+
     /** Plugin lifecycle steps that need PHP (composer packages, migrations, seeders). */
     public function artisan(Request $request, PluginService $service): JsonResponse
     {

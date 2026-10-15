@@ -413,7 +413,7 @@ fn validate(admin: &Admin, snap: &Snapshot<'_>, trusted_proxies: &[String]) -> R
     v.rules("APP_NAME", &["required", "string"]);
     v.rules("APP_FAVICON", &["required", "string"]);
     let mut providers = String::from("in:gravatar,uiavatars");
-    for (_, a) in pelican_plugins::runtime::avatar_providers() {
+    for (_, a) in pelican_api::sidecar::all_avatar_providers() {
         providers.push(',');
         providers.push_str(&a.id);
     }
@@ -576,7 +576,7 @@ fn settings_ctx(tab: &str, t: &dyn Fn(&str) -> String, readonly: bool, snap: &Sn
         ],
         avatar_options => [("gravatar".to_string(), "Gravatar".to_string()), ("uiavatars".to_string(), "UI Avatars".to_string())]
             .into_iter()
-            .chain(pelican_plugins::runtime::avatar_providers().into_iter().map(|(_, a)| (a.id, a.name)))
+            .chain(pelican_api::sidecar::all_avatar_providers().into_iter().map(|(_, a)| (a.id, a.name)))
             .collect::<Vec<_>>(),
         nav_options => vec![
             ("sidebar", t("admin/setting.general.sidebar")),
