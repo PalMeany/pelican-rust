@@ -20,7 +20,7 @@ fn greeting() -> String {
 impl PelicanPlugin for Hello {
     fn register() -> Registration {
         Registration {
-            events: vec!["server:power.start".into()],
+            events: vec!["server:power.start".into(), "eloquent.updated: App\\Models\\Server".into()],
             routes: vec![
                 Route { scope: RouteScope::Client, method: "GET".into(), path: "/count".into() },
                 Route { scope: RouteScope::Client, method: "GET".into(), path: "/servers".into() },
@@ -94,6 +94,11 @@ impl PelicanPlugin for Hello {
     }
 
     fn on_event(event: String, payload: Value) {
+        if event.starts_with("eloquent.") {
+            // Model events carry the model's `toArray()` in `data`.
+            host::kv_set("last_server_update", payload["data"]["name"].as_str());
+            return;
+        }
         let n = count() + 1;
         host::kv_set("starts", Some(&n.to_string()));
         pelican_plugin_sdk::info(&format!("{event} #{n}: {}", payload["properties"]));
@@ -101,9 +106,14 @@ impl PelicanPlugin for Hello {
 
     fn handle(req: Request) -> Response {
         match (req.method.as_str(), req.path.as_str()) {
-            ("GET", "/count") => {
-                Response::json(200, &json!({"starts": count(), "server": req.server().map(|s| s["uuid"].clone())}))
-            }
+            ("GET", "/count") => Response::json(
+                200,
+                &json!({
+                    "starts": count(),
+                    "last_server_update": host::kv_get("last_server_update"),
+                    "server": req.server().map(|s| s["uuid"].clone()),
+                }),
+            ),
             ("GET", "/servers") => match host::api("GET", "/servers?per_page=100", None) {
                 Ok((status, body)) => {
                     let doc: Value = pelican_plugin_sdk::serde_json::from_str(&body).unwrap_or(Value::Null);
