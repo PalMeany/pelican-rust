@@ -52,13 +52,13 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] bcrypt (`$2y$`), needs_rehash
 - [x] API-ключи: bearer-парсинг Sanctum, `allowed_ips` (IPTools), `last_used_at` (dirty-check), expiry, тип ключа
 - [x] TOTP (google2fa, окно 8, защита от повтора), recovery-коды (bcrypt в encrypted:array) — в pelican-web
-- [~] Права: spatie roles/permissions, root admin, node restrictions (AuthUser) — сабюзеры/политики с M4
+- [x] Права: spatie roles/permissions, root admin, node restrictions (AuthUser); сабюзеры/политики — M4
 - [x] Сессии/логин/троттлинг (для UI) — хранение в таблице `sessions` (ADR-0013)
 - [x] Обработчик ошибок в формате оригинала (pretty/compact по типу, redirect без Accept: json)
 - [x] Валидация с сообщениями Laravel (`lang/en/validation.php`) + TrimStrings/ConvertEmptyStringsToNull
 - [x] Диф-тесты auth/*: 401 (неверный/просроченный/битый токен), 403 (app-ключ на client, IP), 404 маршрута
 - [x] Application API ACL (биты ключа, root+account key) — с первыми маршрутами M5
-- [~] Логин/2FA/сессии/CSRF — вместе с UI (M6): сессии, CSRF, логин, TOTP/recovery/email-код готовы в pelican-web
+- [x] Логин/2FA/сессии/CSRF — в pelican-web (M6): сессии, CSRF, логин, TOTP/recovery/email-код, passkeys
 
 ### M3 — Remote API для Wings (`/api/remote/*`) и клиент Wings
 - [x] DaemonAuthenticate (порядок ошибок: binding 404 → 401 → 400 → 404 → 403), 405 до auth
@@ -94,7 +94,7 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] webhooks (воркер)
 - [x] plugins (M7): list/view/import file+url/hub/install/update/uninstall/enable/disable, диф-тесты app/plugins-*
 - [x] Вебхуки: доставка (ProcessWebhook), диспатч по активности (server scope, ActivityLogged)
-- [~] Вебхуки на события моделей `eloquent.created/updated/deleted:*` — шина готова (ADR-0019), точки вызова — M7
+- [x] Вебхуки на события моделей `eloquent.created/updated/deleted:*` (ADR-0019, M7)
 - [x] Фоновые задачи: prune activity/webhooks, prune/clean backups, prune images, почта (уведомления)
 - [x] egg check-updates/update-index (планировщик + UI яиц)
 - [x] Диф-тесты на каждый маршрут (app/*), 4 СУБД
@@ -102,7 +102,7 @@ Application API → UI → плагины → PHP-sidecar.
 ### M6 — UI (паритет функций)
 Ветка `m6` (`.worktrees/m6`). Объём оригинала — ~20 тыс. строк Filament (Admin/App/Server-панели).
 Порядок: каркас и эталонные страницы каждого вида пишу сам, остальные страницы — воркерам по одной.
-- [~] Каркас (ADR-0013): крейт pelican-web
+- [x] Каркас (ADR-0013): крейт pelican-web
   - [x] сессии в `sessions` (base64(JSON), ротация id при входе, «запомнить меня», GC-лотерея 2%)
   - [x] CSRF (`_token` / `X-CSRF-TOKEN`, 419), заголовки безопасности (SetSecurityHeaders)
   - [x] шаблоны minijinja, встроенные build.rs, оверрайд `PELICAN_VIEWS_PATH`; фильтры bytes/datetime/ago
@@ -116,7 +116,7 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] Профиль: OAuth-привязки, аватары (Gravatar/UI Avatars/загрузка)
 - [x] Профиль: passkeys (регистрация/удаление, вход; UI только по https, как в оригинале)
 - [x] RequireTwoFactorAuthentication (уровни none/admin/all)
-- [~] Admin: каркас (доступ isAdmin, сайдбар с группами и бейджами по правам spatie)
+- [x] Admin: каркас (доступ isAdmin, сайдбар с группами и бейджами по правам spatie)
   - [x] mounts (эталон)
   - [x] database hosts, webhooks, api keys (воркер ui-a, ревью + доработки)
   - [x] users, roles (воркер ui-b)
@@ -132,7 +132,7 @@ Application API → UI → плагины → PHP-sidecar.
   - [x] settings (все вкладки, запись .env + перечитывание на лету)
   - [x] plugins (M7): список, импорт, действия с хуками, readme, порядок загрузки, настройки плагина
 - [x] App: список серверов (вкладки my/other/all, таблица/сетка по кастомизации, ресурсы из Wings с кешем 15 с, power-действия, фильтры egg/owner, per_page в кастомизации)
-- [~] Server: каркас (доступ к тенанту, права сабюзера, навигация, баннер конфликта)
+- [x] Server: каркас (доступ к тенанту, права сабюзера, навигация, баннер конфликта)
   - [x] консоль (xterm.js 5.5 + WebSocket Wings, power через set state, история команд, графики)
   - [x] файлы (список, массовые действия, права, архивы, загрузка напрямую в Wings, поиск, редактор CodeMirror 5)
   - [x] databases, network, activity (воркер ui-c); блокировка страниц в конфликтном состоянии (BlockAccessInConflict)
@@ -165,7 +165,7 @@ Application API → UI → плагины → PHP-sidecar.
 - [x] Права от плагинов: модели ролей (только свои префиксы), группы прав сабюзеров, ресурсы API-ключей
 - [x] Server features: listeners плагинов в конфиг Wings; модалки на консоли по `feature match` (eula/java_version/gsl_token с валидацией и рестартом, pid_limit/steam_disk_space, плагинные `feature-<id>`), E2E с Wings
 - [x] Возможность `api`: собственный application-ключ плагина (виден в админке), обычный конвейер Application API
-- [ ] События моделей `eloquent.*` (общая шина с вебхуками — хвост M5)
+- [x] События моделей `eloquent.*`: все пути записи (Application/Client/Remote API, задачи, админка, панель сервера, профиль), payload'ы сверены диф-тестом `webhooks/model-events` на 4 СУБД; доставка WASM- и PHP-плагинам
 - [x] Документация для авторов плагинов (docs/plugins.md); шаблон — examples/plugins/hello
 
 ### M8 (после MVP) — PHP-sidecar для оригинальных плагинов
