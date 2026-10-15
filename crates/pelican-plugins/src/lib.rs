@@ -160,7 +160,39 @@ impl Config {
                 tracing::warn!(plugin = %p.id, error = %e, "updating plugin status failed");
             }
         }
+        // `loadPanelPlugins()` for the admin, app and server panels: a PHP plugin whose class
+        // cannot be autoloaded becomes `errored`; a loadable one turns `errored` back to
+        // `enabled`. WASM plugins are judged by the runtime instead.
+        for panel in ["admin", "app", "server"] {
+            let mut plugins = self.plugins();
+            plugins.sort_by_key(|p| p.load_order);
+            for p in plugins.into_iter().filter(|p| p.wasm.is_none() && p.should_load(Some(panel))) {
+                let result = if php_class_exists(&self.root, &p) {
+                    if p.status == Status::Errored { self.set_status(&p, Status::Enabled, None) } else { Ok(()) }
+                } else {
+                    self.set_status(&p, Status::Errored, Some(format!("Class \"{}\" not found", p.full_class())))
+                };
+                if let Err(e) = result {
+                    tracing::warn!(plugin = %p.id, error = %e, "updating plugin status failed");
+                }
+            }
+        }
     }
+}
+
+/// `class_exists($fullClass)` through the plugin's PSR-4 root (`<namespace>\` → `src/`):
+/// the class file exists and declares the class.
+fn php_class_exists(root: &std::path::Path, p: &Plugin) -> bool {
+    let rel = p.class.replace('\\', "/");
+    let short = p.class.rsplit('\\').next().unwrap_or(&p.class).to_lowercase();
+    let file = root.join(&p.dir).join("src").join(format!("{rel}.php"));
+    std::fs::read_to_string(file).is_ok_and(|code| {
+        code.to_lowercase()
+            .split(|c: char| !c.is_alphanumeric() && c != '_')
+            .collect::<Vec<_>>()
+            .windows(2)
+            .any(|w| w[0] == "class" && w[1] == short)
+    })
 }
 
 /// `<id>::group.key` from `plugins/<dir>/lang/<locale>/<group>.json` (fallback `en`),

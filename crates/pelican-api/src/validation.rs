@@ -173,6 +173,13 @@ impl<'a> Validator<'a> {
     }
 
     /// Add an error from an `after()` hook (Pelican reports `rule: ""`).
+    /// `MessageBag::add()` keeps one copy of identical messages per attribute.
+    fn push_error(&mut self, attribute: &str, rule: &str, message: String) {
+        if !self.errors.iter().any(|(a, _, m)| a == attribute && *m == message) {
+            self.errors.push((attribute.to_string(), rule.to_string(), message));
+        }
+    }
+
     pub fn add_error(&mut self, attribute: &str, message: &str) {
         self.errors.push((attribute.to_string(), String::new(), message.to_string()));
     }
@@ -246,7 +253,7 @@ impl<'a> Validator<'a> {
                 }
                 if let Some(msg) = (c.check)(attribute, value.unwrap_or(&Value::Null)) {
                     let msg = msg.replace(":attribute", &self.display_attribute(a));
-                    self.errors.push((attribute.to_string(), c.name.clone(), msg));
+                    self.push_error(attribute, &c.name, msg);
                     self.failed.entry(attribute.to_string()).or_default().push(c.name.clone());
                 }
                 return;
@@ -273,7 +280,7 @@ impl<'a> Validator<'a> {
         let ok = self.check(name, attribute, value, &params, has_numeric, names);
         if !ok {
             let msg = self.make_message(a, name, &params, names);
-            self.errors.push((attribute.to_string(), name.to_string(), msg));
+            self.push_error(attribute, name, msg);
             self.failed.entry(attribute.to_string()).or_default().push(name.to_string());
         }
     }
@@ -423,7 +430,13 @@ impl<'a> Validator<'a> {
                     || chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").is_ok()
             }),
             "timezone" => v.as_str().is_some_and(is_timezone),
-            "url" => v.as_str().is_some_and(crate::url_rule::is_url),
+            // `Str::isUrl($value, $protocols)`: parameters restrict the scheme.
+            "url" => v.as_str().is_some_and(|u| {
+                crate::url_rule::is_url(u)
+                    && (p.is_empty()
+                        || u.split_once("://")
+                            .is_some_and(|(scheme, _)| p.iter().any(|x| x.eq_ignore_ascii_case(scheme))))
+            }),
             other => {
                 tracing::error!("validation rule `{other}` is not implemented");
                 false
