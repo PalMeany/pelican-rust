@@ -1,0 +1,7 @@
+target
+.worktrees
+.git
+bench/.data
+bench/results
+examples/plugins/*/target
+**/*.wasm

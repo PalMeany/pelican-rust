@@ -1,0 +1,21 @@
+# systemd unit for pelican-rs (docs/deploy.md). Replaces php-fpm, the queue worker
+# (pelican-queue.service) and the `schedule:run` cron entry of the original: the
+# scheduler and the queue run inside `pelican serve`.
+[Unit]
+Description=Pelican panel (pelican-rs)
+After=network-online.target mariadb.service mysql.service postgresql.service
+Wants=network-online.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/pelican
+ExecStart=/usr/local/bin/pelican --path /var/www/pelican serve --listen 127.0.0.1:8080
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/var/www/pelican
+
+[Install]
+WantedBy=multi-user.target
