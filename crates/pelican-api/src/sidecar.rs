@@ -904,6 +904,27 @@ pub struct PageExtras {
     pub banners: Vec<Banner>,
     #[serde(default)]
     pub console_actions: Vec<ConsoleAction>,
+    /// The panel's whole menu as the original builds it for the user (order, groups, badges).
+    #[serde(default)]
+    pub layout: Vec<LayoutGroup>,
+}
+
+/// A group of the original's menu ([`PageExtras::layout`]).
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct LayoutGroup {
+    #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub items: Vec<LayoutItem>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct LayoutItem {
+    pub path: String,
+    #[serde(default)]
+    pub badge: Option<Value>,
+    #[serde(default)]
+    pub badge_color: Option<String>,
 }
 
 /// The PHP plugins' additions to a page of `panel` as `user` (or a guest) sees it ([`page_extras`]).

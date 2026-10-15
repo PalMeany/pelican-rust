@@ -102,6 +102,59 @@ struct Count {
     aggregate: pelican_db::Int,
 }
 
+/// `ApiKeyResource::getNavigationBadge()`: application keys, hidden at zero.
+async fn application_key_count(st: &AppState) -> Option<String> {
+    let b = st.db.get_database_backend();
+    let sql = "select count(*) as {aggregate} from {api_keys} where {key_type} = ?";
+    let n = Count::find_by_statement(raw::stmt(b, sql, vec![2.into()])).one(&st.db).await.ok().flatten()?.aggregate.0;
+    (n > 0).then(|| n.to_string())
+}
+
+/// Lay a menu out as the original panel builds it for this user (`layout` from the PHP sidecar,
+/// covering its plugins' items too): its groups and items in its order, its badges where ours
+/// have none. Items it does not list keep their groups, after the rest.
+pub fn arrange(groups: Vec<NavGroup>, layout: &[pelican_api::sidecar::LayoutGroup]) -> Vec<NavGroup> {
+    if layout.is_empty() {
+        return groups;
+    }
+    let path =
+        |url: &str| crate::server::canonical_path(url.split(['?', '#']).next().unwrap_or(url).trim_end_matches('/'));
+    let mut pool: Vec<(Option<String>, Option<NavItem>)> =
+        groups.into_iter().flat_map(|g| g.items.into_iter().map(move |i| (g.label.clone(), Some(i)))).collect();
+    let mut out: Vec<NavGroup> = Vec::new();
+    for lg in layout {
+        let mut items = Vec::new();
+        for li in &lg.items {
+            let want = path(&li.path);
+            let found = pool.iter_mut().find(|(_, i)| i.as_ref().is_some_and(|i| path(&i.url) == want));
+            if let Some(mut item) = found.and_then(|(_, i)| i.take()) {
+                if item.badge.is_none() {
+                    item.badge = match &li.badge {
+                        Some(serde_json::Value::String(s)) if !s.is_empty() => Some(s.clone()),
+                        Some(serde_json::Value::Number(n)) => Some(n.to_string()),
+                        _ => None,
+                    };
+                    item.badge_color = li.badge_color.as_deref().and_then(|c| {
+                        ["danger", "warning", "success", "info", "primary", "gray"].into_iter().find(|k| *k == c)
+                    });
+                }
+                items.push(item);
+            }
+        }
+        if !items.is_empty() {
+            out.push(NavGroup { label: lg.label.clone().filter(|l| !l.is_empty()), items });
+        }
+    }
+    for (label, item) in pool {
+        let Some(item) = item else { continue };
+        match out.iter_mut().find(|g| g.label == label) {
+            Some(g) => g.items.push(item),
+            None => out.push(NavGroup { label, items: vec![item] }),
+        }
+    }
+    out
+}
+
 async fn count(st: &AppState, table: &str) -> Option<String> {
     let b = st.db.get_database_backend();
     let sql = format!("select count(*) as {{aggregate}} from {{{table}}}");
@@ -137,43 +190,30 @@ impl Admin {
         if self.can("view settings") {
             top.push(item("settings", t("admin/setting.title"), "settings", None));
         }
+        // The original's order (resources discovered by name, pages first within a group).
+        if self.can("viewList plugin") {
+            // getNavigationBadge(): the plugin count, hidden at zero.
+            let n = pelican_api::application::plugins::config(st).plugins().len();
+            top.push(item("plugins", t("admin/plugin.nav_title"), "packages", (n > 0).then(|| n.to_string())));
+        }
         let mut server = Vec::new();
+        if self.can("viewList egg") {
+            server.push(item("eggs", t("admin/egg.nav_title"), "eggs", count(st, "eggs").await));
+        }
         if self.can("viewList node") {
             server.push(item("nodes", t("admin/node.nav_title"), "server-2", count(st, "nodes").await));
         }
         if self.can("viewList server") {
             server.push(item("servers", t("admin/server.nav_title"), "brand-docker", count(st, "servers").await));
         }
-        if self.can("viewList egg") {
-            server.push(item("eggs", t("admin/egg.nav_title"), "eggs", count(st, "eggs").await));
-        }
         let mut user = Vec::new();
-        if self.can("viewList user") {
-            user.push(item("users", t("admin/user.nav_title"), "users", count(st, "users").await));
-        }
         if self.can("viewList role") {
             user.push(item("roles", t("admin/role.nav_title"), "users-group", count(st, "roles").await));
         }
+        if self.can("viewList user") {
+            user.push(item("users", t("admin/user.nav_title"), "users", count(st, "users").await));
+        }
         let mut advanced = Vec::new();
-        if self.can("viewList apiKey") {
-            advanced.push(item("api-keys", t("admin/apikey.nav_title"), "key", None));
-        }
-        if self.can("viewList backupHost") {
-            advanced.push(item(
-                "backup-hosts",
-                crate::i18n::trans_choice(&self.locale(), "admin/backuphost.model_label", 2.0, &[]),
-                "file-zip",
-                count(st, "backup_hosts").await,
-            ));
-        }
-        if self.can("viewList databaseHost") {
-            advanced.push(item(
-                "database-hosts",
-                t("admin/databasehost.nav_title"),
-                "database",
-                count(st, "database_hosts").await,
-            ));
-        }
         if self.can("view health") {
             // Health::getNavigationIcon/Badge/BadgeColor/BadgeTooltip from the stored results.
             let results = pelican_api::health::latest();
@@ -194,16 +234,28 @@ impl Admin {
             }
             advanced.push(it);
         }
+        if self.can("viewList apiKey") {
+            // ApiKeyResource::getEloquentQuery(): application keys.
+            advanced.push(item("api-keys", t("admin/apikey.nav_title"), "key", application_key_count(st).await));
+        }
+        if self.can("viewList backupHost") {
+            advanced.push(item(
+                "backup-hosts",
+                crate::i18n::trans_choice(&self.locale(), "admin/backuphost.model_label", 2.0, &[]),
+                "file-zip",
+                count(st, "backup_hosts").await,
+            ));
+        }
+        if self.can("viewList databaseHost") {
+            advanced.push(item(
+                "database-hosts",
+                t("admin/databasehost.nav_title"),
+                "database",
+                count(st, "database_hosts").await,
+            ));
+        }
         if self.can("viewList mount") {
             advanced.push(item("mounts", t("admin/mount.nav_title"), "layers-linked", count(st, "mounts").await));
-        }
-        if self.can("view panelLog") {
-            advanced.push(item("logs", t("admin/log.navigation.panel_logs"), "file-info", None));
-        }
-        if self.can("viewList plugin") {
-            // getNavigationBadge(): the plugin count, hidden at zero.
-            let n = pelican_api::application::plugins::config(st).plugins().len();
-            advanced.push(item("plugins", t("admin/plugin.nav_title"), "packages", (n > 0).then(|| n.to_string())));
         }
         if self.can("viewList webhook") {
             advanced.push(item(
@@ -212,6 +264,9 @@ impl Admin {
                 "webhook",
                 count(st, "webhook_configurations").await,
             ));
+        }
+        if self.can("view panelLog") {
+            advanced.push(item("logs", t("admin/log.navigation.panel_logs"), "file-info", None));
         }
         // Plugin pages (ADR-0018): into the named core group, else a group of their own.
         let mut custom: Vec<(String, Vec<NavItem>)> = Vec::new();
@@ -269,20 +324,18 @@ impl Admin {
                 }
             }
         }
+        // Groups the panel does not register (plugins') sort with the first registered one.
         let mut groups = vec![NavGroup { label: None, items: top }];
-        for (label, items) in [
-            (t("admin/dashboard.server"), server),
-            (t("admin/dashboard.user"), user),
-            (t("admin/dashboard.advanced"), advanced),
-        ]
-        .into_iter()
-        .chain(custom)
+        for (label, items) in std::iter::once((t("admin/dashboard.server"), server))
+            .chain(custom)
+            .chain([(t("admin/dashboard.user"), user), (t("admin/dashboard.advanced"), advanced)])
         {
             if !items.is_empty() {
                 groups.push(NavGroup { label: Some(label), items });
             }
         }
-        groups
+        let layout = pelican_api::sidecar::page_extras(st, "admin", Some(self.user.id()), None).await;
+        arrange(groups, &layout.layout)
     }
 
     /// API request context for calling Application API services as this user

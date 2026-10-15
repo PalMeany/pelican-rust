@@ -486,7 +486,42 @@ class BridgeController extends Controller
             'hooks' => (object) $hooks,
             'banners' => $banners,
             'console_actions' => $user && $tenant && $panelId === 'server' ? $this->consoleActions() : [],
+            'layout' => $user && $tenantReady ? $this->panelNavigation() : [],
         ]);
+    }
+
+    /**
+     * The panel's whole menu as Filament builds it for the signed user (core and plugin items,
+     * group and item order, badges): pelican-rs lays its own menu out the same way.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function panelNavigation(): array
+    {
+        try {
+            $out = [];
+            foreach (Filament::getNavigation() as $group) {
+                if (!$group instanceof \Filament\Navigation\NavigationGroup) {
+                    continue;
+                }
+                $items = [];
+                foreach ($group->getItems() as $item) {
+                    $color = $item->getBadgeColor();
+                    $items[] = [
+                        'path' => '/' . ltrim((string) parse_url((string) $item->getUrl(), PHP_URL_PATH), '/'),
+                        'badge' => $item->getBadge(),
+                        'badge_color' => is_string($color) ? $color : null,
+                    ];
+                }
+                $out[] = ['label' => $this->label($group->getLabel()), 'items' => $items];
+            }
+
+            return $out;
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return [];
+        }
     }
 
     /**

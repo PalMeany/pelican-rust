@@ -46,6 +46,47 @@ pub fn routes() -> Router<AppState> {
         .merge(startup::routes())
         .merge(users::routes())
         .merge(webhooks::routes())
+        .route("/server/{server}/console", axum::routing::get(original_path))
+        .route("/server/{server}/subusers", axum::routing::get(original_path))
+        .route("/server/{server}/subusers/{*rest}", axum::routing::get(original_path))
+        .route("/server/{server}/allocations", axum::routing::get(original_path))
+        .route("/server/{server}/activities", axum::routing::get(original_path))
+}
+
+/// The original's paths for pages ours name differently (`/console`, `/subusers`, `/allocations`,
+/// `/activities`), as bookmarks, plugins and stored notifications link them.
+pub fn canonical_path(path: &str) -> String {
+    let segs: Vec<&str> = path.split('/').collect();
+    // ["", "server", "<id>", "<page>", ...]
+    if segs.len() < 4 || segs[1] != "server" {
+        return path.to_string();
+    }
+    let page = match segs[3] {
+        "console" if segs.len() == 4 => "",
+        "subusers" => "users",
+        "allocations" => "network",
+        "activities" => "activity",
+        _ => return path.to_string(),
+    };
+    let mut out = format!("/server/{}", segs[2]);
+    if !page.is_empty() {
+        out.push('/');
+        out.push_str(page);
+    }
+    for rest in &segs[4..] {
+        out.push('/');
+        out.push_str(rest);
+    }
+    out
+}
+
+async fn original_path(uri: axum::http::Uri) -> Response {
+    let mut to = canonical_path(uri.path());
+    if let Some(q) = uri.query() {
+        to.push('?');
+        to.push_str(q);
+    }
+    axum::response::Redirect::to(&to).into_response()
 }
 
 /// A request inside a server's panel: the tenant, its node and what the user may do there.
@@ -62,6 +103,8 @@ pub struct ServerPanel {
     sidecar_nav: Vec<pelican_api::sidecar::NavEntry>,
     /// The servers of the sidebar's server switcher.
     tenants: Vec<TenantView>,
+    /// The original's menu for this user and server (order, badges), from the PHP sidecar.
+    layout: Vec<pelican_api::sidecar::LayoutGroup>,
 }
 
 impl std::ops::Deref for ServerPanel {
@@ -153,8 +196,17 @@ pub(crate) async fn load(authed: Authed, id: &str) -> Result<ServerPanel, WebErr
     };
     let sidecar_nav =
         crate::sidecar_proxy::nav(&authed.st, "server", authed.user.id(), Some(server.uuid_short.as_str())).await;
+    let layout = pelican_api::sidecar::page_extras(
+        &authed.st,
+        "server",
+        Some(authed.user.id()),
+        Some(server.uuid_short.as_str()),
+    )
+    .await
+    .layout
+    .clone();
     let tenants = tenants(&authed).await?;
-    Ok(ServerPanel { authed, server, node, perms, transfer, webhooks, sidecar_nav, tenants })
+    Ok(ServerPanel { authed, server, node, perms, transfer, webhooks, sidecar_nav, tenants, layout })
 }
 
 /// A server in the sidebar's server switcher (Filament's tenant menu).
@@ -304,7 +356,7 @@ impl ServerPanel {
         }
         let mut nav = vec![NavGroup { label: None, items }];
         nav.extend(groups);
-        nav
+        crate::admin::arrange(nav, &self.layout)
     }
 
     /// Render a server panel page (sidebar, conflict banner, user menu).
