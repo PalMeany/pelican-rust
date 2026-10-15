@@ -22,10 +22,11 @@ pelican-rust in Docker on all four databases, and responses, database changes an
 
 ## Status
 
-Milestones M1–M7 (database layer, auth, Remote/Client/Application APIs, web UI, WASM plugins, model events)
-are on `main`, verified by the full differential run on all four databases. M8 (original PHP plugins through a
-sidecar) is on the `m8` branch. See `PLAN.md` and `PROGRESS.md` (in Russian), and
-the architecture decision records in `docs/decisions/`.
+Milestones M1–M8 (database layer, auth, Remote/Client/Application APIs, web UI, WASM plugins, model events,
+original PHP plugins through a sidecar) are on `main`, verified by the full differential run on all four
+databases. M9 (CLI, API docs, packaging, load tests and optimization, remaining PHP plugin extension points) is
+in progress on the `m9` branch. See `PLAN.md` and `PROGRESS.md` (in Russian), and the architecture decision
+records in `docs/decisions/`.
 
 ## Layout
 
