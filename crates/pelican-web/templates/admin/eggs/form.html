@@ -101,7 +101,7 @@
   {% endif %}
   {{ f.toggle('force_outgoing_ip', trans(N ~ '.force_ip'), v.force_outgoing_ip, tooltip=trans(N ~ '.force_ip_help')) }}
 
-  {{ f.kv('startup_name[]', 'startup_command[]', trans(N ~ '.startup_commands'), v.startup_commands, errors, error_name='startup_commands', hint=trans(N ~ '.startup_help'), key_label=trans(N ~ '.startup_name'), value_label=trans(N ~ '.startup_command'), add_label=trans(N ~ '.add_startup'), required=true, disabled=readonly, mono_value=true) }}
+  {{ f.kv('startup_name[]', 'startup_command[]', trans(N ~ '.startup_commands'), v.startup_commands, errors, error_name='startup_commands', hint=trans(N ~ '.startup_help'), key_label=trans(N ~ '.startup_name'), value_label=trans(N ~ '.startup_command'), add_label=trans(N ~ '.add_startup'), reorderable=true, required=true, disabled=readonly, mono_value=true) }}
 
   <div class="grid grid-2">
     {{ f.tags('file_denylist', trans(N ~ '.file_denylist'), v.file_denylist, errors, placeholder='denied-file.txt', hint=trans(N ~ '.file_denylist_help'), disabled=readonly) }}
@@ -110,7 +110,7 @@
     {{ f.tags('tags', trans(N ~ '.tags'), v.tags, errors, disabled=readonly) }}
   </div>
 
-  {{ f.kv('image_name[]', 'image_uri[]', trans(N ~ '.docker_images'), v.docker_images, errors, error_name='docker_images', hint=trans(N ~ '.docker_help'), key_label=trans(N ~ '.docker_name'), value_label=trans(N ~ '.docker_uri'), add_label=trans(N ~ '.add_image'), required=true, disabled=readonly, mono_value=true) }}
+  {{ f.kv('image_name[]', 'image_uri[]', trans(N ~ '.docker_images'), v.docker_images, errors, error_name='docker_images', hint=trans(N ~ '.docker_help'), key_label=trans(N ~ '.docker_name'), value_label=trans(N ~ '.docker_uri'), add_label=trans(N ~ '.add_image'), reorderable=true, required=true, disabled=readonly, mono_value=true) }}
 </section>
 
 <section class="card card-body grid grid-2" data-tab-panel="process_management"{% if tab != 'process_management' %} hidden{% endif %}>

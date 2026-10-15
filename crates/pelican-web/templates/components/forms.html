@@ -145,16 +145,18 @@
 {% endmacro %}
 
 {# KeyValue: rows of `<key_name>[]` / `<value_name>[]` inputs; `reset` (rows) adds the reset hint action. #}
-{% macro kv(key_name, value_name, label, rows=[], errors={}, error_name='', hint='', key_label='', value_label='', add_label='', required=false, disabled=false, mono_value=false, reset=none, reset_label='') %}
+{% macro kv(key_name, value_name, label, rows=[], errors={}, error_name='', hint='', key_label='', value_label='', add_label='', required=false, disabled=false, mono_value=false, reset=none, reset_label='', reorderable=false) %}
+{% set reorder = reorderable and not disabled %}
 <div class="field{% if errors[error_name] %} has-error{% endif %}">
   {% if label or reset is not none %}<div class="row" style="justify-content:space-between">
     {% if label %}<label>{{ label }}{% if required %}<span class="req">*</span>{% endif %}</label>{% endif %}
     {% if reset is not none and not disabled %}<button type="button" class="btn-link danger" data-kv-reset='{{ reset | tojson }}'>{{ icon('trash', 'icon-sm') }}{{ reset_label }}</button>{% endif %}
   </div>{% endif %}
   {# Filament KeyValue: a framed table, the add action centred under it. #}
-  <div class="kv-table">
-  <div class="kv-grid kv-head"><span>{{ key_label or trans('filament-forms::components.key_value.fields.key.label') }}</span><span>{{ value_label or trans('filament-forms::components.key_value.fields.value.label') }}</span><span></span></div>
+  <div class="kv-table{% if reorder %} reorderable{% endif %}">
+  <div class="kv-grid kv-head">{% if reorder %}<span></span>{% endif %}<span>{{ key_label or trans('filament-forms::components.key_value.fields.key.label') }}</span><span>{{ value_label or trans('filament-forms::components.key_value.fields.value.label') }}</span><span></span></div>
   <div data-kv>{% for r in (rows or [['', '']]) %}<div class="kv-grid" data-kv-row>
+    {% if reorder %}<button type="button" class="icon-btn kv-handle" data-kv-handle title="{{ trans('filament-forms::components.key_value.actions.reorder.label') }}" aria-label="{{ trans('filament-forms::components.key_value.actions.reorder.label') }}">{{ icon('arrows-sort', 'icon-sm') }}</button>{% endif %}
     <input class="input" name="{{ key_name }}" value="{{ r[0] }}"{% if disabled %} disabled{% endif %}>
     <input class="input{% if mono_value %} mono{% endif %}" name="{{ value_name }}" value="{{ r[1] }}"{% if disabled %} disabled{% endif %}>
     {% if not disabled %}<button type="button" class="icon-btn danger" data-kv-remove title="{{ trans('filament-forms::components.key_value.actions.delete.label') }}">{{ icon('trash', 'icon-sm') }}</button>{% else %}<span></span>{% endif %}

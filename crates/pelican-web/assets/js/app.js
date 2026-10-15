@@ -222,6 +222,38 @@
     },
   };
 
+  // Reorderable key/value rows (KeyValue::reorderable()): drag a row by its handle; the inputs'
+  // order is what gets submitted.
+  let kvDragged = null;
+  document.addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('[data-kv-handle]');
+    if (handle) handle.closest('[data-kv-row]').draggable = true;
+  });
+  document.addEventListener('pointerup', () => {
+    if (!kvDragged) document.querySelectorAll('[data-kv-row][draggable="true"]').forEach((r) => { r.draggable = false; });
+  });
+  document.addEventListener('dragstart', (e) => {
+    const row = e.target.closest && e.target.closest('[data-kv-row]');
+    if (!row || !row.draggable) return;
+    kvDragged = row;
+    row.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', ''); } catch (_) { /* ignore */ }
+  });
+  document.addEventListener('dragover', (e) => {
+    const row = kvDragged && e.target.closest && e.target.closest('[data-kv-row]');
+    if (!row || row === kvDragged || row.parentElement !== kvDragged.parentElement) return;
+    e.preventDefault();
+    const r = row.getBoundingClientRect();
+    row.parentElement.insertBefore(kvDragged, e.clientY < r.top + r.height / 2 ? row : row.nextSibling);
+  });
+  document.addEventListener('dragend', () => {
+    if (!kvDragged) return;
+    kvDragged.classList.remove('dragging');
+    kvDragged.draggable = false;
+    kvDragged = null;
+  });
+
   // ----- Filament wizards (create node / server) -----
   // One step at a time; Next validates the step's fields, earlier steps are reachable from the
   // header, Create shows the step of the first invalid field. The step survives htmx refreshes
