@@ -94,9 +94,7 @@ pub async fn index(
         ))
         .all(&st.db)
         .await?;
-        for s in &rows {
-            data.push(server_item(&st, &ctx, s, &includes).await?);
-        }
+        data = super::data::server_items(&st, &ctx, &rows, &includes).await?;
     }
     Ok(PhpJson::ok(page.envelope(&ctx, uri.path(), total, data)).into_response())
 }

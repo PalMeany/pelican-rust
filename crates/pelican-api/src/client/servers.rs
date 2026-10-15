@@ -215,10 +215,7 @@ pub async fn index(
     } else {
         Vec::new()
     };
-    let mut data = Vec::with_capacity(rows.len());
-    for s in &rows {
-        data.push(server_item(&st, &ctx, s, &includes).await?);
-    }
+    let data = crate::client::data::server_items(&st, &ctx, &rows, &includes).await?;
     let p = Pagination {
         total,
         count: data.len() as i64,

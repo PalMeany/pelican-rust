@@ -95,11 +95,10 @@ impl ServerBundle {
         Ok(ServerBundle { server, egg, config_from, variables, allocation, allocations, mounts })
     }
 
-    /// The bundles of a page of servers (Remote API server list), loaded the way the
-    /// original's `with(['allocations', 'egg', 'mounts'])` does: one `whereIn` query per
-    /// relation; `variables` stay per server (`ServerDetailsController::list`: its join
-    /// needs the server's id). Fails like [`ServerBundle::load`] at the first server
-    /// without an egg.
+    /// The bundles of a page of servers (server lists), loaded like Eloquent's eager loading
+    /// (`with(['allocations', 'egg', 'mounts'])`): one `whereIn` query per relation; the
+    /// variables stay per server (`Server::variables()` joins on the server's id). Fails
+    /// like [`ServerBundle::load`] at the first server without an egg.
     pub async fn load_many<C: ConnectionTrait>(
         db: &C,
         servers: Vec<servers::Model>,
@@ -163,8 +162,8 @@ impl ServerBundle {
         }
 
         let marks = vec!["?"; ids.len()].join(", ");
-        let mut values: Vec<sea_orm::Value> = ids.iter().map(|id| pelican_db::Int(*id).into()).collect();
-        values.push("server".into());
+        let mut params: Vec<sea_orm::Value> = ids.iter().map(|id| pelican_db::Int(*id).into()).collect();
+        params.push("server".into());
         let rows = db
             .query_all_raw(raw::stmt(
                 backend,
@@ -173,7 +172,7 @@ impl ServerBundle {
                      inner join {{mountables}} on {{mounts.id}} = {{mountables.mount_id}} \
                      where {{mountables.mountable_id}} in ({marks}) and {{mountables.mountable_type}} = ?"
                 ),
-                values,
+                params,
             ))
             .await?;
         let mut mounts_of: HashMap<i64, Vec<mounts::Model>> = HashMap::new();
@@ -187,6 +186,8 @@ impl ServerBundle {
             let egg = eggs_by_id.get(&server.egg_id.0).cloned().ok_or(ConfigError::Php("ErrorException"))?;
             let config_from =
                 egg.config_from.and_then(|id| eggs_by_id.get(&id.0).or_else(|| parents.get(&id.0)).cloned());
+            // The original's per-server join: on PostgreSQL its plan decides the row order, which a
+            // query over all servers' eggs does not reproduce (difftest: environment key order).
             let variables = variables(db, &server).await?;
             let allocation = server.allocation_id.and_then(|id| primary.get(&id.0).cloned());
             let allocations = allocations_of.remove(&server.id.0).unwrap_or_default();

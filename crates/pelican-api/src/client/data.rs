@@ -132,18 +132,74 @@ struct Limits {
 }
 
 /// `ServerData` item with includes (default `allocations`, `variables`).
-pub async fn server_item(st: &AppState, ctx: &Ctx, server: &servers::Model, includes: &Includes) -> ApiResult<Value> {
-    let user = ctx.user()?;
-    let db = &st.db;
-    let b = ServerBundle::load(db, server.clone()).await.map_err(|e| match e {
+fn config_err(e: pelican_core::server_config::ConfigError) -> ApiError {
+    match e {
         pelican_core::server_config::ConfigError::Db(d) => d.into(),
         pelican_core::server_config::ConfigError::Php(c) => ApiError::internal(c),
-    })?;
+    }
+}
+
+pub async fn server_item(st: &AppState, ctx: &Ctx, server: &servers::Model, includes: &Includes) -> ApiResult<Value> {
+    let db = &st.db;
+    let b = ServerBundle::load(db, server.clone()).await.map_err(config_err)?;
     let node =
         nodes::Entity::find_by_id(server.node_id).one(db).await?.ok_or_else(|| ApiError::internal("ErrorException"))?;
+    let transferring = pelican_core::server_state::active_transfer(db, server.id.0).await?.is_some();
+    render_server(st, ctx, &b, &node, transferring, includes).await
+}
+
+/// [`server_item`] for a page of servers: bundles, nodes and transfer states loaded per
+/// page instead of per server (the output is the same, server by server).
+pub async fn server_items(
+    st: &AppState,
+    ctx: &Ctx,
+    servers: &[servers::Model],
+    includes: &Includes,
+) -> ApiResult<Vec<Value>> {
+    use sea_orm::{ColumnTrait, QueryFilter};
+    let db = &st.db;
+    if servers.is_empty() {
+        return Ok(Vec::new());
+    }
+    let bundles = ServerBundle::load_many(db, servers.to_vec()).await.map_err(config_err)?;
+    let node_ids: Vec<pelican_db::Int> = servers.iter().map(|s| s.node_id).collect();
+    let nodes: std::collections::HashMap<i64, nodes::Model> = nodes::Entity::find()
+        .filter(nodes::Column::Id.is_in(node_ids))
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|n| (n.id.0, n))
+        .collect();
+    let ids: Vec<pelican_db::Int> = servers.iter().map(|s| s.id).collect();
+    let transferring: std::collections::HashSet<i64> = pelican_db::entities::server_transfers::Entity::find()
+        .filter(pelican_db::entities::server_transfers::Column::ServerId.is_in(ids))
+        .filter(pelican_db::entities::server_transfers::Column::Successful.is_null())
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|t| t.server_id.0)
+        .collect();
+    let mut out = Vec::with_capacity(bundles.len());
+    for b in &bundles {
+        let node = nodes.get(&b.server.node_id.0).ok_or_else(|| ApiError::internal("ErrorException"))?;
+        out.push(render_server(st, ctx, b, node, transferring.contains(&b.server.id.0), includes).await?);
+    }
+    Ok(out)
+}
+
+async fn render_server(
+    st: &AppState,
+    ctx: &Ctx,
+    b: &ServerBundle,
+    node: &nodes::Model,
+    transferring: bool,
+    includes: &Includes,
+) -> ApiResult<Value> {
+    let user = ctx.user()?;
+    let db = &st.db;
+    let server = &b.server;
     let has = |perm: &'static str| pelican_core::permissions::has_server_permission(db, user, server, perm);
     let gate = |perm: &'static str| pelican_core::permissions::gate_server_permission(db, user, server, perm);
-    let transferring = pelican_core::server_state::active_transfer(db, server.id.0).await?.is_some();
     let mut m = Map::new();
     m.insert("server_owner".into(), json!(user.id() == server.owner_id.0));
     m.insert("identifier".into(), json!(server.uuid_short));
@@ -173,7 +229,7 @@ pub async fn server_item(st: &AppState, ctx: &Ctx, server: &servers::Model, incl
         })
         .unwrap_or(Value::Null),
     );
-    m.insert("invocation".into(), json!(startup_command(&b, !has("startup.read").await?)));
+    m.insert("invocation".into(), json!(startup_command(b, !has("startup.read").await?)));
     m.insert("docker_image".into(), json!(server.image));
     m.insert("egg_features".into(), inherit_features(&b.egg, b.config_from.as_ref()));
     m.insert(

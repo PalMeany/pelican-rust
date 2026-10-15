@@ -161,15 +161,44 @@ pub async fn server_list(
     inc: &Includes,
     object: &str,
 ) -> ApiResult<Value> {
-    let mut data = Vec::new();
-    for s in servers_ {
-        data.push(server_item_as(st, ctx, s, inc, object).await?);
-    }
-    Ok(list(data))
+    Ok(list(server_items_as(st, ctx, servers_, inc, object).await?))
 }
 
 pub fn server_item<'a>(st: &'a AppState, ctx: &'a Ctx, s: &'a servers::Model, inc: &'a Includes) -> Fut<'a> {
-    server_item_as(st, ctx, s, inc, "server")
+    server_item_as(st, ctx, s, inc, "server", None)
+}
+
+/// [`server_item`] for a page of servers, their configuration bundles loaded together.
+pub async fn server_items(
+    st: &AppState,
+    ctx: &Ctx,
+    servers_: &[servers::Model],
+    inc: &Includes,
+) -> ApiResult<Vec<Value>> {
+    server_items_as(st, ctx, servers_, inc, "server").await
+}
+
+async fn server_items_as(
+    st: &AppState,
+    ctx: &Ctx,
+    servers_: &[servers::Model],
+    inc: &Includes,
+    object: &str,
+) -> ApiResult<Vec<Value>> {
+    let bundles =
+        pelican_core::server_config::ServerBundle::load_many(&st.db, servers_.to_vec()).await.map_err(config_err)?;
+    let mut data = Vec::with_capacity(bundles.len());
+    for (s, b) in servers_.iter().zip(bundles) {
+        data.push(server_item_as(st, ctx, s, inc, object, Some(b)).await?);
+    }
+    Ok(data)
+}
+
+fn config_err(e: pelican_core::server_config::ConfigError) -> ApiError {
+    match e {
+        pelican_core::server_config::ConfigError::Db(d) => d.into(),
+        pelican_core::server_config::ConfigError::Php(c) => ApiError::internal(c),
+    }
 }
 
 /// `ServerData` (§2.2). Includes: allocations, user, subusers, egg, variables, node, databases.
@@ -179,12 +208,13 @@ fn server_item_as<'a>(
     s: &'a servers::Model,
     inc: &'a Includes,
     object: &'a str,
+    preloaded: Option<pelican_core::server_config::ServerBundle>,
 ) -> Fut<'a> {
     Box::pin(async move {
-        let bundle = pelican_core::server_config::ServerBundle::load(&st.db, s.clone()).await.map_err(|e| match e {
-            pelican_core::server_config::ConfigError::Db(d) => d.into(),
-            pelican_core::server_config::ConfigError::Php(c) => ApiError::internal(c),
-        })?;
+        let bundle = match preloaded {
+            Some(b) => b,
+            None => pelican_core::server_config::ServerBundle::load(&st.db, s.clone()).await.map_err(config_err)?,
+        };
         let env = pelican_core::server_config::environment(&bundle);
         let installed = !matches!(s.status.as_deref(), Some("installing" | "install_failed" | "reinstall_failed"));
         let mut a = Map::new();
