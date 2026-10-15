@@ -35,17 +35,18 @@
   <div class="grid" style="grid-template-columns: 10rem 1fr; gap:1.5rem">
     <div>{% if s.icon %}<img src="{{ s.icon }}" alt="" style="width:150px;border-radius:var(--radius)">{% endif %}</div>
     <div class="grid grid-3">
-      <div class="span-2">{{ f.text('name', trans(S ~ '.name'), s.name, errors, required=true, attrs='maxlength="255"') }}</div>
+      {% set dice %}{% if not readonly %}<button type="button" class="icon-btn" data-random-name='{{ random_names | tojson }}' data-target="f-name" title="{{ trans(S ~ '.random') }}" aria-label="{{ trans(S ~ '.random') }}">{{ icon('dice-' ~ dice_face, 'icon-sm') }}</button>{% endif %}{% endset %}
+      <div class="span-2">{{ f.text('name', trans(S ~ '.name'), s.name, errors, required=true, attrs='maxlength="255"', prefix_icon='server', actions=dice) }}</div>
       <div class="field"><span class="field-label">{{ trans(S ~ '.server_status') }}</span>
-        <span class="badge badge-{{ condition.color }}" style="align-self:flex-start">{{ icon(condition.icon, 'icon-sm') }}{{ condition.label }}</span></div>
-      <div class="span-2">{{ f.select('owner_id', trans(S ~ '.owner'), owners, s.owner_id, errors, required=true) }}</div>
+        <span class="state-btn {{ condition.color }}">{{ icon(condition.icon, 'icon-sm') }}{{ condition.label }}</span></div>
+      <div class="span-2">{{ f.select('owner_id', trans(S ~ '.owner'), owners, s.owner_id, errors, required=true, prefix_icon='user') }}</div>
     </div>
   </div>
   <div class="form mt-4">
     {{ f.textarea('description', trans(S ~ '.description'), s.description, errors) }}
     <div class="grid grid-2">
-      <div class="field"><label>{{ trans(S ~ '.uuid') }}</label><input class="input copyable" readonly value="{{ s.uuid }}" data-copy="{{ s.uuid }}"></div>
-      <div class="field"><label>{{ trans(S ~ '.short_uuid') }}</label><input class="input copyable" readonly value="{{ s.uuid_short }}" data-copy="{{ s.uuid_short }}"></div>
+      {{ f.text('uuid', trans(S ~ '.uuid'), s.uuid, attrs='readonly', copy=true) }}
+      {{ f.text('uuid_short', trans(S ~ '.short_uuid'), s.uuid_short, attrs='readonly', copy=true) }}
       {{ f.text('external_id', trans(S ~ '.external_id'), s.external_id, errors, attrs='maxlength="255"') }}
       <div class="field"><label>{{ trans(S ~ '.node') }}</label><input class="input" disabled value="{{ s.node }}"></div>
     </div>
@@ -163,11 +164,14 @@
 
 <div id="relations" class="stack" data-tabs-root>
   <div class="tabs-row"><nav class="tabs">
-    <button type="button" data-tab="rel-allocations" class="active">{{ icon('network', 'icon-sm') }}{{ trans('admin/server.allocations') }}<span class="badge">{{ rel.allocations | length }}</span></button>
+    {% for t in plugin_tabs or [] %}<button type="button" data-tab="rel-plugin-{{ loop.index0 }}" class="{{ 'active' if loop.first }}">{% if t.icon %}{{ icon(t.icon, 'icon-sm') }}{% endif %}{{ t.title }}{% if t.badge is not none and t.badge != '' %}<span class="badge{% if t.badge_color %} badge-{{ t.badge_color }}{% endif %}">{{ t.badge }}</span>{% endif %}</button>{% endfor %}
+    <button type="button" data-tab="rel-allocations" class="{{ 'active' if not plugin_tabs }}">{{ icon('network', 'icon-sm') }}{{ trans('admin/server.allocations') }}<span class="badge">{{ rel.allocations | length }}</span></button>
     <button type="button" data-tab="rel-databases">{{ icon('database', 'icon-sm') }}{{ trans('admin/server.databases') }}<span class="badge">{{ rel.databases | length }}</span></button>
   </nav></div>
 
-  <section class="card table-card" data-tab-panel="rel-allocations">
+  {# Relation managers PHP plugins add to servers (subdomains, …), from the PHP sidecar: their tab panels. #}
+  {% if sidecar_main %}<div class="sidecar-page">{{ sidecar_main | safe }}</div>{% endif %}
+  <section class="card table-card" data-tab-panel="rel-allocations"{% if plugin_tabs %} hidden{% endif %}>
     {% if not readonly %}
     <form id="srv-alloc-bulk" method="post" hx-boost="false" action="/admin/servers/{{ s.id }}/allocations/bulk-dissociate" class="bulk-bar" data-bulk-bar hidden>
       {{ csrf_field() }}<input type="hidden" name="_back" value="/admin/servers/{{ s.id }}/edit#relations">
@@ -233,8 +237,6 @@
     {% else %}<div class="empty"><div class="icon-wrap">{{ icon('database', 'icon-lg') }}</div><h3>{{ trans('admin/server.no_databases') }}</h3></div>{% endif %}
   </section>
 </div>
-{# Relation managers PHP plugins add to servers (subdomains, …), from the PHP sidecar. #}
-{% if sidecar_main %}<div class="sidecar-page">{{ sidecar_main | safe }}</div>{% endif %}
 
 {% if not readonly %}
 <dialog id="alloc-create" class="modal"><form method="post" action="/admin/servers/{{ s.id }}/allocations/create">{{ csrf_field() }}

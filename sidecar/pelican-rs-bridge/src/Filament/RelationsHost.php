@@ -83,6 +83,30 @@ class RelationsHost extends Page
         return self::pluginRelations()[$this->resource] ?? [];
     }
 
+    /**
+     * The tab of a relation manager on the edit page (`getTabComponent()`): pelican-rs adds it to
+     * its own relation tabs.
+     *
+     * @return array{title: string, icon: ?string, badge: ?string, badge_color: ?string}
+     */
+    public function tab(string $manager): array
+    {
+        try {
+            $owner = $this->ownerRecord();
+            $page = $this->pageClass();
+            $icon = $manager::getIcon($owner, $page);
+
+            return [
+                'title' => (string) $manager::getTitle($owner, $page),
+                'icon' => $icon instanceof \BackedEnum ? (string) $icon->value : (is_string($icon) ? $icon : null),
+                'badge' => $manager::getBadge($owner, $page),
+                'badge_color' => $manager::getBadgeColor($owner, $page),
+            ];
+        } catch (Throwable) {
+            return ['title' => class_basename($manager), 'icon' => null, 'badge' => null, 'badge_color' => null];
+        }
+    }
+
     /** The resource's edit page, which relation managers take as their page. */
     public function pageClass(): string
     {

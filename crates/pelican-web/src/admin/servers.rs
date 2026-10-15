@@ -503,6 +503,12 @@ async fn render_edit(
                     icon => icon,
                 },
                 condition => context! { label => cond_label, icon => cond_icon, color => cond_color },
+                // The name's `hint_random` action: "{egg name, kebab}-{random word}" (a few to pick from).
+                random_names => (0..12).map(|_| {
+                    let prefix = egg.name.to_lowercase().split_whitespace().collect::<Vec<_>>().join("-");
+                    if prefix.is_empty() { crate::words::random_word().to_string() } else { format!("{prefix}-{}", crate::words::random_word()) }
+                }).collect::<Vec<_>>(),
+                dice_face => rand::random_range(1..=6),
                 owners => owners.iter().map(|u| vec![u.id.0.to_string(), format!("{} ({})", u.username, u.email)]).collect::<Vec<_>>(),
                 images => images.iter().map(|(v, l)| vec![v.clone(), l.clone()]).collect::<Vec<_>>(),
                 image_custom => !images.iter().any(|(v, _)| *v == s.image),
@@ -518,6 +524,7 @@ async fn render_edit(
                 rel => super::server_relations::context(admin, s, c.node).await?,
                 sidecar_head => plugin_rel.as_ref().map(|t| t.head.clone()),
                 sidecar_main => plugin_rel.as_ref().map(|t| t.main.clone()),
+                plugin_tabs => Mj::from_serialize(plugin_rel.as_ref().map(|t| super::plugin_relation_tabs(&t.main)).unwrap_or_default()),
                 sidecar_tail => plugin_rel.as_ref().map(|t| t.tail.clone()),
             },
         )

@@ -125,6 +125,16 @@
   document.addEventListener('close-modal', (e) => { if (e.detail?.id) window.closeModal(e.detail.id); else document.querySelectorAll('dialog[open]').forEach((d) => d.close()); });
   document.addEventListener('htmx:afterSettle', (e) => { flushFlash(e.detail.elt); });
 
+  // Random server name (`hint_random`): one of the names the page was rendered with.
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-random-name]');
+    if (!b) return;
+    let names = [];
+    try { names = JSON.parse(b.dataset.randomName || '[]'); } catch (_) { /* ignore */ }
+    const input = document.getElementById(b.dataset.target);
+    if (input && names.length) { input.value = names[Math.floor(Math.random() * names.length)]; input.dispatchEvent(new Event('input', { bubbles: true })); }
+  });
+
   // ----- admin global search (charrafimed/global-search-modal) -----
   // Recent results live in this browser (the plugin's search history); arrows move between the
   // input and the results, Enter in the input opens the first one.

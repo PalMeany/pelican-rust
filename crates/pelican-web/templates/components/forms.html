@@ -2,15 +2,19 @@
 
 {% macro error(errors, name) %}{% if errors[name] %}<p class="error" id="{{ name }}-error">{{ errors[name] }}</p>{% endif %}{% endmacro %}
 
-{% macro text(name, label, value='', errors={}, type='text', required=false, autofocus=false, hint='', placeholder='', disabled=false, attrs='', prefix='', suffix='', autocomplete='') %}
+{# prefix_icon/suffix_icon: Filament's prefixIcon()/suffixIcon(); copy: copyable() (a copy button after the
+   input); actions: raw HTML of suffix action buttons. #}
+{% macro text(name, label, value='', errors={}, type='text', required=false, autofocus=false, hint='', placeholder='', disabled=false, attrs='', prefix='', suffix='', autocomplete='', prefix_icon='', suffix_icon='', copy=false, actions='') %}
+{% set grouped = prefix or suffix or prefix_icon or suffix_icon or copy or actions %}
 <div class="field{% if errors[name] %} has-error{% endif %}">
   {% if label %}<label for="f-{{ name }}">{{ label }}{% if required %}<span class="req">*</span>{% endif %}</label>{% endif %}
-  {% if prefix or suffix %}<div class="input-group">{% if prefix %}<span class="addon">{{ prefix }}</span>{% endif %}{% endif %}
+  {% if grouped %}<div class="input-group">{% if prefix_icon %}<span class="addon addon-icon">{{ icon(prefix_icon, 'icon') }}</span>{% endif %}{% if prefix %}<span class="addon">{{ prefix }}</span>{% endif %}{% endif %}
   <input class="input" id="f-{{ name }}" name="{{ name }}" type="{{ type }}" value="{{ value if value is not none else '' }}"
     {%- if required %} required{% endif %}{% if autofocus %} autofocus{% endif %}{% if disabled %} disabled{% endif %}
     {%- if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}
     {%- if errors[name] %} aria-invalid="true" aria-describedby="{{ name }}-error"{% endif %} {{ attrs | safe }}>
-  {% if prefix or suffix %}{% if suffix %}<span class="addon">{{ suffix }}</span>{% endif %}</div>{% endif %}
+  {% if grouped %}{% if suffix %}<span class="addon">{{ suffix }}</span>{% endif %}{% if suffix_icon %}<span class="addon addon-icon">{{ icon(suffix_icon, 'icon') }}</span>{% endif %}
+  {%- if actions or copy %}<span class="addon addon-actions">{{ actions | safe }}{% if copy %}<button type="button" class="icon-btn" data-copy="{{ value if value is not none else '' }}" title="{{ trans('filament-forms::components.text_input.actions.copy.label') }}" aria-label="{{ trans('filament-forms::components.text_input.actions.copy.label') }}">{{ icon('copy', 'icon-sm') }}</button>{% endif %}</span>{% endif %}</div>{% endif %}
   {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
   {{ error(errors, name) }}
 </div>
@@ -38,9 +42,10 @@
 {% endmacro %}
 
 {# options: list of [value, label] pairs #}
-{% macro select(name, label, options, value='', errors={}, required=false, hint='', placeholder=none, multiple=false, disabled=false, attrs='') %}
+{% macro select(name, label, options, value='', errors={}, required=false, hint='', placeholder=none, multiple=false, disabled=false, attrs='', prefix_icon='') %}
 <div class="field{% if errors[name] %} has-error{% endif %}">
   {% if label %}<label for="f-{{ name }}">{{ label }}{% if required %}<span class="req">*</span>{% endif %}</label>{% endif %}
+  {% if prefix_icon %}<div class="input-group"><span class="addon addon-icon">{{ icon(prefix_icon, 'icon') }}</span>{% endif %}
   <select class="select" id="f-{{ name }}" name="{{ name }}{% if multiple %}[]{% endif %}"{% if multiple %} multiple{% endif %}{% if required %} required{% endif %}{% if disabled %} disabled{% endif %} {{ attrs | safe }}>
     {% if placeholder is not none %}<option value="">{{ placeholder }}</option>{% endif %}
     {% for opt in options %}
@@ -48,6 +53,7 @@
     <option value="{{ v }}"{% if (multiple and v in (value | map('string') | list)) or (not multiple and v == (value | string)) %} selected{% endif %}>{{ opt[1] }}</option>
     {% endfor %}
   </select>
+  {% if prefix_icon %}</div>{% endif %}
   {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
   {{ error(errors, name) }}
 </div>

@@ -270,6 +270,19 @@ details.nav-group:not([open]) .nav-group-chevron { transform: rotate(180deg); }
   color: var(--text-2); font-size: 0.875rem; white-space: nowrap; }
 .input-group .addon:first-child { border-right: 0; border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
 .input-group .addon:last-child { border-left: 0; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+/* prefixIcon()/suffixIcon()/suffix actions: inside the field's frame, on the input's background. */
+.input-group .addon-icon, .input-group .addon-actions { background: var(--input-bg); color: var(--text-3); }
+.input-group .addon-icon { padding: 0 0.625rem; }
+.input-group .addon-actions { gap: 0.25rem; padding: 0 0.25rem; }
+.input-group .addon-actions .icon-btn { width: 2rem; height: 2rem; color: var(--text-3); }
+.input-group .addon-actions .icon-btn:hover { color: var(--text-2); }
+.input-group .select { border-radius: 0; flex: 1; min-width: 0; }
+.input-group .select:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+/* A read-only ToggleButtons state (the server condition): a solid button in its colour. */
+.state-btn { display: inline-flex; align-items: center; gap: 0.375rem; align-self: flex-start; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+  font-size: 0.875rem; font-weight: 600; color: #fff; background: var(--gray-600); }
+.state-btn.danger { background: var(--danger-600); } .state-btn.warning { background: var(--warning-600); }
+.state-btn.success { background: var(--success-600); } .state-btn.info { background: var(--info-600); } .state-btn.primary { background: var(--primary-600); }
 .check { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; cursor: pointer; }
 .check input[type=checkbox], .check input[type=radio] { width: 1rem; height: 1rem; accent-color: var(--primary-600); margin: 0; }
 .toggle { position: relative; display: inline-flex; align-items: center; gap: 0.75rem; cursor: pointer; font-size: 0.875rem; }

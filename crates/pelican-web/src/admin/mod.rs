@@ -127,6 +127,36 @@ pub async fn plugin_relations(
     }
 }
 
+/// A plugin relation manager's tab on an edit page (`data-rs-relation` of the bridge's
+/// relations page): it comes first among the record's relation tabs, as in the original.
+#[derive(serde::Deserialize, Serialize)]
+pub struct PluginRelationTab {
+    title: String,
+    icon: Option<String>,
+    badge: Option<serde_json::Value>,
+    badge_color: Option<String>,
+}
+
+pub fn plugin_relation_tabs(main: &str) -> Vec<PluginRelationTab> {
+    use base64::Engine;
+    const ATTR: &str = "data-rs-relation=\"";
+    let mut out = Vec::new();
+    let mut rest = main;
+    while let Some(i) = rest.find(ATTR) {
+        rest = &rest[i + ATTR.len()..];
+        let Some(end) = rest.find('"') else { break };
+        if let Some(tab) = base64::engine::general_purpose::STANDARD
+            .decode(&rest[..end])
+            .ok()
+            .and_then(|b| serde_json::from_slice::<PluginRelationTab>(&b).ok())
+        {
+            out.push(tab);
+        }
+        rest = &rest[end..];
+    }
+    out
+}
+
 /// `ApiKeyResource::getNavigationBadge()`: application keys, hidden at zero.
 async fn application_key_count(st: &AppState) -> Option<String> {
     let b = st.db.get_database_backend();
