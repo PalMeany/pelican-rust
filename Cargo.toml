@@ -31,3 +31,8 @@ debug = 0
 [profile.test]
 debug = 0
 incremental = false
+
+# The shipped binary: whole-program optimization (bench/README.md measures it).
+[profile.release]
+lto = "thin"
+codegen-units = 1

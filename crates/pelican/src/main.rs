@@ -13,6 +13,10 @@ use clap::{Parser, Subcommand};
 use pelican_core::config::Config;
 use pelican_core::env::Env;
 
+/// mimalloc: the request path allocates a lot of small JSON values and rows.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
