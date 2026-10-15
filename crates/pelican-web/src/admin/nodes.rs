@@ -454,6 +454,13 @@ async fn render(
     let mut extra = context! {};
     if let Some(n) = node {
         let info = server_info::node_system_information(st, n).await;
+        // `"{version} " . trans('admin/node.latest', ['version' => latestWingsVersion()])`.
+        let latest = pelican_api::versions::latest_wings_version(st).await.unwrap_or_else(|| t("admin/node.unknown"));
+        let wings_version = format!(
+            "{} {}",
+            info.get("version").and_then(Value::as_str).map(String::from).unwrap_or_else(|| t("admin/node.unknown")),
+            admin.t_with("admin/node.latest", &[("version", &latest)])
+        );
         let config = configuration(admin, n, readonly).await?;
         let yaml = egg_format::yaml::dump_empty_as_sequence(&config, 4);
         let allocs = allocations::Entity::find()
@@ -476,7 +483,7 @@ async fn render(
                 has_servers => !node_servers.is_empty(),
             },
             info => context! {
-                version => info.get("version").and_then(Value::as_str).map(String::from).unwrap_or_else(|| t("admin/node.unknown")),
+                version => wings_version,
                 cpu_count => info.get("cpu_count").and_then(Value::as_i64).unwrap_or(0),
                 architecture => info.get("architecture").and_then(Value::as_str).map(String::from).unwrap_or_else(|| t("admin/node.unknown")),
                 kernel => info.get("kernel_version").and_then(Value::as_str).map(String::from).unwrap_or_else(|| t("admin/node.unknown")),

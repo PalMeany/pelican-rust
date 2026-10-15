@@ -43,6 +43,9 @@
 </details>
 {% endif %}
 {% endset %}
+{% set global_search_trigger %}
+{% if global_search %}<button type="button" class="gs-trigger" data-modal-open="global-search" aria-label="{{ trans('filament-panels::global-search.field.label') }}">{{ icon('search', 'icon-sm') }}<span>{{ trans('filament-panels::global-search.field.placeholder') }}</span></button>{% endif %}
+{% endset %}
 {% set mode = nav_mode or 'sidebar' %}
 {% set sidebar_only = nav and user and mode == 'sidebar' %}
 {% set top_nav = nav and user and mode == 'topbar' %}
@@ -53,6 +56,7 @@
       <a class="brand" href="{{ home_url or '/' }}">{% if app_logo %}<img src="{{ app_logo }}" alt="{{ trans('filament-panels::layout.logo.alt', name=app_name) }}">{% else %}{{ app_name }}{% endif %}</a>
       <button type="button" class="icon-btn sidebar-close" data-nav-toggle aria-label="{{ trans('filament-panels::layout.actions.sidebar.collapse.label') }}">{{ icon('x') }}</button>
     </div>
+    {% if global_search and sidebar_only %}<div class="sidebar-search">{{ global_search_trigger }}</div>{% endif %}
     {{ tenant_menu }}
     <nav>
       {% for group in nav %}
@@ -116,6 +120,7 @@
       {% block topbar %}{% endblock %}
       <div class="spacer"></div>
       {% if user %}
+      {% if global_search %}{{ global_search_trigger }}{% endif %}
       {{ notifications_trigger }}
       <details class="dropdown">
         <summary aria-label="{{ trans('filament-panels::layout.actions.open_user_menu.label') }}">{{ avatar }}</summary>
@@ -136,6 +141,22 @@
     </main>
   </div>
 </div>
+{% if global_search %}
+{# The admin panel's global search modal (charrafimed/global-search-modal). #}
+<dialog id="global-search" class="modal gs-modal" aria-label="{{ trans('filament-panels::global-search.field.label') }}">
+  <div class="gs-input-row">
+    {{ icon('search', 'icon') }}
+    <input id="gs-input" type="search" name="q" placeholder="Search for anything ..." autocomplete="off" spellcheck="false" autofocus
+      hx-get="/admin/global-search" hx-trigger="input changed delay:300ms, search" hx-target="#gs-results" hx-swap="innerHTML" hx-sync="this:replace">
+  </div>
+  <div id="gs-results" class="gs-results"><p class="gs-empty" data-gs-empty>Please enter a search term to get started.</p></div>
+  <ul class="gs-footer">
+    <li><kbd><svg width="15" height="15" aria-label="Enter key" role="img"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2"><path d="M12 3.53088v3c0 1-1 2-2 2H4M7 11.53088l-3-3 3-3"></path></g></svg></kbd><span>to select</span></li>
+    <li><kbd><svg width="15" height="15" aria-label="Arrow down" role="img"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2"><path d="M7.5 3.5v8M10.5 8.5l-3 3-3-3"></path></g></svg></kbd><kbd><svg width="15" height="15" aria-label="Arrow up" role="img"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2"><path d="M7.5 11.5v-8M10.5 6.5l-3-3-3 3"></path></g></svg></kbd><span>to navigate</span></li>
+    <li><kbd>esc</kbd><span>to close</span></li>
+  </ul>
+</dialog>
+{% endif %}
 {% if user %}
 <dialog id="notifications" class="modal slide-over" aria-labelledby="notifications-heading">
   <div id="notifications-panel" class="notifications-panel"></div>

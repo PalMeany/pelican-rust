@@ -64,11 +64,13 @@ pub async fn serve(state: AppState, listener: tokio::net::TcpListener) -> Result
 /// Background tasks (scheduler, `.env` reloader) and the panel router for a booted state.
 fn start_panel(state: AppState) -> axum::Router {
     let live = Live::new(state.clone());
+    // PELICAN_SCHEDULER=false (the differential tests) also stops the node checks: background
+    // Wings calls would land in the recorded steps.
     if state.config.env.bool_or("PELICAN_SCHEDULER", true) {
         pelican_api::jobs::spawn_scheduler(live.clone());
+        pelican_web::server_info::spawn_node_warmer(state.clone());
     }
     spawn_reloader(live.clone());
-    pelican_web::server_info::spawn_node_warmer(state.clone());
     plugins::start(&live);
     app(live)
 }

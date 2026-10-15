@@ -13,7 +13,7 @@ Laravel с задержкой `time_offset`; ручной запуск (`/execut
 выполняет следующую задачу inline с семантикой `SyncQueue` (перечитывание задачи из БД как
 `SerializesModels`, `failed()` и проброс ошибки); любое другое значение — `tokio::spawn` с задержкой,
 при ошибке `failed()` + лог (ADR-0009: без таблиц `jobs`/`failed_jobs`). Минутный тикер
-`spawn_scheduler` запускается внутри `pelican serve` (выключается `PELICAN_SCHEDULER=false`);
+`spawn_scheduler` запускается внутри `pelican serve` (выключается `PELICAN_SCHEDULER=false`, вместе с фоновой проверкой нод);
 `pelican schedule:process` — разовый запуск.
 
 **Последствия.** Отложенные задачи живут в памяти процесса: при рестарте во время цепочки задача

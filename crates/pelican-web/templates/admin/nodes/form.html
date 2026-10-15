@@ -22,19 +22,19 @@
 {% if not creating %}
 <section class="stack" data-tab-panel="overview"{% if tab != 'overview' %} hidden{% endif %}>
   <fieldset class="fieldset"><legend>{{ trans(N ~ '.node_info') }}</legend>
-    <dl class="kv" style="grid-template-columns: repeat(4, max-content 1fr)">
-      <dt>{{ trans(N ~ '.wings_version') }}</dt><dd>{{ info.version }}</dd>
-      <dt>{{ trans(N ~ '.cpu_threads') }}</dt><dd>{{ info.cpu_count }}</dd>
-      <dt>{{ trans(N ~ '.architecture') }}</dt><dd>{{ info.architecture }}</dd>
-      <dt>{{ trans(N ~ '.kernel') }}</dt><dd>{{ info.kernel }}</dd>
-    </dl>
+    <div class="entries entries-4">
+      <div><span class="entry-label">{{ trans(N ~ '.wings_version') }}</span><span>{{ info.version }}</span></div>
+      <div><span class="entry-label">{{ trans(N ~ '.cpu_threads') }}</span><span>{{ info.cpu_count }}</span></div>
+      <div><span class="entry-label">{{ trans(N ~ '.architecture') }}</span><span>{{ info.architecture }}</span></div>
+      <div><span class="entry-label">{{ trans(N ~ '.kernel') }}</span><span>{{ info.kernel }}</span></div>
+    </div>
   </fieldset>
-  <div class="grid grid-2" id="node-charts" data-stats="/admin/nodes/{{ node.id }}/stats" data-cpu-count="{{ info.cpu_count }}">
-    <div class="card"><div class="card-head"><h3 data-heading="cpu">{{ trans(N ~ '.cpu') }}</h3></div><div class="card-body"><canvas class="chart" id="node-cpu" height="120"></canvas></div></div>
-    <div class="card"><div class="card-head"><h3 data-heading="memory">{{ trans(N ~ '.memory') }}</h3></div><div class="card-body"><canvas class="chart" id="node-memory" height="120"></canvas></div></div>
-    <div class="card span-full"><div class="card-head"><h3 data-heading="disk">{{ trans(N ~ '.disk') }}</h3></div><div class="card-body"><div class="progress" style="height:1rem"><span id="node-disk" style="width:0%"></span></div></div></div>
+  <div class="grid grid-2" id="node-charts" data-stats="/admin/nodes/{{ node.id }}/stats" data-cpu-count="{{ info.cpu_count }}" data-binary="{{ 1 if binary else 0 }}" data-locale="{{ locale }}">
+    <div class="card"><div class="card-head"><h3 data-heading="cpu">{{ trans(N ~ '.cpu') }}</h3></div><div class="card-body"><canvas class="chart" id="node-cpu" style="height:15rem"></canvas></div></div>
+    <div class="card"><div class="card-head"><h3 data-heading="memory">{{ trans(N ~ '.memory') }}</h3></div><div class="card-body"><canvas class="chart" id="node-memory" style="height:15rem"></canvas></div></div>
+    <div class="card span-full"><div class="card-head"><h3 data-heading="disk">{{ trans(N ~ '.disk') }}</h3></div><div class="card-body"><canvas class="chart" id="node-disk" style="height:20rem"></canvas></div></div>
   </div>
-  <script type="application/json" id="node-strings">{{ { "cpu": trans(N ~ '.cpu_chart'), "memory": trans(N ~ '.memory_chart'), "disk": trans(N ~ '.disk_chart') } | tojson }}</script>
+  <script type="application/json" id="node-strings">{{ { "cpu": trans(N ~ '.cpu_chart'), "memory": trans(N ~ '.memory_chart'), "disk": trans(N ~ '.disk_chart'), "used": trans(N ~ '.used'), "unused": trans(N ~ '.unused') } | tojson }}</script>
 </section>
 {% endif %}
 

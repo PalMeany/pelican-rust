@@ -125,6 +125,54 @@
   document.addEventListener('close-modal', (e) => { if (e.detail?.id) window.closeModal(e.detail.id); else document.querySelectorAll('dialog[open]').forEach((d) => d.close()); });
   document.addEventListener('htmx:afterSettle', (e) => { flushFlash(e.detail.elt); });
 
+  // ----- admin global search (charrafimed/global-search-modal) -----
+  // Recent results live in this browser (the plugin's search history); arrows move between the
+  // input and the results, Enter in the input opens the first one.
+  const GS_KEY = 'global-search-history';
+  const gsHistory = () => { try { return JSON.parse(localStorage.getItem(GS_KEY) || '[]'); } catch (_) { return []; } };
+  const gsSave = (list) => { try { localStorage.setItem(GS_KEY, JSON.stringify(list.slice(0, 10))); } catch (_) { /* ignore */ } };
+  function gsRecent() {
+    const box = document.getElementById('gs-results');
+    if (!box || !box.querySelector('[data-gs-empty]')) return;
+    const list = gsHistory();
+    if (!list.length) return;
+    const ul = document.createElement('ul'); ul.className = 'gs-groups';
+    const li = document.createElement('li'); const h = document.createElement('h3'); h.className = 'gs-group'; h.textContent = 'recent'; li.appendChild(h);
+    const items = document.createElement('ul');
+    list.forEach((r, i) => {
+      const it = document.createElement('li'); it.className = 'gs-item'; it.setAttribute('role', 'option');
+      const a = document.createElement('a'); a.href = r.url; a.dataset.gsResult = ''; a.dataset.gsGroup = r.group;
+      const t = document.createElement('h4'); t.textContent = r.title; a.appendChild(t);
+      const x = document.createElement('button'); x.type = 'button'; x.className = 'icon-btn gs-remove'; x.setAttribute('aria-label', 'delete'); x.textContent = '×';
+      x.addEventListener('click', (e) => { e.preventDefault(); const l = gsHistory(); l.splice(i, 1); gsSave(l); box.innerHTML = '<p class="gs-empty" data-gs-empty>' + (box.dataset.empty || '') + '</p>'; gsRecent(); });
+      it.append(a, x); items.appendChild(it);
+    });
+    li.appendChild(items); ul.appendChild(li);
+    box.dataset.empty = box.querySelector('[data-gs-empty]').textContent;
+    box.replaceChildren(ul);
+  }
+  document.addEventListener('click', (e) => {
+    const r = e.target.closest('#global-search [data-gs-result]');
+    if (r) {
+      const entry = { title: r.textContent.trim(), group: r.dataset.gsGroup || '', url: r.getAttribute('href') };
+      gsSave([entry, ...gsHistory().filter((x) => x.url !== entry.url)]);
+      return;
+    }
+    if (e.target.id === 'global-search') e.target.close(); // backdrop
+    if (e.target.closest('[data-modal-open="global-search"]')) setTimeout(gsRecent);
+  });
+  document.addEventListener('htmx:afterSwap', (e) => { if (e.detail.target?.id === 'gs-results') gsRecent(); });
+  document.addEventListener('keydown', (e) => {
+    const d = document.getElementById('global-search');
+    if (!d || !d.open) return;
+    const input = document.getElementById('gs-input');
+    const links = [...d.querySelectorAll('[data-gs-result]')];
+    const i = links.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); (links[i + 1] || links[0])?.focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (i <= 0) input?.focus(); else links[i - 1].focus(); }
+    else if (e.key === 'Enter' && document.activeElement === input && links[0]) { e.preventDefault(); links[0].click(); }
+  });
+
   // ----- clicks -----
   document.addEventListener('click', (e) => {
     const open = e.target.closest('[data-modal-open]');

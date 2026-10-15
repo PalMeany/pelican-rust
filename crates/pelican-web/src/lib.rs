@@ -55,6 +55,7 @@ async fn security_headers(req: axum::extract::Request, next: axum::middleware::N
 /// Everything outside `/api/*`.
 pub fn router(state: AppState) -> Router {
     views::init(state.config.env.string("PELICAN_VIEWS_PATH").map(Into::into));
+    error::set_brand(&state.config.app_name);
     let pages = Router::new()
         .route("/login", get(auth::show).post(auth::login))
         .route("/login/challenge", post(auth::challenge))

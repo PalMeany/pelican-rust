@@ -1,0 +1,19 @@
+{# Results of the admin global search (charrafimed/global-search-modal: search/results.blade.php). #}
+{% if not searched %}
+<p class="gs-empty" data-gs-empty>Please enter a search term to get started.</p>
+{% elif not groups %}
+<p class="gs-none">{{ trans('filament-panels::global-search.no_results_message') }}</p>
+{% else %}
+<ul class="gs-groups">
+  {% for g in groups %}
+  <li>
+    <h3 class="gs-group">{{ g.label }}</h3>
+    <ul>
+      {% for r in g.results %}
+      <li class="gs-item" role="option"><a href="{{ r.url }}" data-gs-result data-gs-group="{{ g.label }}"><h4>{{ r.title }}</h4></a></li>
+      {% endfor %}
+    </ul>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}

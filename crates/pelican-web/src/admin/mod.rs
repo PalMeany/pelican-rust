@@ -12,6 +12,7 @@ mod mounts;
 mod nodes;
 mod plugins;
 mod roles;
+mod search;
 mod server_relations;
 mod server_transfer;
 mod servers;
@@ -46,6 +47,7 @@ pub fn routes() -> Router<AppState> {
         .merge(nodes::routes())
         .merge(plugins::routes())
         .merge(roles::routes())
+        .merge(search::routes())
         .merge(servers_create::routes())
         .merge(servers::routes())
         .merge(settings::routes())
@@ -405,7 +407,10 @@ impl Admin {
         let user_menu = vec![context! { label => self.t("profile.exit_admin"), url => "/", icon => "arrow-back" }];
         self.render(
             template,
-            context! { ..ctx, ..context! { nav => Value::from_serialize(&nav), user_menu => user_menu, home_url => "/admin" } },
+            context! {
+                ..ctx,
+                ..context! { nav => Value::from_serialize(&nav), user_menu => user_menu, home_url => "/admin", global_search => true }
+            },
         )
     }
 }

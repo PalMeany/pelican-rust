@@ -1,19 +1,28 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ locale }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ title }}</title>
+<title>{% if panel %}{{ app_name }}{% else %}{{ title }}{% endif %}</title>
 <link rel="stylesheet" href="{{ asset('css/app.css') }}">
 <script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
+{% if panel %}
+{# resources/views/errors/layout.blade.php: Filament's simple layout with the code, title and subtitle. #}
 <main class="simple">
-  <div class="empty">
-    <h1 style="font-size:3rem;font-weight:700;letter-spacing:-0.04em">{{ code }}</h1>
-    <p class="muted" style="font-size:1.125rem">{{ title }}</p>
-    <a class="btn btn-gray mt-4" href="/">{{ icon('arrow-left', 'icon-sm') }} Home</a>
+  <div class="simple-card error-card">
+    <h1>{{ icon(icon_name, 'icon-lg') }}{{ code }} | {{ title }}</h1>
+    {% if subtitle %}<p class="sub">{{ subtitle }}</p>{% endif %}
   </div>
+  {% include "components/footer.html" %}
 </main>
+{% else %}
+{# Laravel's errors::minimal. #}
+<main class="error-minimal">
+  <div class="code">{{ code }}</div>
+  <div class="message">{{ title }}</div>
+</main>
+{% endif %}
 </body>
 </html>
