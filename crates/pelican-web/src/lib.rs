@@ -2,6 +2,7 @@
 //! with htmx, sharing the domain services of the APIs.
 
 pub mod activity;
+pub mod api_docs;
 pub mod assets;
 mod auth;
 pub mod cache;
@@ -65,6 +66,7 @@ pub fn router(state: AppState) -> Router {
         .route("/password-reset/reset", get(auth::password_reset::reset_form).post(auth::password_reset::reset))
         .route("/installer/complete", get(installer_complete))
         .merge(auth::passkeys::routes())
+        .merge(api_docs::routes())
         .merge(plugin_pages::routes())
         .merge(app::routes())
         .merge(admin::routes())

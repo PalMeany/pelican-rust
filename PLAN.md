@@ -179,11 +179,12 @@ Application API → UI → плагины → PHP-sidecar.
    - [ ] Полный диф-тест m8 на 4 СУБД → слияние m8 в main, push
    - [ ] Включить пропущенные smoke-сценарии (`smoke/client-unauthenticated`, `smoke/application-unauthenticated`)
 2. Функциональный паритет
-   - [ ] CLI как `php artisan p:*`: user (make/delete/disable2fa), node (make/list/configuration), environment
+   - [~] CLI как `php artisan p:*` (каркас + p:user:* готовы; node/server/info, environment, egg/maintenance/plugin — воркеры): user (make/delete/disable2fa), node (make/list/configuration), environment
          (setup/database/mail/cache/session/queue/queue-service), redis:setup, info, server:bulk-power,
          egg (check-updates/update-index/normalize), maintenance (clean-service-backups/prune-backups/prune-images),
          plugin (list/install/update/uninstall/disable/composer/make), schedule:process; имена и опции как в оригинале
-   - [ ] Документация API `/docs/api` (Scramble): индекс, UI и JSON-спецификации application/client
+   - [x] Документация API `/docs/api` (Scramble): индекс, UI (Stoplight Elements) и JSON-спецификации application/client —
+         документы оригинала (`scripts/api-docs/export.sh`), сервер = APP_URL; гостям 403 как в оригинале
 3. Готовность к продакшену, скорость и нагрузка
    - [ ] Упаковка: release-сборка, Docker-образ, systemd-юнит, руководство по переезду с PHP и откату, CI (сборка + тесты)
    - [ ] Нагрузочный стенд `bench/`: одинаковые данные (тысячи пользователей/серверов, сотни тысяч записей активности)
