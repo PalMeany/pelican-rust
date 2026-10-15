@@ -161,7 +161,13 @@ impl TestDb {
 
     /// [`TestDb::load`] for large row sets: multi-row INSERTs of up to `chunk` rows with the
     /// same columns (load-test data, `bench/`).
-    pub async fn load_bulk(&self, rows: &Rows, enc: &Encrypter, now: chrono::NaiveDateTime, chunk: usize) -> Result<()> {
+    pub async fn load_bulk(
+        &self,
+        rows: &Rows,
+        enc: &Encrypter,
+        now: chrono::NaiveDateTime,
+        chunk: usize,
+    ) -> Result<()> {
         let txn = self.db.begin().await?;
         if self.backend == DbBackend::MySql {
             txn.execute_unprepared("SET FOREIGN_KEY_CHECKS=0").await?;
