@@ -72,6 +72,10 @@
   Dev-панель теперь `pelican-m7-dev` (тот же порт и данные).
 
 - 2026-10-15 (день): прод пользователя `panel.nuvira.su` переведён на pelican-rs (PLAN.md, «Переезд прода»).
+- 2026-10-15 (вечер): вид как у оригинала (темы плагинов, режим topbar, глобальный поиск, страницы ошибок, вкладки
+  и мастера Filament, ToggleButtons, KeyValue, иконки полей, загрузка иконок сервера/яйца, сворачивание меню,
+  графики Chart.js) и скорость (кэш виджетов дашборда, OPcache 512 МБ на проде, кэши `filament:optimize` в sidecar).
+  Полный диф-тест 316/316; `main` = `prod`. Всё выложено на прод.
 
 ## Где остановился / что дальше
 - Репозиторий: https://github.com/PalMeany/pelican-rust (публичный, AGPL-3.0-only как оригинал; автор коммитов —
@@ -94,6 +98,9 @@
   тестовом сервере), `pelican.service`, sidecar `/var/www/pelican-sidecar` (Caddy 127.0.0.1:8090), скрипты и откат —
   `/root/pelican-rs-deploy/deploy.sh`, бэкап — `/root/pelican-backup-20261015`. Обновление: собрать, скопировать бинарник,
   `systemctl restart pelican`. Копия прода для проверок — `/opt/pelican-rs-bench/shadow` на тестовом сервере (`compare.py`).
+  Пока на тестовом сервере идёт диф-тест (он собирает `/opt/pelican-rs-bench/pelican-rs`), dev-сборки для копии —
+  из отдельной копии исходников `pelican-rs-ui` (`shadow/build-ui.sh`, свой target-том). На проде добавлен
+  `/etc/php/8.5/fpm/conf.d/99-pelican-opcache.ini` (OPcache 512 МБ).
 
 ## Диск (просьба пользователя)
 На хосте мало места (~15–30 ГБ свободно). Сборки живут в docker-томах VM (`pelican-rs-target*`).
