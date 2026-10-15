@@ -15,7 +15,9 @@ pelican-rs не использует PHP-форматы сессий/очере�
   запускает и контролирует его (`PANEL_PHP_SIDECAR=<путь|url>`) только если есть включённые PHP-плагины;
   слушает только loopback/unix-сокет. Версия сверяется при старте (`config('app.version')` ↔ наша
   эмулируемая); при расхождении PHP-плагины получают статус `errored`.
-- **Мост** — маленький Composer-пакет `pelican-rs/sidecar-bridge`, ставится в sidecar:
+- **Мост** — плагин Pelican `pelican-rs-bridge` (папка в `plugins/` sidecar; оригинал не меняется, в списке
+  плагинов pelican-rs скрыт). Его service provider регистрирует служебные маршруты, а Filament-плагин во всех
+  панелях добавляет persistent-middleware (до `Authenticate`, действует и на `/livewire/update`):
   - `GET /_bridge/manifest`: что зарегистрировали PHP-плагины — маршруты (по namespace плагина),
     страницы/ресурсы Filament по панелям со slug'ами и навигацией, реестры (типы задач, features,
     провайдеры аватаров, права ролей/сабюзеров, ресурсы API-ключей).
