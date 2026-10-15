@@ -306,6 +306,9 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
     // The response reflects the stored row (the encrypted password is never exposed).
     let host = database_hosts::Entity::find_by_id(id).one(&txn).await?.ok_or_else(ApiError::model_not_found)?;
     txn.commit().await?;
+    // HostCreationService: DatabaseHost::create() (eloquent.created); pivot
+    // database_host_node attach/detach fires nothing.
+    crate::model_events::created(&st, &host).await;
     let body = with_meta(
         database_host_item(&st, &ctx, &host, &Includes::parse(&input)).await?,
         resource_meta(&st, &format!("database-hosts/{}", id.0)),
@@ -372,6 +375,10 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
     }
     test_connection(&st, &probe_model(&m, &st, pw_new.as_deref())).await?;
     txn.commit().await?;
+    if dirty {
+        // HostUpdateService: $host->save() only when isDirty (eloquent.updated)
+        crate::model_events::updated(&st, &m).await;
+    }
     Ok(PhpJson::ok(database_host_item(&st, &ctx, &m, &Includes::parse(&input)).await?).into_response())
 }
 
@@ -380,5 +387,7 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
     ctx.acl("database_host", WRITE)?;
     let h = bound_host(&ctx)?;
     database_hosts::Entity::delete_by_id(h.id).exec(&st.db).await?;
+    // $host->delete() (eloquent.deleted, attributes as before the delete)
+    crate::model_events::deleted(&st, &h).await;
     Ok(no_content())
 }

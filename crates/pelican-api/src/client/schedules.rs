@@ -17,6 +17,7 @@ use crate::error::{ApiError, ApiResult, Style};
 use crate::input::{In, Input, php_boolean};
 use crate::jobs::{next_run_date, touch_schedule};
 use crate::json::{PhpJson, no_content};
+use crate::model_events::{self, Action};
 use crate::pipeline::Ctx;
 use crate::resources::{atom, format_timestamp};
 use crate::services::LogActivity;
@@ -166,6 +167,8 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         ..Default::default()
     };
     let created = pelican_db::write::insert(&st.db, am).await?;
+    // ScheduleController::store: Schedule::query()->create([...]).
+    model_events::created(&st, &created).await;
     ctx.activity("server:schedule.create")
         .subject(morph::SCHEDULE, created.id.0)
         .property("name", created.name.clone())
@@ -225,6 +228,8 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
     if dirty {
         am.updated_at = Set(Some(Timestamp(pelican_core::time::now())));
         pelican_db::write::update(&st.db, &am).await?;
+        // ScheduleController::update: $schedule->update($data).
+        model_events::fire_id::<schedules::Entity>(&st, Action::Updated, s.id.0).await;
     }
     let mut props = Map::new();
     props.insert("name".into(), json!(input_str(&input, "name")));
@@ -256,7 +261,13 @@ pub async fn execute(State(st): State<AppState>, Extension(ctx): Extension<Ctx>)
 pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) -> ApiResult<Response> {
     ctx.authorize(&st, "schedule.delete").await?;
     let s = schedule(&ctx)?;
+    // ScheduleController::delete: $schedule->delete(); the payload carries the tasks
+    // (`$with`), which the cascade removes, so it is built first.
+    let event = model_events::pending(&st, Action::Deleted, &s).await;
     schedules::Entity::delete_by_id(s.id).exec(&st.db).await?;
+    if let Some(ev) = event {
+        ev.send(&st).await;
+    }
     ctx.activity("server:schedule.delete")
         .subject(morph::SCHEDULE, s.id.0)
         .property("name", s.name.clone())
@@ -413,16 +424,8 @@ pub async fn task_store(
     touch_schedule(&txn, s.id.0).await?;
     txn.commit().await?;
 
-    let mut props = Map::new();
-    props.insert("name".into(), json!(s.name));
-    props.insert("action".into(), json!(action));
-    props.insert("payload".into(), json!(payload));
-    ctx.activity("server:task.create")
-        .subject(morph::SCHEDULE, s.id.0)
-        .subject(morph::TASK, id)
-        .properties(Value::Object(props))
-        .log(&st)
-        .await?;
+    // ScheduleTaskController::store: Task::query()->create([...]) inside the transaction,
+    // then Task::$touches fires a save of the parent schedule (updated_at only).
     let t = tasks::Model {
         id: Int(id),
         schedule_id: s.id,
@@ -435,6 +438,19 @@ pub async fn task_store(
         updated_at: Some(now),
         continue_on_failure: SmallBool(continue_on_failure),
     };
+    model_events::created(&st, &t).await;
+    model_events::fire_id::<schedules::Entity>(&st, Action::Updated, s.id.0).await;
+
+    let mut props = Map::new();
+    props.insert("name".into(), json!(s.name));
+    props.insert("action".into(), json!(t.action));
+    props.insert("payload".into(), json!(t.payload));
+    ctx.activity("server:task.create")
+        .subject(morph::SCHEDULE, s.id.0)
+        .subject(morph::TASK, id)
+        .properties(Value::Object(props))
+        .log(&st)
+        .await?;
     Ok(PhpJson::ok(task_item(&t)).into_response())
 }
 
@@ -495,6 +511,13 @@ pub async fn task_update(
     }
     txn.commit().await?;
 
+    // ScheduleTaskController::update: $task->update([...]) (only when dirty),
+    // then Task::$touches fires a save of the parent schedule.
+    if dirty {
+        model_events::fire_id::<tasks::Entity>(&st, Action::Updated, t.id.0).await;
+        model_events::fire_id::<schedules::Entity>(&st, Action::Updated, s.id.0).await;
+    }
+
     let mut props = Map::new();
     props.insert("name".into(), json!(s.name));
     props.insert("action".into(), json!(action));
@@ -522,9 +545,12 @@ pub async fn task_delete(State(st): State<AppState>, Extension(ctx): Extension<C
         ));
     }
     shift(&st.db, s.id.0, "-", "{sequence_id} > ?", vec![t.sequence_id.0]).await?;
-    // Model::delete() touches owners before deleting.
+    // Model::delete() touches owners before deleting (Task::$touches).
     touch_schedule(&st.db, s.id.0).await?;
+    model_events::fire_id::<schedules::Entity>(&st, Action::Updated, s.id.0).await;
     tasks::Entity::delete_by_id(t.id).exec(&st.db).await?;
+    // ScheduleTaskController::delete: $task->delete().
+    model_events::deleted(&st, &t).await;
     ctx.activity("server:task.delete")
         .subject(morph::SCHEDULE, s.id.0)
         .subject(morph::TASK, t.id.0)

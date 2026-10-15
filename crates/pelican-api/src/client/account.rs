@@ -18,6 +18,7 @@ use crate::envelope::{item, list, with_meta};
 use crate::error::{ApiError, ApiResult};
 use crate::input::In;
 use crate::json::{PhpJson, no_content};
+use crate::model_events::{self, Action};
 use crate::pipeline::Ctx;
 use crate::resources::{atom, user_data};
 use crate::services::LogActivity;
@@ -82,6 +83,8 @@ pub async fn update_username(
             .filter(users::Column::Id.eq(u.user.id))
             .exec(&st.db)
             .await?;
+        // UserUpdateService: $user->forceFill($data)->saveOrFail().
+        model_events::fire_id::<users::Entity>(&st, Action::Updated, u.user.id.0).await;
     }
     if original != raw_input {
         ctx.activity("user:account.username-changed")
@@ -128,6 +131,8 @@ pub async fn update_email(
                 .filter(users::Column::Id.eq(u.user.id))
                 .exec(&st.db)
                 .await?;
+            // UserUpdateService: $user->forceFill($data)->saveOrFail().
+            model_events::fire_id::<users::Entity>(&st, Action::Updated, u.user.id.0).await;
         }
         ctx.activity("user:account.email-changed")
             .property("old", original)
@@ -164,6 +169,8 @@ pub async fn update_password(
     revoke_sftp_access(&st, &txn, &u.user).await?;
     ctx.activity("user:account.password-changed").log_in(&st, &txn).await?;
     txn.commit().await?;
+    // UserUpdateService: $user->forceFill($data)->saveOrFail().
+    model_events::fire_id::<users::Entity>(&st, Action::Updated, u.user.id.0).await;
     Ok(no_content())
 }
 
@@ -275,6 +282,8 @@ pub async fn api_keys_store(
         ..Default::default()
     };
     let key = pelican_db::write::insert(&st.db, am).await?;
+    // HasAccessTokens::createToken: $this->tokens()->forceCreate([...]).
+    model_events::created(&st, &key).await;
     ctx.activity("user:api-key.create")
         .subject(morph::API_KEY, key.id.0)
         .property("identifier", identifier)
@@ -301,6 +310,8 @@ pub async fn api_keys_delete(
         .ok_or_else(ApiError::model_not_found)?;
     ctx.activity("user:api-key.delete").property("identifier", key.identifier.clone()).log(&st).await?;
     api_keys::Entity::delete_by_id(key.id).exec(&st.db).await?;
+    // ApiKeyController::delete: $key->delete().
+    model_events::deleted(&st, &key).await;
     Ok(no_content())
 }
 
@@ -381,6 +392,8 @@ pub async fn ssh_keys_store(
         ..Default::default()
     };
     let model = pelican_db::write::insert(&st.db, am).await?;
+    // SSHKeyController::store: $request->user()->sshKeys()->create([...]).
+    model_events::created(&st, &model).await;
     ctx.activity("user:ssh-key.create")
         .subject(morph::SSH_KEY, model.id.0)
         .property("fingerprint", fingerprint)
@@ -415,5 +428,7 @@ pub async fn ssh_keys_delete(
         .filter(user_ssh_keys::Column::Id.eq(key.id))
         .exec(&st.db)
         .await?;
+    // SSHKeyController::delete: $key->delete() (SoftDeletes — row already carries deleted_at).
+    model_events::fire_id::<user_ssh_keys::Entity>(&st, Action::Deleted, key.id.0).await;
     Ok(no_content())
 }

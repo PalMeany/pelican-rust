@@ -817,6 +817,9 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         },
     )
     .await?;
+    // WebhookController::store → WebhookConfiguration::create() (eloquent.created;
+    // also invalidates the watched-webhooks cache).
+    crate::model_events::created(&st, &wh).await;
     let body = with_meta(
         webhook_item(&st, &ctx, &wh, &Includes::parse(&input)).await?,
         resource_meta(&st, &format!("webhooks/{}", wh.id.0)),
@@ -966,6 +969,13 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
     if dirty {
         am.updated_at = Set(Some(Timestamp(pelican_core::time::now())));
         pelican_db::write::update(&st.db, &am).await?;
+        // $webhook->save() when isDirty (eloquent.updated)
+        crate::model_events::fire_id::<webhook_configurations::Entity>(
+            &st,
+            crate::model_events::Action::Updated,
+            rec.id.0,
+        )
+        .await;
     }
     let fresh =
         webhook_configurations::Entity::find_by_id(rec.id).one(&st.db).await?.ok_or_else(ApiError::model_not_found)?;
@@ -990,5 +1000,8 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
         },
     )
     .await?;
+    // SoftDeletes::runSoftDelete fires eloquent.deleted with deleted_at set.
+    crate::model_events::fire_id::<webhook_configurations::Entity>(&st, crate::model_events::Action::Deleted, wh.id.0)
+        .await;
     Ok(no_content())
 }

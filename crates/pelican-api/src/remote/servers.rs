@@ -227,6 +227,10 @@ pub async fn install_store(
         }
         q.col_expr(servers::Column::UpdatedAt, Expr::value(now)).exec(&st.db).await?;
     }
+    // ServerInstallController: $server->save() (instance op — fires updated only when dirty).
+    if status_dirty || installed_dirty {
+        crate::model_events::fire_id::<servers::Entity>(&st, crate::model_events::Action::Updated, server.id.0).await;
+    }
     crate::services::server_saved(&st, &ctx, &st.db, &server).await?;
     pelican_core::events::server_installed(&st.db, &server, successful, initial_install, &ctx.root).await?;
     crate::services::server_installed_mail(&st, &server, initial_install).await?;

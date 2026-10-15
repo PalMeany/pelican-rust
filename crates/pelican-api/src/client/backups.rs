@@ -19,6 +19,7 @@ use crate::envelope::{Pagination, item, list, with_meta};
 use crate::error::{ApiError, ApiResult, Style};
 use crate::input::{In, Input, parse_query, php_boolean};
 use crate::json::{PhpJson, no_content};
+use crate::model_events::{self, Action};
 use crate::pipeline::Ctx;
 use crate::resources::atom;
 use crate::services::LogActivity;
@@ -176,6 +177,8 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         .log_in(&st, &txn)
         .await?;
     txn.commit().await?;
+    // InitiateBackupService::handle(): Backup::create([...]).
+    model_events::created(&st, &backup).await;
     Ok(PhpJson::ok(backup_item(&backup)).into_response())
 }
 
@@ -388,6 +391,8 @@ pub async fn rename(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
             .filter(backups::Column::Id.eq(backup.id))
             .exec(&st.db)
             .await?;
+        // BackupController: $backup->update(['name' => $newName]).
+        model_events::updated(&st, &backup).await;
         backup.name = new_name.clone();
         backup.updated_at = Some(now);
         ctx.activity("server:backup.rename")
@@ -414,6 +419,8 @@ pub async fn lock(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) ->
         .await?;
     backup.is_locked = SmallBool(!backup.is_locked.0);
     backup.updated_at = Some(now);
+    // BackupController: $backup->update(['is_locked' => !$backup->is_locked]).
+    model_events::updated(&st, &backup).await;
     ctx.activity(event).subject(morph::BACKUP, backup.id.0).property("name", backup.name.clone()).log(&st).await?;
     Ok(PhpJson::ok(backup_item(&backup)).into_response())
 }
@@ -462,6 +469,12 @@ pub async fn restore(State(st): State<AppState>, Extension(ctx): Extension<Ctx>,
         .log_in(&st, &txn)
         .await?;
     txn.commit().await?;
+    // BackupController: $server->update(['status' => ServerState::RestoringBackup]).
+    {
+        // Relations loaded by AuthenticateServerAccess travel with the model.
+        let loaded = model_events::client_server_loaded(&st, &ctx, &server).await;
+        model_events::fire_id_with::<servers::Entity, _>(&st, &st.db, Action::Updated, server.id.0, loaded).await;
+    }
     Ok(no_content())
 }
 
@@ -485,6 +498,8 @@ pub async fn delete_backup(st: &AppState, server: &servers::Model, backup: &back
     let txn = st.db.begin().await?;
     delete_backup_in(st, &txn, server, backup).await?;
     txn.commit().await?;
+    // DeleteBackupService::handle(): $backup->delete() (panel-web callers share this wrapper).
+    model_events::deleted(st, backup).await;
     Ok(())
 }
 

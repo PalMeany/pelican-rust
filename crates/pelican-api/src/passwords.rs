@@ -143,5 +143,9 @@ pub async fn reset(
         .filter(password_resets::Column::Email.eq(user.email.clone()))
         .exec(&st.db)
         .await?;
+    // The framework reset closure: $user->forceFill(['password' => ..., 'remember_token'
+    // => ...])->save() — an instance save fires eloquent.updated: App\Models\User
+    // (PasswordResetListener then logs the activity; token-table writes fire nothing).
+    crate::model_events::fire_id::<users::Entity>(st, crate::model_events::Action::Updated, user.id.0).await;
     Ok((Status::Reset, Some(user)))
 }

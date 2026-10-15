@@ -20,6 +20,7 @@ use crate::envelope::list;
 use crate::error::{ApiError, ApiResult};
 use crate::input::In;
 use crate::json::{PhpJson, no_content};
+use crate::model_events::{self, Action};
 use crate::pipeline::Ctx;
 use crate::services::LogActivity;
 use crate::validation::Validator;
@@ -161,12 +162,14 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) -
     .all(&txn)
     .await?;
 
+    let mut newly_created = false;
     let chosen = match rand_pick(&cands) {
         Some(a) => a.clone(),
         None => {
             if !create_new {
                 return Err(no_space());
             }
+            newly_created = true;
             create_new_allocation(&txn, &server, &primary, start, end).await?
         }
     };
@@ -194,6 +197,13 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) -
         .log_in(&st, &txn)
         .await?;
     txn.commit().await?;
+    // FindAssignableAllocationService::handle: AssignmentService may have done
+    // Allocation::query()->create($newAllocation) (created), then always
+    // $allocation->update(['server_id' => ...]) (updated).
+    if newly_created {
+        model_events::fire_id::<allocations::Entity>(&st, Action::Created, chosen.id.0).await;
+    }
+    model_events::fire_id::<allocations::Entity>(&st, Action::Updated, fresh.id.0).await;
 
     Ok(PhpJson::ok(allocation_data(&fresh, server.allocation_id.map(|x| x.0), false)).into_response())
 }
@@ -297,6 +307,8 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
             },
         )
         .await?;
+        // NetworkAllocationController::update: $allocation->forceFill(['notes' => ...])->save().
+        model_events::fire_id::<allocations::Entity>(&st, Action::Updated, alloc.id.0).await;
         ctx.activity("server:allocation.notes")
             .subject(morph::ALLOCATION, alloc.id.0)
             .property("allocation", alloc_address(&alloc))
@@ -331,6 +343,13 @@ pub async fn set_primary(State(st): State<AppState>, Extension(ctx): Extension<C
             },
         )
         .await?;
+        // NetworkAllocationController::setPrimary: associate()+$server->save() fires
+        // eloquent.updated before the Server::saved observer (subuser removal).
+        {
+            // Relations loaded by AuthenticateServerAccess travel with the model.
+            let loaded = model_events::client_server_loaded(&st, &ctx, &server).await;
+            model_events::fire_id_with::<servers::Entity, _>(&st, &st.db, Action::Updated, server.id.0, loaded).await;
+        }
         crate::services::server_saved(&st, &ctx, &st.db, &server).await?;
     }
     ctx.activity("server:allocation.primary")
@@ -386,6 +405,8 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
     ))
     .await?;
 
+    // RELEASE_ATTRIBUTES is a relation query-builder update (mass op — no event).
+    let mut primary_moved = false;
     if current.is_none() || current == Some(alloc.id.0) {
         let rows = allocations::Model::find_by_statement(raw::stmt(
             txn.get_database_backend(),
@@ -399,6 +420,7 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
         let new_id = newp.as_ref().map(|a| a.id.0);
         // associate()+save() dirtiness against the just-locked pointer.
         if new_id != current {
+            primary_moved = true;
             pelican_db::write::update(
                 &txn,
                 &servers::ActiveModel {
@@ -420,6 +442,15 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
         }
     }
     txn.commit().await?;
+    // Server::releaseAllocations: associate()+$this->save() for a moved primary
+    // (updated(Server); the mass RELEASE_ATTRIBUTES write itself fires nothing).
+    if primary_moved {
+        {
+            // Relations loaded by AuthenticateServerAccess travel with the model.
+            let loaded = model_events::client_server_loaded(&st, &ctx, &server).await;
+            model_events::fire_id_with::<servers::Entity, _>(&st, &st.db, Action::Updated, server.id.0, loaded).await;
+        }
+    }
 
     ctx.activity("server:allocation.delete")
         .subject(morph::ALLOCATION, alloc.id.0)

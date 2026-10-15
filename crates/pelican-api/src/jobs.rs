@@ -17,6 +17,16 @@ use serde_json::{Value, json};
 
 use crate::client::backups::{InitiateBackup, initiate_backup};
 use crate::error::{ApiError, ApiResult};
+use crate::model_events::{self, Action};
+
+/// Instance-update events of `$task->update(['is_queued' => v])` (RunTaskJob):
+/// `updated(Task)`, then `Task::$touches` saves the parent schedule
+/// (`updated(Schedule)` with only its fresh timestamp). Callers outside a
+/// transaction invoke this when [`set_queued`] actually wrote.
+async fn task_updated_events(st: &AppState, task_id: i64, schedule_id: i64) {
+    model_events::fire_id::<tasks::Entity>(st, Action::Updated, task_id).await;
+    model_events::fire_id::<schedules::Entity>(st, Action::Updated, schedule_id).await;
+}
 
 /// `Utilities::getScheduleNextRunDate()`: evaluated in `timezone`, returned in UTC.
 pub fn next_run_date(
@@ -45,10 +55,10 @@ fn now_ts() -> Timestamp {
 }
 
 /// `$task->update(['is_queued' => $v])`: writes only when dirty, then touches
-/// the schedule (`Task::$touches`).
-async fn set_queued<C: ConnectionTrait>(db: &C, task: &mut tasks::Model, value: bool) -> ApiResult<()> {
+/// the schedule (`Task::$touches`). Returns whether the instance write happened.
+async fn set_queued<C: ConnectionTrait>(db: &C, task: &mut tasks::Model, value: bool) -> ApiResult<bool> {
     if task.is_queued.0 == value {
-        return Ok(());
+        return Ok(false);
     }
     let ts = now_ts();
     pelican_db::write::update(
@@ -63,7 +73,8 @@ async fn set_queued<C: ConnectionTrait>(db: &C, task: &mut tasks::Model, value: 
     .await?;
     task.is_queued = Bool(value);
     task.updated_at = Some(ts);
-    touch_schedule(db, task.schedule_id.0).await
+    touch_schedule(db, task.schedule_id.0).await?;
+    Ok(true)
 }
 
 /// `BelongsTo::touch()`: `update schedules set updated_at = now where id = ?`.
@@ -91,9 +102,12 @@ async fn mark_schedule_complete<C: ConnectionTrait>(db: &C, schedule_id: i64) ->
     Ok(())
 }
 
-/// `RunTaskJob::failed()`.
+/// `RunTaskJob::failed()`: markTaskNotQueued (instance update + touch), then the
+/// mass `schedule()->update()` (query builder — no events).
 async fn failed(st: &AppState, task: &mut tasks::Model) -> ApiResult<()> {
-    set_queued(&st.db, task, false).await?;
+    if set_queued(&st.db, task, false).await? {
+        task_updated_events(st, task.id.0, task.schedule_id.0).await;
+    }
     mark_schedule_complete(&st.db, task.schedule_id.0).await
 }
 
@@ -137,8 +151,18 @@ pub async fn process_schedule(st: &AppState, schedule: &mut schedules::Model, no
     }
     schedule.is_processing = Bool(true);
     schedule.next_run_at = Some(next);
-    set_queued(&txn, &mut task, true).await?;
+    let task_queued_now = set_queued(&txn, &mut task, true).await?;
     txn.commit().await?;
+
+    // ProcessScheduleService: $schedule->forceFill([...])->saveOrFail() then
+    // $task->update(['is_queued' => true]) (+touch) — instance saves inside the
+    // transaction; webhook delivery waits for the commit.
+    if dirty {
+        model_events::fire_id::<schedules::Entity>(st, Action::Updated, schedule.id.0).await;
+    }
+    if task_queued_now {
+        task_updated_events(st, task.id.0, task.schedule_id.0).await;
+    }
 
     if schedule.only_when_online.0 {
         let state = server_state(st, schedule.server_id.0).await?;
@@ -239,7 +263,9 @@ pub async fn run_task(st: &AppState, task: &mut tasks::Model, manual: bool) -> A
     let schedule =
         schedules::Entity::find_by_id(task.schedule_id).one(&st.db).await?.ok_or_else(ApiError::model_not_found)?;
     if !schedule.is_active.0 && !manual {
-        set_queued(&st.db, task, false).await?;
+        if set_queued(&st.db, task, false).await? {
+            task_updated_events(st, task.id.0, task.schedule_id.0).await;
+        }
         return mark_schedule_complete(&st.db, schedule.id.0).await;
     }
     let server =
@@ -253,7 +279,10 @@ pub async fn run_task(st: &AppState, task: &mut tasks::Model, manual: bool) -> A
             return Err(e);
         }
     }
-    set_queued(&st.db, task, false).await?;
+    // markTaskNotQueued() at the end of RunTaskJob::handle().
+    if set_queued(&st.db, task, false).await? {
+        task_updated_events(st, task.id.0, task.schedule_id.0).await;
+    }
 
     // queueNextTask()
     let next = tasks::Model::find_by_statement(raw::stmt(
@@ -266,7 +295,9 @@ pub async fn run_task(st: &AppState, task: &mut tasks::Model, manual: bool) -> A
     let Some(mut next) = next else {
         return mark_schedule_complete(&st.db, schedule.id.0).await;
     };
-    set_queued(&st.db, &mut next, true).await?;
+    if set_queued(&st.db, &mut next, true).await? {
+        task_updated_events(st, next.id.0, next.schedule_id.0).await;
+    }
     if is_sync(st) {
         // SyncQueue: runs now, calls failed() on error and rethrows.
         run_queued(st, next.id.0, manual).await
@@ -295,8 +326,10 @@ async fn run_action(st: &AppState, server: &servers::Model, task: &tasks::Model)
             let txn = st.db.begin().await?;
             let opts =
                 InitiateBackup { name: None, ignored, is_locked: false, is_scheduled: true, override_limit: true };
-            initiate_backup(st, &txn, server, opts).await?;
+            let created = initiate_backup(st, &txn, server, opts).await?;
             txn.commit().await?;
+            // TaskSchema\BackupSchema -> InitiateBackupService: Backup::create([...]).
+            model_events::created(st, &created).await;
             Ok(())
         }
         "delete_files" => delete_files(st, &conn()?, server, &task.payload).await,

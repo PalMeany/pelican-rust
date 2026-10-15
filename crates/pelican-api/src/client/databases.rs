@@ -20,6 +20,7 @@ use crate::envelope::{Includes, item, list, null_resource};
 use crate::error::{ApiError, ApiResult};
 use crate::input::In;
 use crate::json::{PhpJson, no_content};
+use crate::model_events::{self, Action};
 use crate::pipeline::Ctx;
 use crate::services::LogActivity;
 use crate::validation::{CustomRule, Validator};
@@ -166,6 +167,8 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
     let mut created =
         create_database_in(&st, &ctx, &txn, &server, &host, &unique_name(&name, server.id.0), &remote).await?;
     txn.commit().await?;
+    // DatabaseManagementService::create(): $database->saveOrFail().
+    model_events::created(&st, &created).await;
 
     // The response uses the in-memory model: `max_connections` was never set (the column default is 0).
     created.max_connections = None;
@@ -186,6 +189,8 @@ pub async fn rotate_password(State(st): State<AppState>, Extension(ctx): Extensi
         .log_in(&st, &txn)
         .await?;
     txn.commit().await?;
+    // DatabaseManagementService::rotatePassword(): $database->update([...]).
+    model_events::fire_id::<databases::Entity>(&st, Action::Updated, db.id.0).await;
 
     let fresh = databases::Entity::find_by_id(db.id).one(&st.db).await?.ok_or_else(ApiError::model_not_found)?;
     let includes = Includes::default().with(&["password"]);
@@ -199,6 +204,8 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
     let txn = st.db.begin().await?;
     delete_database_in(&st, &ctx, &txn, &db).await?;
     txn.commit().await?;
+    // DatabaseManagementService::delete(): $database->delete().
+    model_events::deleted(&st, &db).await;
     Ok(no_content())
 }
 
@@ -284,6 +291,9 @@ pub async fn create_database(
     let txn = st.db.begin().await?;
     let created = create_database_in(st, ctx, &txn, server, host, database, remote).await?;
     txn.commit().await?;
+    // DatabaseManagementService::create(): $database->saveOrFail() (shared by the
+    // Application API and admin panel callers of this wrapper).
+    model_events::created(st, &created).await;
     Ok(created)
 }
 

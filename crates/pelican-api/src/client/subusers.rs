@@ -19,6 +19,7 @@ use crate::envelope::list;
 use crate::error::{ApiError, ApiResult, Style};
 use crate::input::{In, Input};
 use crate::json::{PhpJson, no_content};
+use crate::model_events::{self, Action};
 use crate::pipeline::Ctx;
 use crate::services::LogActivity;
 use crate::validation::Validator;
@@ -202,10 +203,12 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
     let txn = st.db.begin().await?;
     let existing = users::Entity::find().filter(users::Column::Email.eq(email.clone())).one(&txn).await?;
     let mut created_token = None;
+    let mut new_user = false;
     let user = match existing {
         None => {
             let (u, token) = create_user(&st, &txn, &email).await?;
             created_token = Some(token);
+            new_user = true;
             u
         }
         Some(u) => {
@@ -260,6 +263,12 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
     }
     crate::services::subuser_mail(&st, &user, &server, true).await?;
     txn.commit().await?;
+    // SubuserCreationService: UserCreationService->handle() → User::forceCreate(), then
+    // Subuser::updateOrCreate([...]) (new row — the duplicate check ran above).
+    if new_user {
+        model_events::fire_id::<users::Entity>(&st, Action::Created, user.id.0).await;
+    }
+    model_events::created(&st, &sub).await;
     ctx.activity("server:subuser.create")
         .subject(morph::USER, user.id.0)
         .property("email", email)
@@ -307,6 +316,8 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
             .log_in(&st, &txn)
             .await?;
         txn.commit().await?;
+        // SubuserUpdateService: $subuser->update(['permissions' => ...]).
+        model_events::fire_id::<subusers::Entity>(&st, Action::Updated, sub.id.0).await;
     }
     let fresh = subusers::Entity::find_by_id(sub.id).one(&st.db).await?.ok_or_else(ApiError::model_not_found)?;
     Ok(PhpJson::ok(subuser_item(&st.db, &fresh, user).await?).into_response())
@@ -332,6 +343,8 @@ pub async fn delete_subuser(
     let txn = st.db.begin().await?;
     delete_subuser_in(st, ctx, &txn, server, sub, user).await?;
     txn.commit().await?;
+    // SubuserDeletionService: $subuser->delete().
+    model_events::deleted(st, sub).await;
     Ok(())
 }
 

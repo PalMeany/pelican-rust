@@ -288,17 +288,21 @@ pub async fn import_egg_into(st: &AppState, content: &str, target: Option<i64>) 
         updated_at: Set(Some(now)),
         ..Default::default()
     };
-    let egg = match existing {
+    let (egg, egg_action) = match existing {
         Some(e) => {
             am.id = sea_orm::ActiveValue::Unchanged(e.id);
             pelican_db::write::update(&txn, &am).await?;
-            e.id
+            (e.id, crate::model_events::Action::Updated)
         }
         None => {
             am.created_at = Set(Some(now));
-            pelican_db::write::insert(&txn, am).await?.id
+            let m = pelican_db::write::insert(&txn, am).await?;
+            (m.id, crate::model_events::Action::Created)
         }
     };
+    // EggVariable::unguarded + $egg->variables()->updateOrCreate(...) →
+    // eloquent.created|updated per variable (in file order).
+    let mut var_events: Vec<(i64, crate::model_events::Action)> = Vec::new();
     let mut imported = Vec::new();
     for var in &vars {
         let Value::Object(m) = var else { return Err(ApiError::internal("TypeError")) };
@@ -336,12 +340,14 @@ pub async fn import_egg_into(st: &AppState, content: &str, target: Option<i64>) 
             Some(f) => {
                 row.id = sea_orm::ActiveValue::Unchanged(f.id);
                 pelican_db::write::update(&txn, &row).await?;
+                var_events.push((f.id.0, crate::model_events::Action::Updated));
             }
             None => {
                 row.egg_id = Set(egg);
                 row.env_variable = Set(env);
                 row.created_at = Set(Some(now));
-                pelican_db::write::insert(&txn, row).await?;
+                let v = pelican_db::write::insert(&txn, row).await?;
+                var_events.push((v.id.0, crate::model_events::Action::Created));
             }
         }
     }
@@ -366,6 +372,12 @@ pub async fn import_egg_into(st: &AppState, content: &str, target: Option<i64>) 
         .await?;
     }
     txn.commit().await?;
+    // $egg->save() fires created or updated depending on the prior existence;
+    // the whereNotIn cleanup is a relation query delete → no events.
+    crate::model_events::fire_id::<eggs::Entity>(st, egg_action, egg.0).await;
+    for (id, action) in &var_events {
+        crate::model_events::fire_id::<egg_variables::Entity>(st, *action, *id).await;
+    }
     Ok(egg)
 }
 
@@ -415,5 +427,7 @@ pub async fn delete_egg(st: &AppState, e: &eggs::Model) -> ApiResult<()> {
         ));
     }
     eggs::Entity::delete_by_id(e.id).exec(&st.db).await?;
+    // $egg->delete() with the deleting guards above (eloquent.deleted)
+    crate::model_events::deleted(st, e).await;
     Ok(())
 }

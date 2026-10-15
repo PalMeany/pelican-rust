@@ -90,6 +90,8 @@ pub async fn upload_parts(
         .filter(backups::Column::Id.eq(backup.id))
         .exec(&st.db)
         .await?;
+    // S3BackupSchema::backupFrom Wings path: $backup->update(['upload_id' => ...]).
+    crate::model_events::fire_id::<backups::Entity>(&st, crate::model_events::Action::Updated, backup.id.0).await;
     let concurrent = st.config.env.int_or("BACKUP_MAX_CONCURRENT_UPLOADS", crate::s3::MAX_CONCURRENT_UPLOADS);
     Ok(crate::json::PhpJson::ok(serde_json::json!({
         "parts": parts,
@@ -213,6 +215,9 @@ pub async fn status(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
         .log_in(&st, &txn)
         .await?;
     txn.commit().await?;
+    // BackupStatusController: $model->fill([...])->save() inside the txn (always
+    // dirty — completed_at is set to a fresh now()).
+    crate::model_events::fire_id::<backups::Entity>(&st, crate::model_events::Action::Updated, backup.id.0).await;
     let fresh = backups::Entity::find_by_id(backup.id).one(&st.db).await?.ok_or_else(ApiError::model_not_found)?;
     pelican_core::events::backup_completed(&st.db, &fresh, &server, &ctx.root).await?;
     Ok(no_content())
@@ -235,8 +240,9 @@ pub async fn restore(State(st): State<AppState>, Extension(ctx): Extension<Ctx>,
             .filter(servers::Column::Id.eq(server.id))
             .exec(&st.db)
             .await?;
+        // BackupStatusController::restore: $model->server->update(['status' => null]).
+        crate::model_events::fire_id::<servers::Entity>(&st, crate::model_events::Action::Updated, server.id.0).await;
     }
-    crate::services::server_saved(&st, &ctx, &st.db, &server).await?;
     // The failure event name contains a `.` instead of `:` in the original.
     let event = if php_boolean(input.get("successful")) {
         "server:backup.restore-complete"

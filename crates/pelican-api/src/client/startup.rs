@@ -126,6 +126,14 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
                     .filter(server_variables::Column::Id.eq(e.id))
                     .exec(db)
                     .await?;
+                // StartupController: ServerVariable::query()->updateOrCreate(...) →
+                // existing row with a changed value fires eloquent.updated.
+                crate::model_events::fire_id::<server_variables::Entity>(
+                    &st,
+                    crate::model_events::Action::Updated,
+                    e.id.0,
+                )
+                .await;
             }
         }
         None => {
@@ -137,7 +145,11 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
                 updated_at: Set(Some(now)),
                 ..Default::default()
             };
-            pelican_db::write::insert_id(db, &am).await?;
+            let new_id =
+                pelican_db::write::insert_id(db, &am).await?.ok_or_else(|| ApiError::internal("QueryException"))?;
+            // New row via updateOrCreate fires eloquent.created.
+            crate::model_events::fire_id::<server_variables::Entity>(&st, crate::model_events::Action::Created, new_id)
+                .await;
         }
     }
     let b = bundle(&st, &ctx).await?;

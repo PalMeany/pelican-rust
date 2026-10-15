@@ -210,7 +210,7 @@ async fn activity_created<C: ConnectionTrait>(st: &AppState, db: &C, id: i64) {
         .await
         .unwrap_or_default();
     for s in subjects {
-        if let Err(e) = fire(st, db, Action::Created, "ActivityLogSubject", s.to_array()).await {
+        if let Err(e) = fire(st, db, Action::Created, "ActivityLogSubject", s.array(st.driver)).await {
             tracing::warn!(error = ?e, "model event failed");
         }
     }

@@ -15,6 +15,7 @@ use serde_json::{Value, json};
 use crate::error::{ApiError, ApiResult};
 use crate::input::In;
 use crate::json::{PhpJson, no_content};
+use crate::model_events::{self, Action};
 use crate::pipeline::Ctx;
 use crate::services::LogActivity;
 use crate::validation::{CustomRule, Validator, php_loose_eq};
@@ -42,6 +43,12 @@ pub async fn rename(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
     if server.name != name {
         // `$server->wasChanged('name')`.
         touch_column(&st, server.id.0, servers::Column::Name, Expr::value(name.clone())).await?;
+        // SettingsController: $server->update(['name' => $name]).
+        {
+            // Relations loaded by AuthenticateServerAccess travel with the model.
+            let loaded = model_events::client_server_loaded(&st, &ctx, &server).await;
+            model_events::fire_id_with::<servers::Entity, _>(&st, &st.db, Action::Updated, server.id.0, loaded).await;
+        }
         // Server::saved hook (owner must not be a subuser) arrives with the subusers work.
         ctx.activity("server:settings.rename")
             .property("old", server.name.clone())
@@ -70,6 +77,12 @@ pub async fn description(
     let stored = input.str("description").unwrap_or("").to_string();
     if server.description.as_deref() != Some(stored.as_str()) {
         touch_column(&st, server.id.0, servers::Column::Description, Expr::value(Some(stored.clone()))).await?;
+        // SettingsController: $server->update(['description' => $description ?? '']).
+        {
+            // Relations loaded by AuthenticateServerAccess travel with the model.
+            let loaded = model_events::client_server_loaded(&st, &ctx, &server).await;
+            model_events::fire_id_with::<servers::Entity, _>(&st, &st.db, Action::Updated, server.id.0, loaded).await;
+        }
         // The log keeps the RAW input (null when omitted), unlike the stored column.
         let new_raw = match input.get("description") {
             Some(Value::String(s)) => Value::String(s.clone()),
@@ -106,6 +119,14 @@ pub async fn reinstall(State(st): State<AppState>, Extension(ctx): Extension<Ctx
     }
     st.wings.reinstall_server(&conn, &server.uuid).await.map_err(|e| ApiError::internal(e.code()))?;
     txn.commit().await?;
+    // ReinstallServerService: $server->fill(['status' => Installing])->save().
+    if server.status.as_deref() != Some("installing") {
+        {
+            // Relations loaded by AuthenticateServerAccess travel with the model.
+            let loaded = model_events::client_server_loaded(&st, &ctx, &server).await;
+            model_events::fire_id_with::<servers::Entity, _>(&st, &st.db, Action::Updated, server.id.0, loaded).await;
+        }
+    }
     ctx.activity("server:reinstall").log(&st).await?;
     Ok(PhpJson::with_status(StatusCode::ACCEPTED, json!([])).into_response())
 }
@@ -164,6 +185,12 @@ pub async fn docker_image(
     let image = input.str("docker_image").unwrap_or_default().to_string();
     if server.image != image {
         touch_column(&st, server.id.0, servers::Column::Image, Expr::value(image.clone())).await?;
+        // SettingsController::dockerImage: $server->forceFill(['image' => ...])->saveOrFail().
+        {
+            // Relations loaded by AuthenticateServerAccess travel with the model.
+            let loaded = model_events::client_server_loaded(&st, &ctx, &server).await;
+            model_events::fire_id_with::<servers::Entity, _>(&st, &st.db, Action::Updated, server.id.0, loaded).await;
+        }
         ctx.activity("server:startup.image")
             .property("old", server.image.clone())
             .property("new", image.clone())

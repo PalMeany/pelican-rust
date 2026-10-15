@@ -116,6 +116,8 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         },
     )
     .await?;
+    // spatie Role::create (eloquent.created)
+    crate::model_events::created(&st, &role).await;
     let body = with_meta(
         role_item(&st, &role, &Includes::parse(&input)).await?,
         resource_meta(&st, &format!("roles/{}", role.id.0)),
@@ -145,6 +147,8 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
         .await?;
         role.name = name;
         role.updated_at = Some(now);
+        // $role->save() when isDirty (eloquent.updated)
+        crate::model_events::updated(&st, &role).await;
     }
     Ok(PhpJson::ok(role_item(&st, &role, &Includes::parse(&input)).await?).into_response())
 }
@@ -157,5 +161,7 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
         return Err(ApiError::internal("PanelException"));
     }
     roles::Entity::delete_by_id(role.id).exec(&st.db).await?;
+    // $role->delete() (eloquent.deleted, attributes as before the delete)
+    crate::model_events::deleted(&st, &role).await;
     Ok(no_content())
 }

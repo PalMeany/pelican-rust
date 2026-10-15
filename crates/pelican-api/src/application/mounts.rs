@@ -243,6 +243,8 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         ..Default::default()
     };
     let m = pelican_db::write::insert(&st.db, am).await?;
+    // MountController::store → Mount::create() (eloquent.created)
+    crate::model_events::created(&st, &m).await;
     let body = with_meta(
         mount_item(&st, &ctx, &m, &Includes::parse(&input)).await?,
         resource_meta(&st, &format!("mounts/{}", m.id.0)),
@@ -304,6 +306,9 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
     }
     if dirty {
         pelican_db::write::update(&st.db, &am).await?;
+        // $mount->save() when isDirty (eloquent.updated); pivot mountables
+        // attach/detach below fires nothing.
+        crate::model_events::fire_id::<mounts::Entity>(&st, crate::model_events::Action::Updated, m.id.0).await;
         let fresh = mounts::Entity::find_by_id(m.id).one(&st.db).await?.ok_or_else(ApiError::model_not_found)?;
         return Ok(PhpJson::ok(mount_item(&st, &ctx, &fresh, &Includes::parse(&input)).await?).into_response());
     }
@@ -331,6 +336,8 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
         ));
     }
     mounts::Entity::delete_by_id(m.id).exec(&st.db).await?; // mountables cascade via FK
+    // $mount->delete() (eloquent.deleted, attributes as before the delete)
+    crate::model_events::deleted(&st, &m).await;
     Ok(no_content())
 }
 

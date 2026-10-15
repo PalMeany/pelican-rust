@@ -223,6 +223,8 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         .await?;
     }
     txn.commit().await?;
+    // UserCreationService: User::create() (eloquent.created)
+    crate::model_events::created(&st, &user).await;
     crate::services::account_created(&st, &user, reset_token.as_deref()).await?;
     let body = with_meta(
         user_item(&st, &ctx, &user, &Includes::parse(&input)).await?,
@@ -275,6 +277,8 @@ pub async fn create_user(st: &AppState, username: &str, email: &str, oauth: Valu
     let user = pelican_db::write::insert(&txn, am).await?;
     let token = crate::passwords::create_token(st, &txn, &email).await?;
     txn.commit().await?;
+    // UserCreationService: User::create() (eloquent.created)
+    crate::model_events::created(st, &user).await;
     crate::services::account_created(st, &user, Some(&token)).await?;
     Ok(user)
 }
@@ -297,6 +301,8 @@ pub async fn ensure_root_admin_role(st: &AppState) -> ApiResult<i64> {
     )
     .await?
     .ok_or_else(|| ApiError::internal("QueryException"))?;
+    // Seeder: Role::firstOrCreate → Role::create() (eloquent.created)
+    crate::model_events::fire_id::<roles::Entity>(&st, crate::model_events::Action::Created, id).await;
     Ok(id)
 }
 
@@ -348,6 +354,8 @@ pub async fn create_admin(st: &AppState, username: &str, email: &str, password: 
     ))
     .await?;
     txn.commit().await?;
+    // UserCreationService: User::create() (eloquent.created)
+    crate::model_events::created(st, &user).await;
     crate::services::account_created(st, &user, None).await?;
     Ok(user)
 }
@@ -412,6 +420,8 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
     if dirty {
         am.updated_at = Set(Some(Timestamp(pelican_core::time::now())));
         pelican_db::write::update(&st.db, &am).await?;
+        // UserUpdateService: $user->save() only when isDirty (eloquent.updated)
+        crate::model_events::fire_id::<users::Entity>(&st, crate::model_events::Action::Updated, u.id.0).await;
     }
     if password_changed {
         // PasswordChanged → RevocationListener: deauthorize SFTP on every node with the user's servers.
@@ -432,7 +442,7 @@ async fn root_admin_role(st: &AppState) -> ApiResult<roles::Model> {
         return Ok(r);
     }
     let now = Timestamp(pelican_core::time::now());
-    Ok(pelican_db::write::insert(
+    let r = pelican_db::write::insert(
         &st.db,
         roles::ActiveModel {
             name: Set(pelican_core::auth::ROOT_ADMIN_ROLE.into()),
@@ -442,7 +452,10 @@ async fn root_admin_role(st: &AppState) -> ApiResult<roles::Model> {
             ..Default::default()
         },
     )
-    .await?)
+    .await?;
+    // Role::findOrCreate fallback → Role::create() (eloquent.created)
+    crate::model_events::created(st, &r).await;
+    Ok(r)
 }
 
 /// `AssignUserRolesRequest::rules()`.
@@ -581,5 +594,7 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
     // User\Deleting → RevocationListener.
     crate::jobs::revoke_sftp_access(&st, &u).await?;
     users::Entity::delete_by_id(u.id).exec(&st.db).await?;
+    // UserController::destroy (eloquent.deleted, attributes as before the delete)
+    crate::model_events::deleted(&st, &u).await;
     Ok(no_content())
 }

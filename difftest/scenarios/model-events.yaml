@@ -1,0 +1,16 @@
+# Eloquent model events → global webhooks (DispatchWebhooks::handleEloquentEvent, ADR-0019).
+# Only `updated`/`deleted`: `created` payloads differ in key order by design (see the ADR).
+name: webhooks/model-events
+fixtures: [base, infra, client-users, schedules]
+rows:
+  webhook_configurations:
+    - { id: 1, endpoint: "http://wings.test:8080/hook/models", name: models, description: null, events: ["eloquent.updated: App\\Models\\User", "eloquent.updated: App\\Models\\Server", "eloquent.deleted: App\\Models\\Mount", "eloquent.updated: App\\Models\\Schedule", "eloquent.deleted: App\\Models\\Schedule", "eloquent.deleted: App\\Models\\Allocation"], scope: global, server_id: null, type: regular, payload: null, headers: [], created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00", deleted_at: null }
+    - { id: 2, endpoint: "http://wings.test:8080/hook/other", name: other, description: null, events: ["eloquent.updated: App\\Models\\Node"], scope: global, server_id: null, type: regular, payload: null, headers: null, created_at: "2026-01-01 00:00:00", updated_at: "2026-01-01 00:00:00", deleted_at: null }
+steps:
+  - { method: PATCH, path: /api/application/users/2, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { email: user@example.com, username: user, language: fr } }
+  - { method: PATCH, path: /api/application/servers/1/details, bearer: papp_admin000001AdminAppSecret000000000000000001, json: { name: " Renamed ", user: 2, external_id: ext-1, description: null }, expect_status: 200 }
+  - { method: DELETE, path: /api/application/mounts/2, bearer: papp_admin000001AdminAppSecret000000000000000001 }
+  - { method: DELETE, path: /api/application/nodes/1/allocations/4, bearer: papp_admin000001AdminAppSecret000000000000000001, expect_status: 204 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/settings/rename, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: Survival }, expect_status: 204 }
+  - { method: POST, path: /api/client/servers/0b5c6a0e/schedules/1, bearer: pacc_user0000001UserClientSecret0000000000000001, json: { name: "Daily restart", minute: "0", hour: "4", day_of_month: "1", month: "*", day_of_week: "*", is_active: "1" } }
+  - { method: DELETE, path: /api/client/servers/0b5c6a0e/schedules/2, bearer: pacc_user0000001UserClientSecret0000000000000001, expect_status: 204 }

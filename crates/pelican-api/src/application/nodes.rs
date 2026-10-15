@@ -330,6 +330,8 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         set_column(&mut am, k, v);
     }
     let created = pelican_db::write::insert(&st.db, am).await?;
+    // NodeController::store → Node::create() (eloquent.created)
+    crate::model_events::created(&st, &created).await;
     attrs.insert("updated_at".into(), ts(Some(&now))?);
     attrs.insert("created_at".into(), ts(Some(&now))?);
     attrs.insert("id".into(), json!(created.id.0));
@@ -414,10 +416,16 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
     let outcome = st.wings.send(&conn, call).await;
     node.fqdn = new_fqdn;
     match outcome {
-        Ok(_) => txn.commit().await?,
+        Ok(_) => {
+            txn.commit().await?;
+            // NodeUpdateService: $updated->forceFill(...)->save() (eloquent.updated
+            // after the commit; the rolled-back path fires nothing here).
+            crate::model_events::fire_id::<nodes::Entity>(&st, crate::model_events::Action::Updated, node.id.0).await;
+        }
         Err(pelican_wings::WingsError::Connection(_)) => {
             // Stored anyway; ConfigurationNotPersistedException is reported, the original node returned.
             txn.commit().await?;
+            crate::model_events::fire_id::<nodes::Entity>(&st, crate::model_events::Action::Updated, node.id.0).await;
             return Ok(PhpJson::ok(node_item(&st, &ctx, &node, &includes, NodeExtra::default()).await?).into_response());
         }
         Err(_) => {
@@ -465,6 +473,8 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
         ));
     }
     nodes::Entity::delete_by_id(n.id).exec(&st.db).await?;
+    // NodeDeletionService: $node->delete() (eloquent.deleted)
+    crate::model_events::deleted(&st, &n).await;
     Ok(no_content())
 }
 
@@ -769,6 +779,11 @@ pub async fn assign_allocations(
         }
     }
     txn.commit().await?;
+    // AssignmentService: Allocation::query()->create($newAllocation) per row
+    // (eloquent.created for every allocation, in insert order)
+    for id in &ids {
+        crate::model_events::fire_id::<allocations::Entity>(st, crate::model_events::Action::Created, *id).await;
+    }
     Ok(ids)
 }
 
@@ -790,5 +805,7 @@ pub async fn allocations_delete(State(st): State<AppState>, Extension(ctx): Exte
         ));
     }
     allocations::Entity::delete_by_id(a.id).exec(&st.db).await?;
+    // $allocation->delete() (eloquent.deleted)
+    crate::model_events::deleted(&st, &a).await;
     Ok(no_content())
 }

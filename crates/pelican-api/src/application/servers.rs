@@ -237,6 +237,19 @@ pub async fn details(State(st): State<AppState>, Extension(ctx): Extension<Ctx>,
         crate::client::subusers::revoke(&st, &txn, &s, &old_owner.uuid).await?;
     }
     txn.commit().await?;
+    if dirty {
+        // DetailsModificationService: `$oldOwner = $server->user` loads the relation, then
+        // forceFill([...])->saveOrFail() (eloquent.updated only when isDirty).
+        use crate::model_events::{Action, Eloquent, fire_id_with};
+        fire_id_with::<servers::Entity, _>(
+            &st,
+            &st.db,
+            Action::Updated,
+            s.id.0,
+            vec![("user", old_owner.array(st.driver))],
+        )
+        .await;
+    }
     Ok(PhpJson::ok(server_item(&st, &ctx, &s, &Includes::parse(&input)).await?).into_response())
 }
 
@@ -271,6 +284,8 @@ pub async fn set_suspension(st: &AppState, ctx: &Ctx, mut s: servers::Model, sus
         },
     )
     .await?;
+    // SuspensionService: $server->update(['status' => ...]) (eloquent.updated)
+    crate::model_events::fire_id::<servers::Entity>(&st, crate::model_events::Action::Updated, s.id.0).await;
     s.status = status;
     crate::services::server_saved(st, ctx, &st.db, &s).await?;
     let conn = node_conn(st, &st.db, s.node_id).await?;
@@ -301,6 +316,7 @@ pub async fn reinstall_server(st: &AppState, ctx: &Ctx, mut s: servers::Model) -
     let st = st.clone();
     let conn = node_conn(&st, &st.db, s.node_id).await?;
     let txn = st.db.begin().await?;
+    let mut changed = false;
     if s.status.as_deref() != Some("installing") {
         pelican_db::write::update(
             &txn,
@@ -313,10 +329,15 @@ pub async fn reinstall_server(st: &AppState, ctx: &Ctx, mut s: servers::Model) -
         )
         .await?;
         s.status = Some("installing".into());
+        changed = true;
     }
     crate::services::server_saved(&st, ctx, &txn, &s).await?;
     st.wings.reinstall_server(&conn, &s.uuid).await.map_err(wings_err)?;
     txn.commit().await?;
+    // ReinstallServerService: $server->update([...]) only when the status differs
+    if changed {
+        crate::model_events::fire_id::<servers::Entity>(&st, crate::model_events::Action::Updated, s.id.0).await;
+    }
     Ok(())
 }
 
@@ -339,6 +360,12 @@ pub async fn transfer_cancel(State(st): State<AppState>, Extension(ctx): Extensi
         },
     )
     .await?;
+    // $transfer->successful = true; $transfer->save(); (eloquent.updated only when
+    // successful actually changes)
+    if t.successful != Some(Bool(true)) {
+        crate::model_events::fire_id::<server_transfers::Entity>(&st, crate::model_events::Action::Updated, t.id.0)
+            .await;
+    }
     // DaemonServerRepository::cancelTransfer(): source node, then the target node.
     let old = node_conn(&st, &st.db, s.node_id).await?;
     let path = format!("/api/servers/{}/transfer", s.uuid);
@@ -387,6 +414,11 @@ pub async fn delete_server(st: &AppState, ctx: &Ctx, s: &servers::Model, force: 
     ))
     .all(&txn)
     .await?;
+    // DatabaseManagementService::delete → $database->delete() per row; the
+    // events go out after the commit, in deletion order (databases first). The
+    // server's payload carries its allocation as loaded before the release.
+    let server_event = crate::model_events::pending(st, crate::model_events::Action::Deleted, s).await;
+    let mut db_events: Vec<&databases::Model> = Vec::new();
     for d in &dbs {
         if let Err(e) = crate::client::databases::delete_database_in(st, ctx, &txn, d).await {
             if !force {
@@ -394,6 +426,7 @@ pub async fn delete_server(st: &AppState, ctx: &Ctx, s: &servers::Model, force: 
             }
             databases::Entity::delete_by_id(d.id).exec(&txn).await?;
         }
+        db_events.push(d);
     }
     let b = st.db.get_database_backend();
     let now = Timestamp(pelican_core::time::now());
@@ -413,6 +446,13 @@ pub async fn delete_server(st: &AppState, ctx: &Ctx, s: &servers::Model, force: 
     .await?;
     servers::Entity::delete_by_id(s.id).exec(&txn).await?;
     txn.commit().await?;
+    for d in db_events {
+        crate::model_events::deleted(st, d).await;
+    }
+    // $server->delete() (eloquent.deleted)
+    if let Some(ev) = server_event {
+        ev.send(st).await;
+    }
     Ok(())
 }
 
@@ -498,6 +538,7 @@ pub async fn databases_store(
     let remote = input.get("remote").map(pelican_core::php::string).unwrap_or_default();
     let mut created =
         crate::client::databases::create_database(&st, &ctx, &s, &host, &prefixed, &remote, false).await?;
+    // eloquent.created is fired by create_database (DatabaseManagementService::create).
     created.max_connections = None;
     let body = with_meta(
         database_item(&st, &ctx, &created, &Includes::parse(&input), "server_database").await?,
@@ -516,6 +557,9 @@ pub async fn databases_reset_password(
     let txn = st.db.begin().await?;
     crate::client::databases::rotate_password_in(&st, &txn, &d).await?;
     txn.commit().await?;
+    // DatabaseManagementService::rotatePassword → $database->update([...])
+    // (eloquent.updated)
+    crate::model_events::fire_id::<databases::Entity>(&st, crate::model_events::Action::Updated, d.id.0).await;
     Ok(no_content())
 }
 
@@ -526,5 +570,7 @@ pub async fn databases_delete(State(st): State<AppState>, Extension(ctx): Extens
     let txn = st.db.begin().await?;
     crate::client::databases::delete_database_in(&st, &ctx, &txn, &d).await?;
     txn.commit().await?;
+    // $database->delete() (eloquent.deleted)
+    crate::model_events::deleted(&st, &d).await;
     Ok(no_content())
 }

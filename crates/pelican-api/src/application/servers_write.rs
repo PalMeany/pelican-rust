@@ -377,6 +377,7 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
     )
     .await?;
     server_saved(&st, &ctx, &txn, &created).await?;
+    let mut alloc_updated: Vec<i64> = Vec::new();
     if let Some(primary) = allocation_id {
         let mut ids = vec![primary];
         let extra: Vec<Value> = match input.get("allocation.additional") {
@@ -395,6 +396,8 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
             .filter(allocations::Column::ServerId.is_null())
             .all(&txn)
             .await?;
+        // storeAssignedAllocations: ->get()->each(fn ($a) => $a->save()) — instance
+        // saves (eloquent.updated per allocation); events go out post-commit.
         for a in free {
             pelican_db::write::update(
                 &txn,
@@ -407,10 +410,14 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
                 },
             )
             .await?;
+            alloc_updated.push(a.id.0);
         }
     }
+    // storeEggVariables: $server->serverVariables()->forceCreate(...) per variable
+    // (eloquent.created per row).
+    let mut vars_created: Vec<i64> = Vec::new();
     for (var, val) in &vars {
-        pelican_db::write::insert(
+        let sv = pelican_db::write::insert(
             &txn,
             server_variables::ActiveModel {
                 server_id: Set(created.id),
@@ -422,8 +429,17 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
             },
         )
         .await?;
+        vars_created.push(sv.id.0);
     }
     txn.commit().await?;
+    // Event order mirrors the original inside the transaction.
+    crate::model_events::created(&st, &created).await;
+    for id in &alloc_updated {
+        crate::model_events::fire_id::<allocations::Entity>(&st, crate::model_events::Action::Updated, *id).await;
+    }
+    for id in &vars_created {
+        crate::model_events::fire_id::<server_variables::Entity>(&st, crate::model_events::Action::Created, *id).await;
+    }
 
     let conn = node_conn(&st, &st.db, created.node_id).await?;
     let start = input.get("start_on_completion").is_some_and(|v| !pelican_core::php::empty(v));
@@ -585,6 +601,11 @@ pub async fn build(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
     let fresh = servers::Entity::find_by_id(s.id).one(&txn).await?.ok_or_else(ApiError::model_not_found)?;
     server_saved(&st, &ctx, &txn, &fresh).await?;
     txn.commit().await?;
+    // BuildModificationService: $server->forceFill(...)->saveOrFail() (eloquent.updated
+    // only when isDirty; the mass allocation updates fire nothing)
+    if dirty {
+        crate::model_events::fire_id::<servers::Entity>(&st, crate::model_events::Action::Updated, s.id.0).await;
+    }
 
     let conn = node_conn(&st, &st.db, fresh.node_id).await?;
     match st.wings.sync_server(&conn, &fresh.uuid).await {
@@ -613,6 +634,8 @@ pub async fn startup(State(st): State<AppState>, Extension(ctx): Extension<Ctx>,
     let now = Timestamp(pelican_core::time::now());
 
     let txn = st.db.begin().await?;
+    // ServerVariable::query()->updateOrCreate(...) → created|updated per changed variable.
+    let mut collected: Vec<(i64, crate::model_events::Action)> = Vec::new();
     if !pelican_core::php::empty(&environment) {
         let egg = if egg_raw.is_null() { s.egg_id } else { Int(egg_input) };
         let results = validate_variables(&txn, egg, &environment).await?;
@@ -623,6 +646,7 @@ pub async fn startup(State(st): State<AppState>, Extension(ctx): Extension<Ctx>,
                 .filter(server_variables::Column::VariableId.eq(var.id))
                 .one(&txn)
                 .await?;
+            let mut var_events: Vec<(i64, crate::model_events::Action)> = Vec::new();
             match existing {
                 Some(row) if row.variable_value != value => {
                     pelican_db::write::update(
@@ -635,10 +659,11 @@ pub async fn startup(State(st): State<AppState>, Extension(ctx): Extension<Ctx>,
                         },
                     )
                     .await?;
+                    var_events.push((row.id.0, crate::model_events::Action::Updated));
                 }
                 Some(_) => {}
                 None => {
-                    pelican_db::write::insert(
+                    let sv = pelican_db::write::insert(
                         &txn,
                         server_variables::ActiveModel {
                             server_id: Set(s.id),
@@ -650,8 +675,10 @@ pub async fn startup(State(st): State<AppState>, Extension(ctx): Extension<Ctx>,
                         },
                     )
                     .await?;
+                    var_events.push((sv.id.0, crate::model_events::Action::Created));
                 }
             }
+            collected.extend(var_events);
         }
     }
     // updateAdministrativeSettings()
@@ -691,6 +718,14 @@ pub async fn startup(State(st): State<AppState>, Extension(ctx): Extension<Ctx>,
     let fresh = servers::Entity::find_by_id(s.id).one(&txn).await?.ok_or_else(ApiError::model_not_found)?;
     server_saved(&st, &ctx, &txn, &fresh).await?;
     txn.commit().await?;
+    for (id, action) in &collected {
+        crate::model_events::fire_id::<server_variables::Entity>(&st, *action, *id).await;
+    }
+    // updateAdministrativeSettings: $server->fill([...])->save() (eloquent.updated
+    // only when isDirty)
+    if dirty {
+        crate::model_events::fire_id::<servers::Entity>(&st, crate::model_events::Action::Updated, s.id.0).await;
+    }
     Ok(PhpJson::ok(server_item(&st, &ctx, &fresh, &Includes::parse(&input)).await?).into_response())
 }
 
@@ -806,8 +841,20 @@ pub async fn transfer_server(
             .await?;
         }
     }
-    pelican_db::write::insert(&txn, am).await?;
+    let transfer = pelican_db::write::insert(&txn, am).await?;
     txn.commit().await?;
+    // TransferServerService: ServerTransfer::create([...]) then ->save() with the
+    // allocation fields (eloquent.created, plus eloquent.updated when a primary
+    // allocation exists — the mass Allocation update fires nothing)
+    crate::model_events::created(st, &transfer).await;
+    if s.allocation_id.is_some() {
+        crate::model_events::fire_id::<server_transfers::Entity>(
+            st,
+            crate::model_events::Action::Updated,
+            transfer.id.0,
+        )
+        .await;
+    }
 
     // JWT for the destination node; the source node is told via the bare client (no throwIf).
     let new_conn = node_conn(&st, &st.db, node_id).await?;
