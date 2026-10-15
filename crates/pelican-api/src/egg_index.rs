@@ -58,7 +58,8 @@ pub async fn fetch_index(url: &str) -> Result<EggIndex, String> {
         let mut eggs = IndexMap::new();
         for egg in nest.get("Eggs").and_then(Value::as_array).into_iter().flatten() {
             let url = pelican_core::php::string(egg.get("download_url").unwrap_or(&Value::Null));
-            let egg_name = pelican_core::php::string(egg.get("egg").and_then(|e| e.get("name")).unwrap_or(&Value::Null));
+            let egg_name =
+                pelican_core::php::string(egg.get("egg").and_then(|e| e.get("name")).unwrap_or(&Value::Null));
             eggs.insert(url, egg_name);
         }
         index.insert(name, eggs);

@@ -305,7 +305,11 @@ pub async fn ensure_root_admin_role(st: &AppState) -> ApiResult<i64> {
 pub async fn create_admin(st: &AppState, username: &str, email: &str, password: &str) -> ApiResult<users::Model> {
     let (username, email) = (username.to_lowercase(), email.to_lowercase());
     let taken = users::Entity::find()
-        .filter(sea_orm::Condition::any().add(users::Column::Username.eq(username.clone())).add(users::Column::Email.eq(email.clone())))
+        .filter(
+            sea_orm::Condition::any()
+                .add(users::Column::Username.eq(username.clone()))
+                .add(users::Column::Email.eq(email.clone())),
+        )
         .one(&st.db)
         .await?
         .is_some();

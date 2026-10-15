@@ -65,6 +65,22 @@ pub async fn upload_parts(
     Err(ApiError::internal("S3Exception"))
 }
 
+/// The backup Wings reports on, waiting briefly for it to become visible: Wings answers
+/// `create_backup` before the panel commits the row, and a small server's backup can be
+/// done (and reported) before that commit. A 404 makes Wings delete the archive. PHP's
+/// slower request start-up hides the same race in the original.
+async fn find_reported_backup(st: &AppState, uuid: &str) -> ApiResult<(backups::Model, servers::Model)> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    loop {
+        match find_backup(st, uuid).await {
+            Err(e) if e.status == axum::http::StatusCode::NOT_FOUND && std::time::Instant::now() < deadline => {
+                tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+            }
+            other => return other,
+        }
+    }
+}
+
 /// R12 `POST /backups/{backup}`.
 pub async fn status(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, In(input): In) -> ApiResult<Response> {
     let mut v = Validator::new(&input);
@@ -78,7 +94,7 @@ pub async fn status(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
     v.validate()?;
     let node = node(&ctx)?;
     let uuid = ctx.bound.param("backup").unwrap_or_default().to_string();
-    let (backup, server) = find_backup(&st, &uuid).await?;
+    let (backup, server) = find_reported_backup(&st, &uuid).await?;
     if server.node_id != node.id {
         return Err(node_forbidden());
     }

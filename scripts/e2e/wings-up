@@ -1,40 +1,53 @@
 #!/usr/bin/env bash
 # Real Wings for end-to-end checks of the dev panel (lima VM, rootless Docker).
 #
-#   scripts/e2e/wings-up <node-config.json|yml>
+#   scripts/e2e/wings-up <node-config.json|yml> [name] [root]
 #
 # Layout: panel and Wings share the docker network `pelican-e2e`; the panel is
-# reachable as panel.localhost:8088 and Wings as wings.localhost:8080 from both the
-# containers (network aliases) and the Mac browser (Chromium resolves *.localhost to
-# loopback, lima forwards the published ports). Create the node with
-# fqdn=wings.localhost, scheme=http, daemon ports 8080/2022, and set the dev panel's
-# APP_URL to http://panel.localhost:8088 (the container must join pelican-e2e with
-# --network-alias panel.localhost and listen on 0.0.0.0:8088).
+# reachable as panel.localhost:8088 and Wings as <name>.localhost:<api port> from both
+# the containers (network aliases) and the Mac browser (Chromium resolves *.localhost
+# to loopback, lima forwards the published ports). Create the node with
+# fqdn=<name>.localhost, scheme=http, daemon_base=<root>/volumes, and set the dev
+# panel's APP_URL to http://panel.localhost:8088 (the container must join pelican-e2e
+# with --network-alias panel.localhost and listen on 0.0.0.0:8088).
+#
+# A second instance (e.g. `wings2 /var/lib/pelican2`, for transfers) shares the Docker
+# daemon but keeps its own directories and ports.
 #
 # Rootless Docker copies /etc at start, so Wings' config and passwd/machine-id
-# directories live under /var/lib/pelican instead of /etc/pelican.
+# directories live under <root> instead of /etc/pelican.
 set -euo pipefail
 cfg="${1:?node configuration (JSON from /api/application/nodes/<id>/configuration)}"
+NAME="${2:-wings}"
+ROOT="${3:-/var/lib/pelican}"
+BASE="$(basename "$ROOT")"
 VM=pelican
-limactl shell "$VM" -- sh -c 'sudo mkdir -p /var/lib/pelican/etc /var/lib/pelican/run /var/log/pelican /tmp/pelican \
-  && sudo chown -R "$(id -u):$(id -g)" /var/lib/pelican /var/log/pelican /tmp/pelican \
-  && (docker network inspect pelican-e2e >/dev/null 2>&1 || docker network create pelican-e2e >/dev/null)'
+read -r API_PORT SFTP_PORT < <(python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print(c["api"]["port"], c["system"]["sftp"]["bind_port"])' "$cfg")
+limactl shell "$VM" -- sh -c "sudo mkdir -p /var/lib/pelican $ROOT/etc $ROOT/run /var/log/$BASE /tmp/$BASE \
+  && sudo chown -R \"\$(id -u):\$(id -g)\" /var/lib/pelican $ROOT /var/log/$BASE /tmp/$BASE \
+  && (docker network inspect pelican-e2e >/dev/null 2>&1 || docker network create pelican-e2e >/dev/null)"
 # JSON is valid YAML once slashes are unescaped.
-python3 -c 'import json,sys; json.dump(json.load(open(sys.argv[1])), open(sys.argv[2], "w"), indent=2)' "$cfg" /tmp/wings-config.yml
-limactl copy /tmp/wings-config.yml "$VM:/var/lib/pelican/etc/config.yml"
-limactl shell "$VM" -- sh -c '
+python3 -c 'import json,sys; json.dump(json.load(open(sys.argv[1])), open(sys.argv[2], "w"), indent=2)' "$cfg" "/tmp/$NAME-config.yml"
+limactl copy "/tmp/$NAME-config.yml" "$VM:$ROOT/etc/config.yml"
+limactl shell "$VM" -- env NAME="$NAME" ROOT="$ROOT" BASE="$BASE" API_PORT="$API_PORT" SFTP_PORT="$SFTP_PORT" sh -c '
   set -e
   [ -x /var/lib/pelican/.wings-bin ] || curl -fsSL -o /var/lib/pelican/.wings-bin \
     "https://github.com/pelican-dev/wings/releases/latest/download/wings_linux_$( [ "$(uname -m)" = aarch64 ] && echo arm64 || echo amd64 )"
   chmod +x /var/lib/pelican/.wings-bin
-  docker rm -f wings >/dev/null 2>&1 || true
-  # First start writes the defaults; then move passwd/machine-id out of /etc.
-  run() { docker run -d --name wings --network pelican-e2e --network-alias wings.localhost -p 8080:8080 -p 2022:2022 \
+  docker rm -f "$NAME" >/dev/null 2>&1 || true
+  run() { docker run -d --name "$NAME" --network pelican-e2e --network-alias "$NAME.localhost" \
+    -p "$API_PORT:$API_PORT" -p "$SFTP_PORT:$SFTP_PORT" \
     -e TZ=UTC -e WINGS_UID=988 -e WINGS_GID=988 -e WINGS_USERNAME=pelican \
-    -v "$XDG_RUNTIME_DIR/docker.sock:/var/run/docker.sock" -v /var/lib/pelican/etc:/etc/pelican \
-    -v /var/lib/pelican:/var/lib/pelican -v /var/log/pelican:/var/log/pelican -v /tmp/pelican:/tmp/pelican \
-    alpine:latest /var/lib/pelican/.wings-bin --config /etc/pelican/config.yml >/dev/null; }
-  run; sleep 4; docker rm -f wings >/dev/null
-  sed -i "s|      directory: /etc/pelican$|      directory: /var/lib/pelican/run|; s|    directory: /etc/pelican/machine-id|    directory: /var/lib/pelican/run/machine-id|" /var/lib/pelican/etc/config.yml
-  run; sleep 4; docker logs wings 2>&1 | tail -3
+    -v "$XDG_RUNTIME_DIR/docker.sock:/var/run/docker.sock" -v "$ROOT/etc:/etc/pelican" \
+    -v "$ROOT:$ROOT" -v "/var/log/$BASE:/var/log/pelican" -v "/tmp/$BASE:/tmp/$BASE" \
+    -v /var/lib/pelican/.wings-bin:/usr/local/bin/wings:ro \
+    alpine:latest /usr/local/bin/wings --config /etc/pelican/config.yml >/dev/null; }
+  # First start writes the defaults; then move every directory under ROOT and
+  # passwd/machine-id out of /etc.
+  run; sleep 4; docker rm -f "$NAME" >/dev/null
+  sed -i "s|      directory: /etc/pelican$|      directory: $ROOT/run|; s|    directory: /etc/pelican/machine-id|    directory: $ROOT/run/machine-id|" "$ROOT/etc/config.yml"
+  if [ "$ROOT" != /var/lib/pelican ]; then
+    sed -i "s|/var/lib/pelican/|$ROOT/|; s|: /var/lib/pelican$|: $ROOT|; s|/tmp/pelican|/tmp/$BASE|" "$ROOT/etc/config.yml"
+  fi
+  run; sleep 4; docker logs "$NAME" 2>&1 | tail -3
 '
