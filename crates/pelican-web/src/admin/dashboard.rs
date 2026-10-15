@@ -16,7 +16,7 @@ pub fn routes() -> Router<AppState> {
     Router::new().route("/admin", get(index))
 }
 
-async fn index(admin: Admin) -> WebResult {
+async fn index(admin: Admin, headers: axum::http::HeaderMap) -> WebResult {
     let st = &admin.st;
     let version = versions::current_panel_version();
     // UpdateWidget: a canary build is never compared, so it always reads "up to date".
@@ -30,7 +30,17 @@ async fn index(admin: Admin) -> WebResult {
         _ => "available",
     };
     let no_nodes = nodes::Entity::find().count(&st.db).await? == 0;
-    admin
+    // The widgets PHP plugins add to the dashboard (`/admin/rs-widgets` of the bridge).
+    let widgets = if pelican_api::sidecar::manifest().is_some_and(|m| m.admin_widgets > 0) {
+        crate::sidecar_proxy::embedded(&admin, &headers, "/admin/rs-widgets").await
+    } else {
+        None
+    };
+    let (sidecar, cookies) = match widgets {
+        Some((t, c)) => (Some(t), c),
+        None => (None, Vec::new()),
+    };
+    let mut resp = admin
         .page(
             "",
             "admin/dashboard.html",
@@ -43,7 +53,14 @@ async fn index(admin: Admin) -> WebResult {
                 in_container => std::path::Path::new("/.dockerenv").exists(),
                 canary => versions::current_comparable_version().is_none(),
                 no_nodes => no_nodes,
+                sidecar_head => sidecar.as_ref().map(|t| t.head.clone()),
+                sidecar_main => sidecar.as_ref().map(|t| t.main.clone()),
+                sidecar_tail => sidecar.as_ref().map(|t| t.tail.clone()),
             },
         )
-        .await
+        .await?;
+    for c in cookies {
+        resp.headers_mut().append(axum::http::header::SET_COOKIE, c);
+    }
+    Ok(resp)
 }

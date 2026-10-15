@@ -87,6 +87,32 @@ pub async fn fallback(web: Web, req: Request) -> Response {
     out
 }
 
+/// A sidecar page fetched for a pelican-rs page that embeds it (the plugins' dashboard widgets):
+/// the user's own request headers (sidecar cookies), the page cut out ([`transplant`]) and the
+/// cookies the sidecar sets, which the embedding page passes on.
+pub async fn embedded(
+    web: &Web,
+    headers: &axum::http::HeaderMap,
+    path: &str,
+) -> Option<(Transplant, Vec<HeaderValue>)> {
+    let sc = sidecar::get(&web.st)?;
+    let mut req = Request::builder().method(axum::http::Method::GET).uri(path);
+    for (name, value) in headers {
+        if matches!(name.as_str(), "cookie" | "user-agent" | "accept-language") {
+            req = req.header(name, value);
+        }
+    }
+    let req = req.header(header::ACCEPT, "text/html").body(Body::empty()).ok()?;
+    let resp = forward(&sc, web, req).await.ok()?;
+    if resp.status() != StatusCode::OK {
+        return None;
+    }
+    let cookies: Vec<HeaderValue> = resp.headers().get_all(header::SET_COOKIE).iter().cloned().collect();
+    let bytes = axum::body::to_bytes(resp.into_body(), 16 * 1024 * 1024).await.ok()?;
+    let page = String::from_utf8_lossy(&bytes);
+    Some((transplant(&page)?, cookies))
+}
+
 /// A plugin's Filament page cut out of the sidecar's layout: its head (styles, scripts), the
 /// page (`main.fi-main`, as a `div`) and what follows the layout in `body` (Livewire, Filament's
 /// scripts and notifications). Cut along marker comments so the markup stays as sent.

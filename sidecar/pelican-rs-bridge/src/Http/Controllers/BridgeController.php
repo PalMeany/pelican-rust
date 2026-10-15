@@ -36,6 +36,7 @@ class BridgeController extends Controller
             'listeners' => $this->listenedEvents(),
             'render_hooks' => array_keys($this->pluginRenderHooks()),
             'boots' => $this->pluginsBootPanels(),
+            'admin_widgets' => count(\PelicanRs\Bridge\Filament\WidgetsHost::pluginWidgets(Filament::getPanel('admin'))),
             'console_actions' => array_map(fn ($a) => $a->getName(), \PelicanRs\Bridge\Filament\ConsoleActionHost::pluginHeaderActions()),
             'tasks' => $this->tasks(),
             'features' => $this->features(),

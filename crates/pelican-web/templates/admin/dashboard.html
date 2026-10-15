@@ -37,4 +37,7 @@
     <p>{{ trans(D ~ 'intro-help.content') }}</p>
   {% endcall %}
 </div>
+{% if sidecar_main %}<div class="sidecar-page">{{ sidecar_main | safe }}</div>{% endif %}
 {% endblock %}
+{% block head %}{{ sidecar_head | safe if sidecar_head }}{% endblock %}
+{% block body_end %}{{ sidecar_tail | safe if sidecar_tail }}{% endblock %}

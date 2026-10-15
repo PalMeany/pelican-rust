@@ -44,6 +44,7 @@ const BRIDGE_FILES: &[(&str, &str)] = &[
         "src/Filament/PluginSettingsHost.php",
         include_str!("../../../sidecar/pelican-rs-bridge/src/Filament/PluginSettingsHost.php"),
     ),
+    ("src/Filament/WidgetsHost.php", include_str!("../../../sidecar/pelican-rs-bridge/src/Filament/WidgetsHost.php")),
     (
         "resources/views/plugin-settings.blade.php",
         include_str!("../../../sidecar/pelican-rs-bridge/resources/views/plugin-settings.blade.php"),
@@ -202,6 +203,9 @@ pub struct Manifest {
     /// A plugin acts when a panel boots (`boot()` sending alert banners, panel render hooks).
     #[serde(default)]
     pub boots: bool,
+    /// Widgets plugins add to the admin panel's dashboard (shown from `/admin/rs-widgets`).
+    #[serde(default)]
+    pub admin_widgets: usize,
     /// Names of the console header actions plugins added (`Console::registerCustomHeaderActions()`).
     #[serde(default)]
     pub console_actions: Vec<String>,
