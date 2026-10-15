@@ -191,7 +191,7 @@ impl LogActivity for Activity {
     }
 }
 
-fn listens(c: &webhook_configurations::Model, event: &str) -> bool {
+pub(crate) fn listens(c: &webhook_configurations::Model, event: &str) -> bool {
     match &c.events.0 {
         Value::Array(a) => a.iter().any(|e| e.as_str() == Some(event)),
         Value::Object(m) => m.values().any(|e| e.as_str() == Some(event)),
@@ -231,7 +231,7 @@ async fn activity_payload<C: ConnectionTrait>(db: &C, a: &Activity) -> ApiResult
 }
 
 /// `hasPayloadContent()`: anything besides `event` that is not null/""/empty.
-fn has_content(data: &Value) -> bool {
+pub(crate) fn has_content(data: &Value) -> bool {
     data.as_object().is_some_and(|m| {
         m.iter().filter(|(k, _)| k.as_str() != "event").any(|(_, v)| match v {
             Value::Null => false,
