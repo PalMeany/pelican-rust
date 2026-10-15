@@ -5,8 +5,7 @@ use axum::Router;
 use axum::extract::Path;
 use axum::routing::post;
 use minijinja::{Value as Mj, context};
-use pelican_api::binding::Bound;
-use pelican_api::services::LogActivity;
+use pelican_api::{binding::Bound, model_events, services::LogActivity};
 use pelican_core::activity::morph;
 use pelican_core::state::AppState;
 use pelican_db::entities::{allocations, database_host_node, database_hosts, databases, nodes, servers};
@@ -119,6 +118,9 @@ async fn allocation_op(admin: Admin, Path((id, aid, op)): Path<(i64, i64, String
         updated_at: Set(Some(now)),
         ..Default::default()
     };
+    // Instance updates in the original (`$allocation->update([...])`,
+    // `$this->getOwnerRecord()->update(['allocation_id' => …])`) fire events;
+    // inline columns save only when the value differs.
     match op.as_str() {
         "primary" => {
             let b = st.db.get_database_backend();
@@ -129,20 +131,35 @@ async fn allocation_op(admin: Admin, Path((id, aid, op)): Path<(i64, i64, String
                     vec![aid.into(), now.into(), id.into()],
                 ))
                 .await?;
+            // make-primary action → `$server->update(['allocation_id' => …])`.
+            model_events::fire_id::<servers::Entity>(st, model_events::Action::Updated, id).await;
         }
         "lock" | "unlock" => {
-            update(allocations::ActiveModel { is_locked: Set(Bool(op == "lock")), ..base }).await?;
+            if update(allocations::ActiveModel { is_locked: Set(Bool(op == "lock")), ..base }).await?
+                && Bool(op == "lock") != a.is_locked
+            {
+                model_events::updated(st, &a).await;
+            }
         }
         "show-port" => {
-            update(allocations::ActiveModel { show_port: Set(Bool(form.bool("show_port"))), ..base }).await?;
+            let v = Bool(form.bool("show_port"));
+            if update(allocations::ActiveModel { show_port: Set(v), ..base }).await? && v != a.show_port {
+                model_events::updated(st, &a).await;
+            }
         }
         "alias" => {
             let v = form.get("ip_alias").trim().to_string();
-            update(allocations::ActiveModel { ip_alias: Set((!v.is_empty()).then_some(v)), ..base }).await?;
+            let val = (!v.is_empty()).then_some(v);
+            if update(allocations::ActiveModel { ip_alias: Set(val.clone()), ..base }).await? && val != a.ip_alias {
+                model_events::updated(st, &a).await;
+            }
         }
         "notes" => {
             let v = form.get("notes").trim().to_string();
-            update(allocations::ActiveModel { notes: Set((!v.is_empty()).then_some(v)), ..base }).await?;
+            let val = (!v.is_empty()).then_some(v);
+            if update(allocations::ActiveModel { notes: Set(val.clone()), ..base }).await? && val != a.notes {
+                model_events::updated(st, &a).await;
+            }
         }
         "dissociate" => release(&admin, &s, &[aid]).await?,
         _ => return Err(WebError::Unprocessable),
@@ -174,6 +191,7 @@ async fn release(admin: &Admin, s: &servers::Model, ids: &[i64]) -> Result<(), W
     ))
     .await?;
     let primary_released = s.allocation_id.is_none_or(|p| ids.contains(&p.0));
+    let mut primary_saved = false;
     if primary_released {
         let next = allocations::Entity::find()
             .filter(allocations::Column::ServerId.eq(s.id.0))
@@ -187,6 +205,9 @@ async fn release(admin: &Admin, s: &servers::Model, ids: &[i64]) -> Result<(), W
             vec![next.as_ref().map(|a| a.id.0).into(), now.into(), s.id.0.into()],
         ))
         .await?;
+        // `associate()` + `$this->save()`: Eloquent fires only when the pointer
+        // actually changed.
+        primary_saved = next.as_ref().map(|a| a.id) != s.allocation_id;
         if let Some(p) = &next {
             let _ = admin
                 .activity("server:allocation.primary")
@@ -198,6 +219,11 @@ async fn release(admin: &Admin, s: &servers::Model, ids: &[i64]) -> Result<(), W
         }
     }
     txn.commit().await?;
+    // `releaseAllocations`: the allocation reset is a mass relation update (no
+    // events), but the re-picked primary is `$this->save()` → updated Server.
+    if primary_saved {
+        model_events::fire_id::<servers::Entity>(st, model_events::Action::Updated, s.id.0).await;
+    }
     Ok(())
 }
 
@@ -249,16 +275,28 @@ async fn allocation_create(admin: Admin, Path(id): Path<i64>, form: Form) -> Web
             if s.allocation_id.is_none() {
                 if let Some(first) = ids.first() {
                     let b = admin.st.db.get_database_backend();
+                    let now = pelican_db::Timestamp(pelican_core::time::now());
                     admin
                         .st
                         .db
                         .execute_raw(raw::stmt(
                             b,
-                            "update {servers} set {allocation_id} = ? where {id} = ?",
-                            vec![(*first).into(), id.into()],
+                            "update {servers} set {allocation_id} = ?, {updated_at} = ? where {id} = ?",
+                            vec![(*first).into(), now.into(), id.into()],
                         ))
                         .await?;
                 }
+            }
+            // AssignmentService::handle → `$server->update(['allocation_id' => …])`
+            // (the guard above matches Eloquent isDirty; the allocation inserts
+            // belong to `pelican_api::application::nodes::assign_allocations`).
+            if s.allocation_id.is_none() && ids.first().is_some() {
+                model_events::fire_id::<pelican_db::entities::servers::Entity>(
+                    &admin.st,
+                    model_events::Action::Updated,
+                    id,
+                )
+                .await;
             }
             admin.flash_success(admin.t("filament-actions::create.single.notifications.created.title"));
         }
@@ -283,7 +321,10 @@ async fn allocation_associate(admin: Admin, Path(id): Path<i64>, form: Form) -> 
         if a.node_id != n.id || a.server_id.is_some() {
             continue;
         }
-        pelican_db::write::update(
+        // Filament AssociateAction → `$allocation->allocate()->associate($server); $allocation->save();`
+        // per record (updated event; the is_locked part comes from the mass
+        // `whereIn` update in `after()` — no event there).
+        if pelican_db::write::update(
             &st.db,
             &allocations::ActiveModel {
                 id: sea_orm::ActiveValue::Unchanged(a.id),
@@ -293,7 +334,10 @@ async fn allocation_associate(admin: Admin, Path(id): Path<i64>, form: Form) -> 
                 ..Default::default()
             },
         )
-        .await?;
+        .await?
+        {
+            model_events::updated(st, &a).await;
+        }
         first.get_or_insert(aid);
     }
     if let (None, Some(f)) = (s.allocation_id, first) {
@@ -305,6 +349,8 @@ async fn allocation_associate(admin: Admin, Path(id): Path<i64>, form: Form) -> 
                 vec![f.into(), id.into()],
             ))
             .await?;
+        // `$this->getOwnerRecord()->update(['allocation_id' => …])` in `after()`.
+        model_events::fire_id::<servers::Entity>(st, model_events::Action::Updated, id).await;
     }
     Ok(admin.redirect(&back(id)))
 }

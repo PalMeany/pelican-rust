@@ -11,14 +11,14 @@ use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use chrono::Utc;
 use minijinja::{Value as Mj, context};
-use pelican_api::binding::Bound;
-use pelican_api::client::backups as api;
+use pelican_api::model_events;
 use pelican_api::pipeline::Ctx;
 use pelican_api::services::LogActivity;
 use pelican_api::validation::Validator;
+use pelican_api::{binding::Bound, client::backups as api};
 use pelican_core::activity::morph;
 use pelican_core::state::AppState;
-use pelican_db::entities::{backup_hosts, backups, nodes, server_user_settings};
+use pelican_db::entities::{backup_hosts, backups, nodes, server_user_settings, servers};
 use pelican_db::raw;
 use pelican_db::{Int, Timestamp};
 use sea_orm::sea_query::Expr;
@@ -155,13 +155,16 @@ async fn notification_settings(p: &ServerPanel) -> Result<(bool, bool), WebError
 /// `User::updateServerSetting()` inside the caller's transaction: merge one
 /// key, keep only the known keys (`array_intersect_key` against the two
 /// defaults), save.
+/// Returns ("created", Some(id)) / ("updated", None) / ("clean", None)
+/// (Eloquent firstOrNew + save(): a clean model writes nothing and fires nothing).
+#[allow(clippy::type_complexity)]
 async fn save_setting<C: ConnectionTrait>(
     db: &C,
     user_id: i64,
     server_id: i64,
     key: &str,
     value: bool,
-) -> Result<(), sea_orm::DbErr> {
+) -> Result<(&'static str, Option<i64>), sea_orm::DbErr> {
     const KNOWN: [&str; 2] = ["manual_backup_notifications", "scheduled_backup_notifications"];
     let existing = server_user_settings::Entity::find()
         .filter(server_user_settings::Column::UserId.eq(user_id))
@@ -170,8 +173,12 @@ async fn save_setting<C: ConnectionTrait>(
         .await?;
     let mut m =
         existing.as_ref().and_then(|e| e.settings.as_ref()).and_then(|j| j.0.as_object().cloned()).unwrap_or_default();
+    let prev_same = m.get(key) == Some(&Value::Bool(value));
     m.insert(key.into(), Value::Bool(value));
     m.retain(|k, _| KNOWN.contains(&k.as_str()));
+    if prev_same {
+        return Ok(("clean", None));
+    }
     let now = Timestamp(pelican_core::time::now());
     match existing {
         Some(e) => {
@@ -182,6 +189,7 @@ async fn save_setting<C: ConnectionTrait>(
                 ..Default::default()
             };
             pelican_db::write::update(db, &am).await?;
+            Ok(("updated", Some(e.id.0)))
         }
         None => {
             let am = server_user_settings::ActiveModel {
@@ -192,10 +200,10 @@ async fn save_setting<C: ConnectionTrait>(
                 updated_at: Set(Some(now)),
                 ..Default::default()
             };
-            pelican_db::write::insert(db, am).await?;
+            let new_id = pelican_db::write::insert_id(db, &am).await?.unwrap_or(0);
+            Ok(("created", Some(new_id)))
         }
     }
-    Ok(())
 }
 
 /// First `errors[0].detail` of an error object list, for notification bodies.
@@ -443,6 +451,8 @@ async fn create(p: ServerPanel, form: Form) -> WebResult<Response> {
             .log_in(&st, &txn)
             .await?;
         txn.commit().await?;
+        // InitiateBackupService: `Backup::create([...])`.
+        model_events::created(&st, &backup).await;
         Ok(backup)
     }
     .await;
@@ -489,9 +499,20 @@ async fn save_notifications(p: ServerPanel, form: Form) -> WebResult<Response> {
     let sid = p.server.id.0;
     let result = async {
         let txn = p.st.db.begin().await?;
-        save_setting(&txn, uid, sid, "manual_backup_notifications", manual).await?;
-        save_setting(&txn, uid, sid, "scheduled_backup_notifications", scheduled).await?;
+        // `updateServerSetting()` per key: firstOrNew + `$row->save()` → created for a new
+        // row, updated when the key changed, nothing for a clean save.
+        let mut events: Vec<(model_events::Action, i64)> = Vec::new();
+        for (key, val) in [("manual_backup_notifications", manual), ("scheduled_backup_notifications", scheduled)] {
+            match save_setting(&txn, uid, sid, key, val).await? {
+                ("created", Some(id)) => events.push((model_events::Action::Created, id)),
+                ("updated", Some(id)) => events.push((model_events::Action::Updated, id)),
+                _ => {}
+            }
+        }
         txn.commit().await?;
+        for (action, id) in events {
+            model_events::fire_id::<server_user_settings::Entity>(&p.st, action, id).await;
+        }
         Ok::<(), sea_orm::DbErr>(())
     }
     .await;
@@ -558,12 +579,14 @@ async fn rename(p: ServerPanel, RecordId(id): RecordId, form: Form) -> WebResult
     let old = b.name.clone();
     if old != name {
         let now = Timestamp(pelican_core::time::now());
+        // Client API `rename` → `$backup->update(['name' => …])` (updated).
         backups::Entity::update_many()
             .col_expr(backups::Column::Name, Expr::value(name.clone()))
             .col_expr(backups::Column::UpdatedAt, Expr::value(now))
             .filter(backups::Column::Id.eq(b.id))
             .exec(&p.st.db)
             .await?;
+        model_events::fire_id::<backups::Entity>(&p.st, model_events::Action::Updated, id).await;
         log_act(
             ctx_activity(&p, "server:backup.rename").property("old_name", old).property("new_name", name.clone()),
             &p.st,
@@ -674,7 +697,14 @@ async fn restore(p: ServerPanel, RecordId(id): RecordId, form: Form) -> WebResul
             }
             .await;
             match result {
-                Ok(()) => p.flash_success(t("notification_started")),
+                Ok(()) => {
+                    // Client API `restore` → `$server->update(['status' => …RestoringBackup])`.
+                    if p.server.status.as_deref() != Some("restoring_backup") {
+                        model_events::fire_id::<servers::Entity>(&p.st, model_events::Action::Updated, p.server.id.0)
+                            .await;
+                    }
+                    p.flash_success(t("notification_started"));
+                }
                 Err(e) => {
                     tracing::warn!(error=?e, "backup restore failed");
                     p.flash_danger(t("notification_fail"), first_detail(Some(&e.errors)));
@@ -736,12 +766,14 @@ async fn lock(p: ServerPanel, RecordId(id): RecordId, form: Form) -> WebResult<R
     let b = find(&p, id).await?;
     let event = if b.is_locked.0 { "server:backup.unlock" } else { "server:backup.lock" };
     let now = Timestamp(pelican_core::time::now());
+    // Client API `toggleLock` → `$backup->update(['is_locked' => …])` (updated).
     backups::Entity::update_many()
         .col_expr(backups::Column::IsLocked, Expr::value(!b.is_locked.0))
         .col_expr(backups::Column::UpdatedAt, Expr::value(now))
         .filter(backups::Column::Id.eq(b.id))
         .exec(&p.st.db)
         .await?;
+    model_events::fire_id::<backups::Entity>(&p.st, model_events::Action::Updated, id).await;
     log_act(ctx_activity(&p, event).property("name", b.name.clone()), &p.st).await?;
     let _ = form;
     Ok(p.redirect(&form.back(&format!("{}/backups", p.base_url()))))

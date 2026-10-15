@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use axum::extract::Path;
 use axum::response::Response;
 use minijinja::{Value as MjValue, context};
+use pelican_api::model_events;
 use pelican_core::auth::AuthUser;
 use pelican_core::permissions::has_server_permission;
 use pelican_db::entities::{allocations, eggs, nodes, servers, users};
@@ -468,6 +469,9 @@ pub async fn save_customization(
         Some(serde_json::Value::Object(m)) => serde_json::Value::Object(m.clone()),
         _ => json!({}),
     };
+    // `setCustomization` → `$this->update(['customization' => …])`: event only
+    // when the key's value actually changed (Eloquent isDirty).
+    let prev_same = stored.as_object().and_then(|m| m.get(key)) == Some(&value);
     if let Some(m) = stored.as_object_mut() {
         m.insert(key.into(), value);
     }
@@ -485,6 +489,9 @@ pub async fn save_customization(
             ],
         ))
         .await?;
+    if !prev_same {
+        model_events::fire_id::<users::Entity>(&web.st, model_events::Action::Updated, user.id.0).await;
+    }
     Ok(())
 }
 

@@ -6,7 +6,7 @@ use axum::Router;
 use axum::extract::Path;
 use axum::routing::{get, post};
 use minijinja::{Value as Mj, context};
-use pelican_api::validation::Validator;
+use pelican_api::{model_events, validation::Validator};
 use pelican_core::state::AppState;
 use pelican_db::entities::{api_keys, users};
 use pelican_db::{Int, Json, Timestamp};
@@ -325,7 +325,9 @@ async fn store(admin: Admin, form: Form) -> WebResult {
         updated_at: Set(Some(now)),
         ..Default::default()
     };
-    pelican_db::write::insert(&admin.st.db, am).await?;
+    // CreateApiKey::handleRecordCreation → `ApiKey::create($data)` (created event).
+    let key = pelican_db::write::insert(&admin.st.db, am).await?;
+    model_events::created(&admin.st, &key).await;
     admin.flash_success(admin.t("filament-panels::resources/pages/create-record.notifications.created.title"));
     Ok(admin.redirect("/admin/api-keys"))
 }
@@ -338,7 +340,9 @@ async fn delete(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
         .one(&admin.st.db)
         .await?
         .ok_or(WebError::NotFound)?;
+    // DeleteAction → `$record->delete()` (deleted event; the row was already read).
     api_keys::Entity::delete_by_id(k.id).exec(&admin.st.db).await?;
+    model_events::deleted(&admin.st, &k).await;
     admin.flash_success(admin.t("filament-actions::delete.single.notifications.deleted.title"));
     Ok(admin.redirect(&form.back("/admin/api-keys")))
 }

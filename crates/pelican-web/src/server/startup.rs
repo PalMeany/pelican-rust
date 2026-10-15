@@ -12,6 +12,7 @@ use axum::response::Response;
 use axum::routing::{get, post};
 use minijinja::context;
 use pelican_api::binding::Bound;
+use pelican_api::model_events;
 use pelican_api::pipeline::Ctx;
 use pelican_api::services::{LogActivity, server_saved};
 use pelican_core::activity::morph;
@@ -119,7 +120,11 @@ async fn ensure_variables_exist<C: ConnectionTrait>(db: &C, p: &ServerPanel, b: 
             updated_at: Set(Some(now)),
             ..Default::default()
         };
-        pelican_db::write::insert_id(db, &am).await?;
+        // `ServerVariable::firstOrCreate(...)` in `Server::ensureVariablesExist()`
+        // (created event for the missing rows).
+        if let Some(new_id) = pelican_db::write::insert_id(db, &am).await? {
+            model_events::fire_id::<server_variables::Entity>(&p.st, model_events::Action::Created, new_id).await;
+        }
     }
     Ok(())
 }
@@ -233,6 +238,10 @@ pub(crate) async fn save_server_field(
     image: Option<String>,
 ) -> Result<(), WebError> {
     use pelican_db::entities::servers;
+    // Eloquent isDirty: `forceFill` only marks a field dirty when its value
+    // actually differs from the stored one.
+    let changed = startup.as_ref().is_some_and(|s| *s != p.server.startup)
+        || image.as_ref().is_some_and(|i| *i != p.server.image);
     let now = ts_now();
     let am = servers::ActiveModel {
         id: Set(p.server.id),
@@ -242,6 +251,11 @@ pub(crate) async fn save_server_field(
         ..Default::default()
     };
     pelican_db::write::update(&p.st.db, &am).await?;
+    if changed {
+        // `$server->forceFill([...])->saveOrFail()` → updated Server (a clean
+        // model would not write at all).
+        model_events::fire_id::<servers::Entity>(&p.st, model_events::Action::Updated, p.server.id.0).await;
+    }
     // Model hooks fire through `saveOrFail`; failures surface like an uncaught
     // exception in the original.
     let ctx = api_ctx(p)?;
@@ -360,6 +374,8 @@ async fn variable(p: ServerPanel, RecordId(id): RecordId, form: Form) -> WebResu
         match existing {
             Some(row) => {
                 if row.variable_value != stored {
+                    // `updateOrCreate` on an existing row (updated; dirty guard
+                    // matches Eloquent).
                     let now = ts_now();
                     pelican_db::entities::server_variables::Entity::update_many()
                         .col_expr(
@@ -370,6 +386,8 @@ async fn variable(p: ServerPanel, RecordId(id): RecordId, form: Form) -> WebResu
                         .filter(server_variables::Column::Id.eq(row.id))
                         .exec(&p.st.db)
                         .await?;
+                    model_events::fire_id::<server_variables::Entity>(&p.st, model_events::Action::Updated, row.id.0)
+                        .await;
                 }
             }
             None => {
@@ -381,7 +399,11 @@ async fn variable(p: ServerPanel, RecordId(id): RecordId, form: Form) -> WebResu
                     updated_at: Set(Some(ts_now())),
                     ..Default::default()
                 };
-                pelican_db::write::insert_id(&p.st.db, &am).await?;
+                // `updateOrCreate` inserting a new row (created event).
+                if let Some(new_id) = pelican_db::write::insert_id(&p.st.db, &am).await? {
+                    model_events::fire_id::<server_variables::Entity>(&p.st, model_events::Action::Created, new_id)
+                        .await;
+                }
             }
         }
         // `$original !== $state` (strict PHP comparison on the stored value).

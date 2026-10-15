@@ -5,6 +5,7 @@
 
 use axum::extract::Path;
 use axum::response::Response;
+use pelican_api::model_events;
 use pelican_api::services::LogActivity;
 use pelican_core::activity::morph;
 use pelican_core::env::Env;
@@ -702,12 +703,19 @@ async fn find_linked(st: &AppState, id: &str, oauth_id: &Value) -> Result<Option
 
 /// `OAuthService::linkUser()`.
 pub async fn link_user(st: &AppState, user: &users::Model, id: &str, oauth_id: &Value) -> Result<(), WebError> {
+    let prev = user.oauth.as_ref().map(|j| j.0.clone());
     let mut oauth = match user.oauth.as_ref().map(|j| j.0.clone()) {
         Some(Value::Object(m)) => m,
         _ => serde_json::Map::new(),
     };
     oauth.insert(id.into(), oauth_id.clone());
-    set_oauth(st, user.id.0, Value::Object(oauth)).await
+    // `$user->update(['oauth' => $oauth])`: Eloquent fires only when the value changed.
+    let dirty = prev.as_ref() != Some(&json!(oauth));
+    set_oauth(st, user.id.0, Value::Object(oauth)).await?;
+    if dirty {
+        model_events::fire_id::<users::Entity>(st, model_events::Action::Updated, user.id.0).await;
+    }
+    Ok(())
 }
 
 /// `OAuthService::unlinkUser()` / the profile's unlink action.
@@ -716,7 +724,9 @@ pub async fn unlink_user(st: &AppState, user: &users::Model, id: &str) -> Result
     if oauth.remove(id).is_none() {
         return Ok(false);
     }
+    // `$user->update(['oauth' => $oauth])` — removing the key always changes it.
     set_oauth(st, user.id.0, Value::Object(oauth)).await?;
+    model_events::fire_id::<users::Entity>(st, model_events::Action::Updated, user.id.0).await;
     Ok(true)
 }
 

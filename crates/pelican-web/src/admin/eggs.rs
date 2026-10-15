@@ -10,7 +10,10 @@ use axum::http::{HeaderValue, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use minijinja::{Value as Mj, context};
-use pelican_api::validation::{CustomRule, Validator};
+use pelican_api::{
+    model_events,
+    validation::{CustomRule, Validator},
+};
 use pelican_core::state::AppState;
 use pelican_db::entities::{allocations, egg_variables, eggs, nodes, servers, users};
 use pelican_db::{Bool, Int, Json, SmallBool, Timestamp, raw};
@@ -801,10 +804,14 @@ async fn persist(admin: &Admin, id: Option<i64>, f: &EggForm) -> Result<i64, Web
         updated_at: Set(Some(now)),
         ..Default::default()
     };
+    // Events fire per model instance after commit (EditRecord / repeater
+    // relationship saves in the original).
+    let mut egg_created: Option<i64> = None;
+    let mut egg_updated = false;
     let egg_id = match id {
         Some(id) => {
             am.id = sea_orm::ActiveValue::Unchanged(Int(id));
-            pelican_db::write::update(&txn, &am).await?;
+            egg_updated = pelican_db::write::update(&txn, &am).await?;
             id
         }
         None => {
@@ -812,9 +819,12 @@ async fn persist(admin: &Admin, id: Option<i64>, f: &EggForm) -> Result<i64, Web
             am.author = Set(f.author.clone());
             am.script_is_privileged = Set(Bool(f.script_is_privileged));
             am.created_at = Set(Some(now));
-            pelican_db::write::insert_id(&txn, &am).await?.ok_or_else(|| WebError::internal("no id"))?
+            egg_created = pelican_db::write::insert_id(&txn, &am).await?;
+            egg_created.unwrap_or_default()
         }
     };
+    let mut var_created: Vec<i64> = Vec::new();
+    let mut var_updated: Vec<i64> = Vec::new();
     let mut kept: Vec<i64> = Vec::new();
     for var in &f.variables {
         let rules: Vec<Value> = var.rules.iter().map(|r| json!(r)).collect();
@@ -837,7 +847,9 @@ async fn persist(admin: &Admin, id: Option<i64>, f: &EggForm) -> Result<i64, Web
         match existing {
             Some(v) => {
                 row.id = sea_orm::ActiveValue::Unchanged(v.id);
-                pelican_db::write::update(&txn, &row).await?;
+                if pelican_db::write::update(&txn, &row).await? {
+                    var_updated.push(v.id.0);
+                }
                 kept.push(v.id.0);
             }
             None => {
@@ -845,20 +857,42 @@ async fn persist(admin: &Admin, id: Option<i64>, f: &EggForm) -> Result<i64, Web
                 row.created_at = Set(Some(now));
                 if let Some(new) = pelican_db::write::insert_id(&txn, &row).await? {
                     kept.push(new);
+                    var_created.push(new);
                 }
             }
         }
     }
-    // Repeater relationship: rows removed from the form are deleted.
+    // Repeater relationship: rows removed from the form are deleted
+    // (`$record->delete()` per removed variable in the original). Read their
+    // pre-delete state first — the deleted events carry it.
     let b = txn.get_database_backend();
     let mut sql = String::from("delete from {egg_variables} where {egg_id} = ?");
     let mut vals: Vec<sea_orm::Value> = vec![egg_id.into()];
+    let mut removed_q = egg_variables::Entity::find().filter(egg_variables::Column::EggId.eq(Int(egg_id)));
     if !kept.is_empty() {
         sql.push_str(&format!(" and {{id}} not in ({})", vec!["?"; kept.len()].join(", ")));
         vals.extend(kept.iter().map(|i| sea_orm::Value::from(*i)));
+        removed_q = removed_q.filter(egg_variables::Column::Id.is_not_in(kept.clone()));
     }
+    let removed = removed_q.all(&txn).await?;
     txn.execute_raw(raw::stmt(b, &sql, vals)).await?;
     txn.commit().await?;
+    // eloquent events (order: egg, variable updates, creates, removals).
+    if egg_updated {
+        model_events::fire_id::<eggs::Entity>(st, model_events::Action::Updated, egg_id).await;
+    }
+    if let Some(cid) = egg_created {
+        model_events::fire_id::<eggs::Entity>(st, model_events::Action::Created, cid).await;
+    }
+    for vid in var_updated {
+        model_events::fire_id::<egg_variables::Entity>(st, model_events::Action::Updated, vid).await;
+    }
+    for vid in var_created {
+        model_events::fire_id::<egg_variables::Entity>(st, model_events::Action::Created, vid).await;
+    }
+    for m in &removed {
+        model_events::deleted(st, m).await;
+    }
     Ok(egg_id)
 }
 

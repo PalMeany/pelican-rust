@@ -12,7 +12,10 @@ use axum::response::Response;
 use axum::routing::{get, post};
 use minijinja::{Value as Mj, context};
 use pelican_api::application::webhooks as api_webhooks;
-use pelican_api::validation::{CustomRule, Validator, php_string};
+use pelican_api::{
+    model_events,
+    validation::{CustomRule, Validator, php_string},
+};
 use pelican_core::state::AppState;
 use pelican_db::entities::webhook_configurations;
 use pelican_db::{Int, Json, Timestamp};
@@ -418,6 +421,8 @@ async fn store(p: ServerPanel, form: Form) -> WebResult<Response> {
         },
     )
     .await?;
+    // CreateRecord → `WebhookConfiguration::create($data)`.
+    model_events::created(&p.st, &wh).await;
     p.flash_success(p.t("filament-panels::resources/pages/create-record.notifications.created.title"));
     Ok(p.redirect(&format!("{}/webhook/{}/edit", p.base_url(), wh.id.0)))
 }
@@ -463,7 +468,17 @@ async fn update(p: ServerPanel, RecordId(id): RecordId, form: Form) -> WebResult
         updated_at: Set(Some(Timestamp(pelican_core::time::now()))),
         ..Default::default()
     };
+    // EditRecord → `$record->update($data)`; event only on actual change.
+    let changed = data.name != rec.name
+        || data.endpoint != rec.endpoint
+        || rec.r#type.clone().unwrap_or_default()
+            != (if data.r#type.is_empty() { api_webhooks::REGULAR.into() } else { data.r#type.clone() })
+        || rec.events.0 != json!(data.events)
+        || rec.headers.clone().map(|h| h.0) != Some(Value::Object(normalize_headers(&data.headers)));
     pelican_db::write::update(&p.st.db, &am).await?;
+    if changed {
+        model_events::fire_id::<webhook_configurations::Entity>(&p.st, model_events::Action::Updated, id).await;
+    }
     p.flash_success(p.t("filament-panels::resources/pages/edit-record.notifications.saved.title"));
     Ok(p.redirect(&format!("{}/webhook/{id}/edit", p.base_url())))
 }
@@ -508,6 +523,8 @@ async fn delete_one(p: &ServerPanel, id: i64) -> Result<(), WebError> {
         },
     )
     .await?;
+    // SoftDeletes → `$record->delete()`; row now carries deleted_at.
+    model_events::fire_id::<webhook_configurations::Entity>(&p.st, model_events::Action::Deleted, id).await;
     Ok(())
 }
 
@@ -539,6 +556,8 @@ async fn replicate(p: ServerPanel, RecordId(id): RecordId) -> WebResult<Response
         },
     )
     .await?;
+    // ReplicateAction → `$replica->save()` (created event).
+    model_events::created(&p.st, &replica).await;
     p.flash_success(p.t("filament-actions::replicate.single.notifications.replicated.title"));
     Ok(p.redirect(&format!("{}/webhook/{}/edit", p.base_url(), replica.id.0)))
 }

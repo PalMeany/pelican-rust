@@ -9,9 +9,8 @@ use axum::Router;
 use axum::extract::Path;
 use axum::routing::{get, post};
 use minijinja::{Value as Mj, context};
-use pelican_api::application::servers as app_servers;
-use pelican_api::binding::Bound;
 use pelican_api::validation::{CustomRule, Validator};
+use pelican_api::{application::servers as app_servers, binding::Bound, model_events};
 use pelican_core::activity::morph;
 use pelican_core::state::AppState;
 use pelican_db::entities::{
@@ -1000,6 +999,9 @@ pub(crate) async fn store_new_user(st: &AppState, data: &FormData) -> Result<use
         reset_token = Some(plain);
     }
     txn.commit().await?;
+    // `UserCreationService::handle` → `User::query()->forceCreate([...])`; the
+    // role pivot sync and the password-broker token rows fire nothing.
+    model_events::created(st, &user).await;
     pelican_api::services::account_created(st, &user, reset_token.as_deref())
         .await
         .map_err(|e| WebError::internal(format!("{e:?}")))?;
@@ -1054,6 +1056,18 @@ async fn update(admin: Admin, Path(id): Path<i64>, form: Form) -> WebResult {
     // Relationship saveRelationshipsUsing → syncRoles (root admins keep theirs).
     if !is_root_target(st, id).await? {
         sync_roles(&st.db, id, &data.role_ids()).await?;
+    }
+    // `UserUpdateService` → `$user->forceFill($data)->saveOrFail()`; fires only
+    // when one of the submitted fields actually differs from the stored model.
+    let user_changed = u.username != data.username.to_lowercase()
+        || u.email != data.email.to_lowercase()
+        || u.external_id != (!data.external_id.is_empty()).then(|| data.external_id.clone())
+        || Bool(data.is_managed_externally) != u.is_managed_externally
+        || u.language != data.language
+        || u.timezone != data.timezone
+        || password_changed;
+    if user_changed {
+        model_events::fire_id::<users::Entity>(st, model_events::Action::Updated, id).await;
     }
     if password_changed {
         // PasswordChanged → RevocationListener.
@@ -1115,7 +1129,9 @@ async fn delete_one(admin: &Admin, u: &users::Model) -> Result<Result<(), String
         return Ok(Err(admin.t("exceptions.users.is_self")));
     }
     pelican_api::jobs::revoke_sftp_access(st, u).await.map_err(|e| WebError::internal(format!("{e:?}")))?;
+    // DeleteAction → `$user->delete()`.
     users::Entity::delete_by_id(u.id).exec(&st.db).await?;
+    model_events::deleted(st, u).await;
     Ok(Ok(()))
 }
 
@@ -1138,7 +1154,9 @@ async fn oauth_unlink(admin: Admin, Path(uid): Path<i64>, form: Form) -> WebResu
             updated_at: Set(Some(ts())),
             ..Default::default()
         };
+        // OAuthService::unlinkUser → `$user->update(['oauth' => $oauth])`.
         pelican_db::write::update(&admin.st.db, &am).await?;
+        model_events::fire_id::<users::Entity>(&admin.st, model_events::Action::Updated, uid).await;
         admin.flash_success(admin.t_with("profile.unlinked", &[("name", &schema)]));
     }
     Ok(admin.redirect(&format!("/admin/users/{uid}/edit")))
@@ -1157,7 +1175,9 @@ async fn api_key_delete(admin: Admin, Path((uid, key_id)): Path<(i64, i64)>, for
         .one(&st.db)
         .await?
     {
+        // Repeater delete action → `$key->delete()`.
         api_keys::Entity::delete_by_id(k.id).exec(&st.db).await?;
+        model_events::deleted(st, &k).await;
         use pelican_api::services::LogActivity;
         let _ = admin
             .activity("user:api-key.delete")
@@ -1191,6 +1211,9 @@ async fn ssh_key_delete(admin: Admin, Path((uid, key_id)): Path<(i64, i64)>, for
             .filter(user_ssh_keys::Column::Id.eq(k.id))
             .exec(&st.db)
             .await?;
+        // Repeater delete action → soft delete (`$key->delete()`); the row now
+        // carries its deleted_at.
+        model_events::fire_id::<user_ssh_keys::Entity>(st, model_events::Action::Deleted, k.id.0).await;
         use pelican_api::services::LogActivity;
         let _ = admin
             .activity("user:ssh-key.delete")

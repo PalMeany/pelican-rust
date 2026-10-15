@@ -17,8 +17,11 @@ use minijinja::Value;
 use minijinja::context;
 use pelican_api::binding::Bound;
 use pelican_api::pipeline::Ctx;
-use pelican_api::services::{LogActivity, server_saved};
 use pelican_api::validation::Validator;
+use pelican_api::{
+    model_events,
+    services::{LogActivity, server_saved},
+};
 use pelican_core::activity::morph;
 use pelican_db::entities::{allocations, backups, databases, eggs, server_user_settings, servers};
 use pelican_db::{Int, Json, Timestamp};
@@ -257,6 +260,9 @@ async fn page(p: ServerPanel) -> WebResult {
 /// `saved` hook; failures surface like an uncaught exception in `try/catch`.
 async fn save_server_field(p: &ServerPanel, col: servers::Column, value: Expr) -> Result<(), WebError> {
     touch_column(&p.st, p.server.id.0, col, value).await?;
+    // `$server->forceFill([$col => $value])->save()` → updated Server (callers
+    // already skip when nothing changed).
+    model_events::fire_id::<servers::Entity>(&p.st, model_events::Action::Updated, p.server.id.0).await;
     let mut server = p.server.clone();
     server.updated_at = Some(ts_now());
     let ctx = api_ctx(p)?;
@@ -369,6 +375,11 @@ async fn reinstall(p: ServerPanel, form: Form) -> WebResult<Response> {
         }
         st.wings.reinstall_server(&conn, &p.server.uuid).await.map_err(|e| WebError::internal(e.code()))?;
         txn.commit().await?;
+        // ReinstallServerService → `$server->fill(['status' => …])->save()`
+        // (updated; the guard above matches Eloquent isDirty).
+        if p.server.status.as_deref() != Some("installing") {
+            model_events::fire_id::<servers::Entity>(st, model_events::Action::Updated, p.server.id.0).await;
+        }
         p.activity_for_server("server:reinstall")
             .log(st)
             .await
@@ -415,6 +426,11 @@ async fn update_server_setting(p: &ServerPanel, key: &str, value: bool) -> Resul
         .await?;
     let mut settings =
         existing.as_ref().and_then(|r| r.settings.clone()).and_then(|j| j.0.as_object().cloned()).unwrap_or_default();
+    // `firstOrNew` + `$row->save()`: a clean model writes nothing and fires
+    // nothing (the key's value already equals the stored one).
+    if settings.get(key) == Some(&json!(value)) {
+        return Ok(());
+    }
     settings.insert(key.into(), json!(value));
     let filtered: Map<String, serde_json::Value> =
         settings.into_iter().filter(|(k, _)| SETTING_KEYS.contains(&k.as_str())).collect();
@@ -428,6 +444,8 @@ async fn update_server_setting(p: &ServerPanel, key: &str, value: bool) -> Resul
                 ..Default::default()
             };
             pelican_db::write::update(&p.st.db, &am).await?;
+            // `User::updateServerSetting()` → `$row->save()` on an existing row.
+            model_events::fire_id::<server_user_settings::Entity>(&p.st, model_events::Action::Updated, row.id.0).await;
         }
         None => {
             let am = server_user_settings::ActiveModel {
@@ -438,7 +456,12 @@ async fn update_server_setting(p: &ServerPanel, key: &str, value: bool) -> Resul
                 updated_at: Set(Some(now)),
                 ..Default::default()
             };
-            pelican_db::write::insert_id(&p.st.db, &am).await?;
+            let new_id = pelican_db::write::insert_id(&p.st.db, &am).await?.unwrap_or(0);
+            // `User::updateServerSetting()` → firstOrNew creates a new row.
+            if new_id > 0 {
+                model_events::fire_id::<server_user_settings::Entity>(&p.st, model_events::Action::Created, new_id)
+                    .await;
+            }
         }
     }
     Ok(())

@@ -527,7 +527,7 @@ async fn gsl_action(p: &ServerPanel, form: &Form, key: &str) -> WebResult<Respon
             .await
             .map_err(|e| e.to_string())?;
         let changed = existing.as_deref() != Some(state.as_str());
-        let id = match row {
+        let (id, action) = match row {
             Some(row) => {
                 use sea_orm::sea_query::Expr;
                 server_variables::Entity::update_many()
@@ -537,7 +537,7 @@ async fn gsl_action(p: &ServerPanel, form: &Form, key: &str) -> WebResult<Respon
                     .exec(&p.st.db)
                     .await
                     .map_err(|e| e.to_string())?;
-                Some(row.id.0)
+                (Some(row.id.0), model_events::Action::Updated)
             }
             None => {
                 use sea_orm::ActiveValue::Set;
@@ -549,12 +549,15 @@ async fn gsl_action(p: &ServerPanel, form: &Form, key: &str) -> WebResult<Respon
                     updated_at: Set(Some(now)),
                     ..Default::default()
                 };
-                pelican_db::write::insert_id(&p.st.db, &am).await.map_err(|e| e.to_string())?
+                (
+                    pelican_db::write::insert_id(&p.st.db, &am).await.map_err(|e| e.to_string())?,
+                    model_events::Action::Created,
+                )
             }
         };
         if changed {
             if let Some(id) = id {
-                model_events::fire_id::<server_variables::Entity>(&p.st, model_events::Action::Updated, id).await;
+                model_events::fire_id::<server_variables::Entity>(&p.st, action, id).await;
             }
             p.activity_for_server("server:startup.edit")
                 .property("variable", var.env_variable.clone())
