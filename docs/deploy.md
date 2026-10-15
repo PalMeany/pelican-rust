@@ -106,3 +106,17 @@ http://127.0.0.1:8090 {
 and set `PANEL_PHP_SIDECAR=http://127.0.0.1:8090` in pelican-rs's `.env`. Plugins that schedule work need
 `* * * * * php /var/www/pelican-sidecar/artisan schedule:run` (the bridge leaves only the plugins' tasks there).
 Plugin settings saved on their pages go to the sidecar's `.env`.
+
+The sidecar's speed is PHP's: give OPcache room for Laravel, Filament and every plugin's vendor packages
+(the default 128 MB overflowed on a panel with 15 plugins — `opcache_get_status()['cache_full']` — and every
+request recompiled scripts):
+
+```ini
+; /etc/php/8.5/fpm/conf.d/99-pelican-opcache.ini
+opcache.memory_consumption=512
+opcache.interned_strings_buffer=32
+opcache.max_accelerated_files=50000
+```
+
+pelican-rs keeps Filament's component and icon caches (`filament:optimize`) in the sidecar up to date by
+itself: they are rebuilt at start and whenever the plugins change.
