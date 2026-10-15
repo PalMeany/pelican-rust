@@ -49,7 +49,8 @@ pub async fn rename(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
             let loaded = model_events::client_server_loaded(&st, &ctx, &server).await;
             model_events::fire_id_with::<servers::Entity, _>(&st, &st.db, Action::Updated, server.id.0, loaded).await;
         }
-        // Server::saved hook (owner must not be a subuser) arrives with the subusers work.
+        // Server::saved hook: the owner must not be a subuser.
+        crate::services::server_saved(&st, &ctx, &st.db, &server).await?;
         ctx.activity("server:settings.rename")
             .property("old", server.name.clone())
             .property("new", name.clone())

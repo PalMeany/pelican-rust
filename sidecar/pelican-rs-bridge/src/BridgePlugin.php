@@ -21,6 +21,9 @@ class BridgePlugin implements Plugin
         if ($panel->getId() === 'server') {
             $panel->pages([Filament\ConsoleActionHost::class]);
         }
+        if ($panel->getId() === 'admin') {
+            $panel->pages([Filament\PluginSettingsHost::class]);
+        }
     }
 
     public function boot(Panel $panel): void {}

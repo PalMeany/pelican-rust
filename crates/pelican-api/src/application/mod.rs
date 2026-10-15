@@ -43,7 +43,17 @@ impl Ctx {
     /// key pass, everyone else needs the key's ACL bit (WRITE does not imply READ).
     pub fn acl(&self, resource: &str, permission: i64) -> ApiResult<()> {
         let user = self.user()?;
-        let Some(key) = user.api_key() else { return Err(ApiError::unauthorized_action()) };
+        let Some(key) = user.api_key() else {
+            // A TransientToken (browser session): the user's own permissions on the resource.
+            let allowed = match permission {
+                READ => {
+                    user.gate_before(&format!("viewList {resource}")) && user.gate_before(&format!("view {resource}"))
+                }
+                WRITE => user.gate_before(&format!("update {resource}")),
+                _ => false,
+            };
+            return if allowed { Ok(()) } else { Err(ApiError::unauthorized_action()) };
+        };
         if user.is_root_admin() && key.key_type.0 == KEY_TYPE_ACCOUNT {
             return Ok(());
         }

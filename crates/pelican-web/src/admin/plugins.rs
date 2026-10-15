@@ -4,8 +4,8 @@
 //! because the Filament jobs pick their own `enable` argument.
 //!
 //! Original background jobs (InstallPlugin/UpdatePlugin/UninstallPlugin) run
-//! synchronously here with the same success/error notifications; "Settings" is
-//! part of the WASM runtime work (ADR-0018) and is not implemented yet.
+//! synchronously here with the same success/error notifications. "Settings" opens the
+//! WASM plugin's form here, a PHP plugin's on the sidecar's host page (ADR-0020).
 
 use std::path::{Path, PathBuf};
 
@@ -251,13 +251,22 @@ async fn index(admin: Admin) -> WebResult {
             row.actions.push(Action::link(admin.t("filament-actions::view.single.label"), icon_name, url));
         }
 
-        // Settings (HasPluginSettings): enabled WASM plugins that declare settings.
-        let has_settings = pl.status == Status::Enabled
+        // Settings (HasPluginSettings): enabled WASM plugins that declare settings, and PHP
+        // plugins with settings on the sidecar's host page.
+        let wasm_settings = pl.status == Status::Enabled
             && pelican_plugins::runtime::global()
                 .and_then(|rt| rt.get(&pl.id))
                 .is_some_and(|l| l.registration.settings);
-        if can_update && has_settings {
+        let php_settings =
+            pl.wasm.is_none() && sidecar::manifest().is_some_and(|m| m.plugin_settings.iter().any(|id| *id == pl.id));
+        if can_update && wasm_settings {
             row.actions.push(Action::link(t("settings"), "settings", format!("/admin/plugins/{}/settings", pl.id)));
+        } else if can_update && php_settings {
+            row.actions.push(Action::link(
+                t("settings"),
+                "settings",
+                format!("/admin/rs-plugin-settings?plugin={}", pl.id),
+            ));
         }
 
         if can_update && pl.status == Status::NotInstalled {

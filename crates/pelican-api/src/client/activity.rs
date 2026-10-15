@@ -4,9 +4,9 @@ use axum::Extension;
 use axum::extract::{OriginalUri, State};
 use axum::response::{IntoResponse, Response};
 use pelican_core::state::AppState;
-use pelican_db::entities::activity_logs;
+use pelican_db::entities::{activity_logs, subusers};
 use pelican_db::raw;
-use sea_orm::{FromQueryResult, Value as DbValue};
+use sea_orm::{ColumnTrait, EntityTrait, FromQueryResult, QueryFilter, Value as DbValue};
 use serde_json::Map;
 
 use super::data::activity_item;
@@ -130,9 +130,37 @@ pub async fn server(
     let (ni, ni_vals) = not_in("{activity_logs.event}", DISABLED_EVENTS);
     wheres.push(ni);
     values.extend(ni_vals);
-    if st.config.env.bool_or("APP_ACTIVITY_HIDE_ADMIN", false) {
-        // ActivityLog::scopeHideAdminActivity — arrives with the admin roles work (M5).
-        return Err(ApiError::internal("NotImplemented"));
+    if !st.config.env.bool_or("APP_ACTIVITY_HIDE_ADMIN", false) {
+        return listing(&st, &ctx, &uri, &input, "*", "{activity_logs}", wheres, values).await;
     }
-    listing(&st, &ctx, &uri, &input, "*", "{activity_logs}", wheres, values).await
+    // ActivityLog::scopeHideAdminActivity(): actions of users holding a role are hidden unless
+    // they are the owner or a subuser. The join's binding comes before the where bindings.
+    let mut members: Vec<i64> = subusers::Entity::find()
+        .filter(subusers::Column::ServerId.eq(server.id))
+        .all(&st.db)
+        .await?
+        .into_iter()
+        .map(|s| s.user_id.0)
+        .collect();
+    members.push(server.owner_id.0);
+    wheres.push(format!(
+        "({{users.id}} is null or {{users.id}} not in (select {{id}} from {{users}} where exists (select * from {{roles}} \
+         inner join {{model_has_roles}} on {{roles.id}} = {{model_has_roles.role_id}} where {{users.id}} = {{model_has_roles.model_id}} \
+         and {{model_has_roles.model_type}} = ?)) or {{users.id}} in ({}))",
+        vec!["?"; members.len()].join(", ")
+    ));
+    values.push("user".into());
+    values.extend(members.into_iter().map(DbValue::from));
+    values.insert(0, "user".into());
+    listing(
+        &st,
+        &ctx,
+        &uri,
+        &input,
+        "{activity_logs}.*",
+        "{activity_logs} left join {users} on {users.id} = {activity_logs.actor_id} and {activity_logs.actor_type} = ?",
+        wheres,
+        values,
+    )
+    .await
 }

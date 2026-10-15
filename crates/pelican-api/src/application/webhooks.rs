@@ -319,6 +319,26 @@ fn transform_class_name(event: &str) -> String {
     rest.replace(r"App\Models\", "").replace(r"App\Events\", "event: ")
 }
 
+/// `FallbackSchema::preparePayload()`: the event data when the template is blank, else the
+/// template with `replaceVars` applied to every string leaf (`array_walk_recursive`).
+fn fallback_payload(template: Option<&Value>, data: Value) -> Value {
+    fn walk(v: &Value, data: &Value) -> Value {
+        match v {
+            Value::String(_) => Value::String(replace_vars(v, data)),
+            Value::Array(a) => Value::Array(a.iter().map(|x| walk(x, data)).collect()),
+            Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), walk(x, data))).collect()),
+            other => other.clone(),
+        }
+    }
+    match template {
+        None | Some(Value::Null) => data,
+        Some(Value::Array(a)) if a.is_empty() => data,
+        Some(Value::Object(m)) if m.is_empty() => data,
+        // (A scalar template makes the original's array_walk_recursive throw.)
+        Some(t) => walk(t, &data),
+    }
+}
+
 /// `replaceVars`: `{{path}}` → `data_get(data, path, trimmed-token)`.
 fn replace_vars(subject: &Value, data: &Value) -> String {
     let raw = php_string(subject);
@@ -430,8 +450,12 @@ pub async fn process_webhook_in<C: sea_orm::ConnectionTrait>(
     event_data: &Value,
 ) -> ApiResult<()> {
     let data = normalize_event_data(Some(event_data), event_name);
-    // RegularSchema.preparePayload = identity (FallbackSchema arrives with M6 plugins).
-    let payload = data;
+    // ProcessWebhook: the panel registers only `regular` (identity payload); any other type has
+    // no schema here and is delivered by FallbackSchema with its stored template.
+    let payload = match wh.r#type.as_deref() {
+        Some("regular") => data,
+        _ => fallback_payload(wh.payload.as_ref().map(|p| &p.0), data),
+    };
     let headers = prepare_headers(wh, &payload);
     // A transport error or non-2xx leaves `successful_at` unset; regular
     // webhooks never ask for a retry.
@@ -1004,4 +1028,21 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, 
     crate::model_events::fire_id::<webhook_configurations::Entity>(&st, crate::model_events::Action::Deleted, wh.id.0)
         .await;
     Ok(no_content())
+}
+
+#[cfg(test)]
+mod fallback_tests {
+    use serde_json::json;
+
+    #[test]
+    fn fallback_payload_template() {
+        let data = json!({"event": "created: Server", "server": {"name": "Paper"}});
+        assert_eq!(super::fallback_payload(None, data.clone()), data);
+        assert_eq!(super::fallback_payload(Some(&json!([])), data.clone()), data);
+        let t = json!({"content": "{{ event }} for {{server.name}}", "embeds": [{"title": "{{missing.key}}", "n": 1}]});
+        assert_eq!(
+            super::fallback_payload(Some(&t), data),
+            json!({"content": "created: Server for Paper", "embeds": [{"title": "missing.key", "n": 1}]})
+        );
+    }
 }

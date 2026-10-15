@@ -20,6 +20,18 @@ Compatibility is checked by **differential tests**: every scenario runs against 
 pelican-rust in Docker on all four databases, and responses, database changes and Wings traffic must match
 (`difftest/`, `crates/difftest`).
 
+The `pelican` binary also carries the original's console commands (`pelican p:user:make`, `p:node:list`,
+`p:environment:setup`, `p:plugin:install`, …: same names, options, prompts and output as `php artisan p:*`)
+and serves the original's API documentation at `/docs/api`. Deployment, migration from the PHP panel and
+rollback: `docs/deploy.md`.
+
+## Performance
+
+`bench/` loads both panels with the same data (1000 users, 5000 servers, 100k activity entries) and the
+same resources (2 CPUs / 1 GiB each). On a Ryzen 9 5950X pelican-rust serves 6–45× more requests per second
+on lists of 50 and 28–36× more on single objects and pages, with 50–75 MiB of memory instead of 215–256 MiB;
+most scenarios end up limited by the database. Numbers and method: `bench/results/README.md`.
+
 ## Status
 
 Milestones M1–M8 (database layer, auth, Remote/Client/Application APIs, web UI, WASM plugins, model events,

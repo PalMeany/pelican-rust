@@ -40,6 +40,7 @@ class BridgeController extends Controller
             'features' => $this->features(),
             'avatars' => $this->avatars(),
             'oauth_providers' => $this->oauthProviders(),
+            'plugin_settings' => array_values(Plugin::all()->filter(fn (Plugin $p) => \PelicanRs\Bridge\Filament\PluginSettingsHost::configurable($p->id) !== null)->pluck('id')->all()),
             'admin_permissions' => $this->staticProperty(Role::class, 'customPermissions'),
             'subuser_permissions' => array_values(array_map(fn ($group) => [
                 'name' => $group['name'],

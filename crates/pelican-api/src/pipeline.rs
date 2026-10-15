@@ -90,6 +90,95 @@ pub enum Group {
     Remote,
 }
 
+/// `EnsureStatefulRequests::fromFrontend()`: the session cookie, or Sanctum's check of
+/// Referer/Origin against `sanctum.stateful` (SANCTUM_STATEFUL_DOMAINS, by default local
+/// hosts plus APP_URL's host and port).
+fn stateful(st: &AppState, headers: &HeaderMap) -> bool {
+    let cookies = headers.get(header::COOKIE).and_then(|v| v.to_str().ok()).unwrap_or("");
+    if cookies.split(';').any(|c| c.trim().split('=').next() == Some(st.config.session_cookie.as_str())) {
+        return true;
+    }
+    let Some(from) = headers
+        .get(header::REFERER)
+        .or_else(|| headers.get(header::ORIGIN))
+        .and_then(|v| v.to_str().ok())
+        .filter(|v| !v.is_empty())
+    else {
+        return false;
+    };
+    let mut domain = from.replacen("https://", "", 1).replacen("http://", "", 1);
+    if !domain.ends_with('/') {
+        domain.push('/');
+    }
+    let domains = match st.config.env.string("SANCTUM_STATEFUL_DOMAINS") {
+        Some(list) => list,
+        None => {
+            // `Sanctum::currentApplicationUrlWithPort()`: APP_URL's host and explicit port.
+            let rest = st.config.app_url.split_once("://").map_or(st.config.app_url.as_str(), |(_, r)| r);
+            let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+            let authority = authority.rsplit_once('@').map_or(authority, |(_, a)| a);
+            let current = if authority.is_empty() { String::new() } else { format!(",{authority}") };
+            format!("localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1{current}")
+        }
+    };
+    // `Str::is("<domain>/*", ...)`: the pattern's prefix up to the wildcard.
+    domains.split(',').map(str::trim).filter(|d| !d.is_empty()).any(|d| domain.starts_with(&format!("{d}/")))
+}
+
+/// The web session of a stateful request (pelican-rs sessions, ADR-0013): CSRF check for
+/// unsafe methods (`X-CSRF-TOKEN`, as `VerifyCsrfToken`; a missing or unknown session has no
+/// matching token: 419), then the signed-in user, if any.
+async fn session_user(
+    st: &AppState,
+    headers: &HeaderMap,
+    method: &Method,
+    now: chrono::NaiveDateTime,
+) -> ApiResult<Option<users::Model>> {
+    use pelican_db::entities::sessions;
+    use sea_orm::{ColumnTrait, QueryFilter};
+    let name = &st.config.session_cookie;
+    let id = headers
+        .get(header::COOKIE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|raw| raw.split(';').map(str::trim).find_map(|c| c.strip_prefix(name.as_str())?.strip_prefix('=')))
+        .filter(|v| v.len() == 40 && v.chars().all(|c| c.is_ascii_alphanumeric()))
+        .map(str::to_string);
+    let unix = now.and_utc().timestamp();
+    let lifetime = st.config.env.int_or("SESSION_LIFETIME", 120) * 60;
+    let mut session: Option<(String, serde_json::Value)> = None;
+    if let Some(id) = id {
+        if let Some(row) = sessions::Entity::find_by_id(id.clone()).one(&st.db).await? {
+            use base64::Engine;
+            let data = base64::engine::general_purpose::STANDARD
+                .decode(&row.payload)
+                .ok()
+                .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok());
+            if let Some(data) = data {
+                let remember = data.get("remember").and_then(serde_json::Value::as_bool).unwrap_or(false);
+                if remember || row.last_activity.0 >= unix - lifetime {
+                    session = Some((id, data));
+                }
+            }
+        }
+    }
+    if !matches!(*method, Method::GET | Method::HEAD | Method::OPTIONS) {
+        let sent = headers.get("x-csrf-token").and_then(|v| v.to_str().ok());
+        let expected = session.as_ref().and_then(|(_, d)| d.get("csrf")).and_then(serde_json::Value::as_str);
+        if sent.is_none() || sent != expected {
+            return Err(ApiError::http(419, "CSRF token mismatch."));
+        }
+    }
+    let Some((id, data)) = session else { return Ok(None) };
+    let Some(uid) = data.get("user_id").and_then(serde_json::Value::as_i64) else { return Ok(None) };
+    // StartSession saves the session on every request: keep it alive.
+    sessions::Entity::update_many()
+        .col_expr(sessions::Column::LastActivity, sea_orm::sea_query::Expr::value(pelican_db::Int(unix)))
+        .filter(sessions::Column::Id.eq(id))
+        .exec(&st.db)
+        .await?;
+    Ok(users::Entity::find_by_id(uid).one(&st.db).await?)
+}
+
 fn request_root(headers: &HeaderMap, trusted_peer: bool) -> String {
     let host = headers.get(header::HOST).and_then(|v| v.to_str().ok()).unwrap_or("localhost");
     let proto = trusted_peer
@@ -179,32 +268,46 @@ async fn pipeline(
         return Ok(next.run(req).await);
     }
 
-    // 2-3. auth:sanctum (session support arrives with the web UI, ADR-0009).
-    let token = req.headers().get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(auth::bearer_token);
-    let Some(token) = token else {
-        return Err(ApiError::unauthenticated());
+    // 2-3. EnsureStatefulRequests + auth:sanctum: a request from the panel's own front end
+    // (session cookie, or a stateful domain in Referer/Origin) runs with the web session first
+    // (CSRF on unsafe methods; its user = Sanctum TransientToken), otherwise the bearer key.
+    let session_user = if stateful(st, req.headers()) {
+        let (headers, method) = (req.headers().clone(), req.method().clone());
+        session_user(st, &headers, &method, now).await?
+    } else {
+        None
     };
-    let Some(key) = auth::find_api_key(&st.db, &st.enc, &token, now).await? else {
-        return Err(ApiError::unauthenticated());
+    let user = match session_user {
+        Some(u) => AuthUser::load(&st.db, u, Credential::Session).await?,
+        None => {
+            let token =
+                req.headers().get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(auth::bearer_token);
+            let Some(token) = token else {
+                return Err(ApiError::unauthenticated());
+            };
+            let Some(key) = auth::find_api_key(&st.db, &st.enc, &token, now).await? else {
+                return Err(ApiError::unauthenticated());
+            };
+            let Some(user_row) = (match key.user_id {
+                Some(uid) => users::Entity::find_by_id(uid).one(&st.db).await?,
+                None => None,
+            }) else {
+                return Err(ApiError::unauthenticated());
+            };
+            auth::touch_last_used(&st.db, &key, now).await?;
+            AuthUser::load(&st.db, user_row, Credential::ApiKey(key)).await?
+        }
     };
-    let Some(user_row) = (match key.user_id {
-        Some(uid) => users::Entity::find_by_id(uid).one(&st.db).await?,
-        None => None,
-    }) else {
-        return Err(ApiError::unauthenticated());
-    };
-    auth::touch_last_used(&st.db, &key, now).await?;
-    let user = AuthUser::load(&st.db, user_row, Credential::ApiKey(key.clone())).await?;
 
     // 4. IsValidJson
     let req = valid_json(req).await?;
 
-    // 6. AuthenticateIPAccess
-    let allowed: Vec<String> = match &key.allowed_ips.0 {
-        serde_json::Value::Array(a) => a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
+    // 6. AuthenticateIPAccess (API keys; a TransientToken passes).
+    let allowed: Vec<String> = match user.api_key().map(|k| &k.allowed_ips.0) {
+        Some(serde_json::Value::Array(a)) => a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
         _ => Vec::new(),
     };
-    if !allowed.is_empty() {
+    if let Some(key) = user.api_key().filter(|_| !allowed.is_empty()) {
         let mut ok = false;
         for entry in &allowed {
             match IpRange::try_parse(entry) {
@@ -237,7 +340,7 @@ async fn pipeline(
 
     // 7. RequireClientApiKey / AuthenticateApplicationUser
     match group {
-        Group::Client if key.key_type.0 == KEY_TYPE_APPLICATION => {
+        Group::Client if user.api_key().is_some_and(|k| k.key_type.0 == KEY_TYPE_APPLICATION) => {
             return Err(ApiError::access_denied(
                 "You are attempting to use an application API key on an endpoint that requires a client API key.",
             ));

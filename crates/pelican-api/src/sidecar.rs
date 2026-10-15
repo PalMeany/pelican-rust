@@ -41,6 +41,14 @@ const BRIDGE_FILES: &[(&str, &str)] = &[
         include_str!("../../../sidecar/pelican-rs-bridge/src/Filament/ConsoleActionHost.php"),
     ),
     (
+        "src/Filament/PluginSettingsHost.php",
+        include_str!("../../../sidecar/pelican-rs-bridge/src/Filament/PluginSettingsHost.php"),
+    ),
+    (
+        "resources/views/plugin-settings.blade.php",
+        include_str!("../../../sidecar/pelican-rs-bridge/resources/views/plugin-settings.blade.php"),
+    ),
+    (
         "resources/views/console-action.blade.php",
         include_str!("../../../sidecar/pelican-rs-bridge/resources/views/console-action.blade.php"),
     ),
@@ -203,6 +211,10 @@ pub struct Manifest {
     /// OAuth providers registered by plugins (`OAuthService::register()`).
     #[serde(default)]
     pub oauth_providers: Vec<OAuthEntry>,
+    /// Enabled PHP plugins with settings (`HasPluginSettings`), edited on the bridge's
+    /// `/admin/rs-plugin-settings?plugin=<id>` page.
+    #[serde(default)]
+    pub plugin_settings: Vec<String>,
     /// `Role::$customPermissions` (`[]` when empty, an object otherwise).
     #[serde(default)]
     pub admin_permissions: Value,
