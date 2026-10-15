@@ -113,10 +113,68 @@ pub async fn embedded(
     Some((transplant(&page)?, cookies))
 }
 
+/// What [`embedded_detached`] needs of a request to stand in for it later (background refreshes).
+#[derive(Clone)]
+pub struct Origin {
+    st: pelican_core::state::AppState,
+    secure: bool,
+    ip: String,
+    host: String,
+    user: Option<i64>,
+    cookie: Option<HeaderValue>,
+    user_agent: Option<HeaderValue>,
+    accept_language: Option<HeaderValue>,
+}
+
+impl Origin {
+    pub fn of(web: &Web, headers: &axum::http::HeaderMap) -> Origin {
+        Origin {
+            st: web.st.clone(),
+            secure: web.secure,
+            ip: web.ip.clone(),
+            host: web.host.clone(),
+            user: web.user.as_ref().map(|u| u.id()),
+            cookie: headers.get(header::COOKIE).cloned(),
+            user_agent: headers.get(header::USER_AGENT).cloned(),
+            accept_language: headers.get(header::ACCEPT_LANGUAGE).cloned(),
+        }
+    }
+}
+
+/// [`embedded`] outside a request: the same signed GET with the request's cookies, its
+/// Set-Cookie and sign-in handoffs ignored (they belong to the request that is long answered).
+pub async fn embedded_detached(o: Origin, path: String) -> Option<Transplant> {
+    let sc = sidecar::get(&o.st)?;
+    let mut rb = client().get(format!("{}{path}", sc.url)).header(header::ACCEPT, "text/html");
+    if let Some(c) = o.cookie.as_ref().and_then(|c| c.to_str().ok()) {
+        let cookies = forwarded_cookies(c, &o.st.config.session_cookie);
+        if !cookies.is_empty() {
+            rb = rb.header(header::COOKIE, cookies);
+        }
+    }
+    for (name, value) in [(header::USER_AGENT, &o.user_agent), (header::ACCEPT_LANGUAGE, &o.accept_language)] {
+        if let Some(v) = value {
+            rb = rb.header(name, v.clone());
+        }
+    }
+    rb = rb
+        .header("x-forwarded-for", o.ip.as_str())
+        .header("x-forwarded-proto", if o.secure { "https" } else { "http" })
+        .header("x-forwarded-host", o.host.as_str());
+    for (k, v) in sc.signature("PROXY", "/", o.user, b"") {
+        rb = rb.header(k, v);
+    }
+    let resp = rb.send().await.ok()?;
+    if resp.status() != reqwest::StatusCode::OK {
+        return None;
+    }
+    transplant(&resp.text().await.ok()?)
+}
+
 /// A plugin's Filament page cut out of the sidecar's layout: its head (styles, scripts), the
 /// page (`main.fi-main`, as a `div`) and what follows the layout in `body` (Livewire, Filament's
 /// scripts and notifications). Cut along marker comments so the markup stays as sent.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Transplant {
     pub title: Option<String>,
     pub head: String,

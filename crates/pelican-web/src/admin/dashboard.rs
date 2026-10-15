@@ -32,7 +32,7 @@ async fn index(admin: Admin, headers: axum::http::HeaderMap) -> WebResult {
     let no_nodes = nodes::Entity::find().count(&st.db).await? == 0;
     // The widgets PHP plugins add to the dashboard (`/admin/rs-widgets` of the bridge).
     let widgets = if pelican_api::sidecar::manifest().is_some_and(|m| m.admin_widgets > 0) {
-        crate::sidecar_proxy::embedded(&admin, &headers, "/admin/rs-widgets").await
+        plugin_widgets(&admin, &headers).await
     } else {
         None
     };
@@ -64,3 +64,49 @@ async fn index(admin: Admin, headers: axum::http::HeaderMap) -> WebResult {
     }
     Ok(resp)
 }
+
+/// Rendered plugin widgets per browser (their Livewire snapshots carry that browser's sidecar
+/// CSRF token), reused for [`WIDGETS_KEEP`]; older than [`WIDGETS_FRESH`] they are shown at
+/// once and rendered again in the background. Plugins' widgets may be slow (System Status
+/// samples the CPU for a second) and the original renders them on every visit.
+async fn plugin_widgets(
+    admin: &Admin,
+    headers: &axum::http::HeaderMap,
+) -> Option<(crate::sidecar_proxy::Transplant, Vec<axum::http::HeaderValue>)> {
+    use std::hash::{Hash, Hasher};
+    const PATH: &str = "/admin/rs-widgets";
+    // Per browser session (cookies themselves are re-encrypted on every response).
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    admin.session.csrf().hash(&mut h);
+    let key = format!("admin-widgets:{}:{:x}", admin.user.id(), h.finish());
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let cached = crate::cache::get(&key).and_then(|v| {
+        let at = v.get("at")?.as_u64()?;
+        let t = serde_json::from_value::<crate::sidecar_proxy::Transplant>(v.get("t")?.clone()).ok()?;
+        Some((at, t))
+    });
+    if let Some((at, t)) = cached {
+        if now.saturating_sub(at) >= WIDGETS_FRESH
+            && REFRESHING.lock().map(|mut g| g.insert(key.clone())).unwrap_or(false)
+        {
+            let origin = crate::sidecar_proxy::Origin::of(admin, headers);
+            tokio::spawn(async move {
+                if let Some(t) = crate::sidecar_proxy::embedded_detached(origin, PATH.to_string()).await {
+                    crate::cache::put(&key, WIDGETS_KEEP, serde_json::json!({ "at": now, "t": t }));
+                }
+                if let Ok(mut g) = REFRESHING.lock() {
+                    g.remove(&key);
+                }
+            });
+        }
+        return Some((t, Vec::new()));
+    }
+    let (t, cookies) = crate::sidecar_proxy::embedded(admin, headers, PATH).await?;
+    crate::cache::put(&key, WIDGETS_KEEP, serde_json::json!({ "at": now, "t": &t }));
+    Some((t, cookies))
+}
+
+const WIDGETS_FRESH: u64 = 30;
+const WIDGETS_KEEP: std::time::Duration = std::time::Duration::from_secs(600);
+static REFRESHING: std::sync::Mutex<std::collections::BTreeSet<String>> =
+    std::sync::Mutex::new(std::collections::BTreeSet::new());
