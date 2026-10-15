@@ -172,6 +172,9 @@ pub async fn details(st: &AppState, server: &servers::Model, node: &nodes::Model
     if node.maintenance_mode.0 {
         return json!({ "state": "missing", "utilization": {} });
     }
+    if node_down(node) {
+        return json!({ "state": "missing" });
+    }
     let key = format!("servers.{}.details", server.uuid);
     let (st, node, uuid) = (st.clone(), node.clone(), server.uuid.clone());
     crate::cache::remember_swr(&key, Duration::from_secs(15), move || async move {
@@ -188,6 +191,12 @@ pub async fn details(st: &AppState, server: &servers::Model, node: &nodes::Model
     .await
 }
 
+/// The node did not answer the background check ([`spawn_node_warmer`]) within the last 30 s:
+/// pages show it as unreachable at once instead of waiting for connect timeouts again.
+fn node_down(node: &nodes::Model) -> bool {
+    crate::cache::get(&format!("nodes.{}.system_information", node.id.0)).is_some_and(|v| v.get("exception").is_some())
+}
+
 async fn wings_get(st: &AppState, node: &nodes::Model, path: &str, timeout: u64, connect: u64) -> Option<Value> {
     let conn = st.node_conn(node).ok()?;
     let mut call = pelican_wings::client::Call::new(pelican_wings::client::Method::GET, path);
@@ -199,9 +208,11 @@ async fn wings_get(st: &AppState, node: &nodes::Model, path: &str, timeout: u64,
 /// `Node::statistics()` (`/api/system/utilization`, zeros when unreachable).
 pub async fn node_statistics(st: &AppState, node: &nodes::Model) -> Value {
     let key = format!("nodes.{}.statistics", node.id.0);
+    let down = node_down(node);
     let (st, node) = (st.clone(), node.clone());
     crate::cache::remember_swr(&key, Duration::from_secs(5), move || async move {
-        match wings_get(&st, &node, "/api/system/utilization", 1, 1).await {
+        let answer = if down { None } else { wings_get(&st, &node, "/api/system/utilization", 1, 1).await };
+        match answer {
             Some(v) if v.get("memory_total").is_some_and(|m| m.as_f64().unwrap_or(0.0) > 0.0) => v,
             _ => json!({
                 "memory_total": 0, "memory_used": 0, "swap_total": 0, "swap_used": 0,
