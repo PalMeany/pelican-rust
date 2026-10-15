@@ -21,8 +21,18 @@ x-panel-env: &panel-env
   MAIL_MAILER: "log"
   TRUSTED_PROXIES: "0.0.0.0/0"
 
+# On a shared server (bench/README.md): BENCH_CPUSET_DB / BENCH_CPUSET_PANEL pin the database and the
+# panels to fixed CPUs, PELICAN_CPU_SHARES lowers their weight against everything else running there.
+x-cpu-db: &cpu-db
+  cpuset: "${BENCH_CPUSET_DB:-}"
+  cpu_shares: ${PELICAN_CPU_SHARES:-0}
+x-cpu-panel: &cpu-panel
+  cpuset: "${BENCH_CPUSET_PANEL:-}"
+  cpu_shares: ${PELICAN_CPU_SHARES:-0}
+
 services:
   mariadb:
+    <<: *cpu-db
     image: mariadb:11.4
     environment:
       MARIADB_ROOT_PASSWORD: root
@@ -37,6 +47,7 @@ services:
       retries: 60
 
   panel-orig:
+    <<: *cpu-panel
     image: pelican-orig:dev
     environment:
       <<: *panel-env
@@ -51,6 +62,7 @@ services:
       mariadb: { condition: service_healthy }
 
   panel-rs:
+    <<: *cpu-panel
     image: pelican-rs-dev:latest
     environment:
       <<: *panel-env

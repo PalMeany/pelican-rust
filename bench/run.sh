@@ -3,6 +3,8 @@
 #   bench/run.sh [--scale N] [--duration 20s] [--connections 32] [--only <scenario substring>]
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=../scripts/lib/host.sh
+source "$REPO/scripts/lib/host.sh"
 SCALE=1; DURATION=20s; CONN=32; ONLY=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -21,7 +23,9 @@ PROJECT=pelican-bench
 NET="${PROJECT}_default"
 DATA="$REPO/bench/.data"; mkdir -p "$DATA"
 OUT="$REPO/bench/results/$(date +%Y%m%d-%H%M%S)"; mkdir -p "$OUT"
-vm() { limactl shell pelican -- "$@"; }
+vm() { on_host "$@"; }
+# The load generator's CPUs on a shared server (BENCH_CPUSET_LOAD), apart from the measured panel.
+load_cpu=(); [[ -n "${BENCH_CPUSET_LOAD:-}" ]] && load_cpu=(--cpuset-cpus "$BENCH_CPUSET_LOAD")
 compose() { vm sh -c "cd '$REPO/bench' && PELICAN_TARGET_VOLUME='$VOLUME' BENCH_DATA='$DATA' docker compose -p $PROJECT $*"; }
 
 # Fixture secrets (difftest/fixtures/base.yaml, infra.yaml).
@@ -56,7 +60,7 @@ auth_header() {
 
 # One oha run inside the stand's network: JSON summary to stdout.
 load() { # target method path header
-  vm docker run --rm --network "$NET" ghcr.io/hatoo/oha:latest --no-tui --output-format json \
+  vm docker run --rm ${load_cpu[@]+"${load_cpu[@]}"} --network "$NET" ghcr.io/hatoo/oha:latest --no-tui --output-format json \
     -z "$DURATION" -c "$CONN" -m "$2" -H "Accept: application/json" -H "$4" "http://$1$3"
 }
 

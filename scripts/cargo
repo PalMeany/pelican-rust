@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Run cargo inside the Linux dev container in the lima VM "pelican".
-# (The macOS host cannot link: Xcode license not accepted — see QUESTIONS.md Q2.)
+# Run cargo inside the Linux dev container: in the lima VM "pelican" on macOS (the host cannot
+# link: Xcode license not accepted — see QUESTIONS.md Q2), with the local Docker on Linux.
 #
 #   scripts/cargo build | test | clippy ...      (same args as cargo)
 #
@@ -11,7 +11,8 @@
 # PELICAN_NET_ALIAS=<name> adds a DNS alias on the difftest network (mock Wings).
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VM="${PELICAN_VM:-pelican}"
+# shellcheck source=lib/host.sh
+source "$REPO/scripts/lib/host.sh"
 NET="${PELICAN_NET:-pelican-difftest-main_default}"
 DATA="$(cd "$REPO/.." && pwd)/.difftest"
 # PELICAN_NET picks the difftest network; PELICAN_TARGET_VOLUME separates target dirs of parallel runs.
@@ -25,6 +26,7 @@ esac
 TARGET_DEFAULT="${TARGET_DEFAULT//\//-}"
 
 # Forward with explicit values: `limactl shell` does not carry the host environment into the VM.
+# PELICAN_CPUSET applies to the container (scripts/lib/host.sh).
 envs=()
 while IFS='=' read -r k _; do
   case "$k" in PELICAN_*|DB_*|RUST_LOG|RUST_BACKTRACE|TEST_*|CARGO_TERM_COLOR) envs+=(-e "$(printf %q "$k=${!k}")");; esac
@@ -33,14 +35,19 @@ done < <(env)
 tty=()
 [[ -t 0 && -t 1 ]] && tty=(-t)
 
-exec limactl shell --workdir "$PWD" "$VM" -- sh -c '
+on_host sh -c '
   net=""
   docker network inspect '"$NET"' >/dev/null 2>&1 && net="--network '"$NET"'"
   alias=""
   sock=""
-  [ "'"${PELICAN_DOCKER_SOCK:-}"'" = 1 ] && [ -S "$XDG_RUNTIME_DIR/docker.sock" ] && sock="-v $XDG_RUNTIME_DIR/docker.sock:/var/run/docker.sock"
+  # Rootless Docker in the VM, the system socket on a Linux host.
+  if [ "'"${PELICAN_DOCKER_SOCK:-}"'" = 1 ]; then
+    for s in "${XDG_RUNTIME_DIR:-/nonexistent}/docker.sock" /var/run/docker.sock; do
+      [ -S "$s" ] && { sock="-v $s:/var/run/docker.sock"; break; }
+    done
+  fi
   [ -n "'"${PELICAN_NET_ALIAS:-}"'" ] && [ -n "$net" ] && alias="--network-alias '"${PELICAN_NET_ALIAS:-}"'"
-  exec docker run --rm -i '"${tty[*]:-}"' $net $alias $sock \
+  exec docker run --rm -i '"${tty[*]:-}"' '"$(cpu_opts)"' $net $alias $sock \
     -v "'"$REPO"'":"'"$REPO"'" -v "'"$DATA"'":"'"$DATA"'" -w "$PWD" \
     -v '"${PELICAN_TARGET_VOLUME:-$TARGET_DEFAULT}"':/target -v pelican-rs-registry:/usr/local/cargo/registry \
     '"${envs[*]:-}"' "$@"' sh pelican-rs-dev cargo "$@"

@@ -31,8 +31,14 @@ x-panel-env: &panel-env
   DB_USERNAME: "pelican"
   DB_PASSWORD: "pelican"
 
+# PELICAN_CPUSET / PELICAN_CPU_SHARES: pinning on a shared server (scripts/lib/host.sh).
+x-cpu: &cpu
+  cpuset: "${PELICAN_CPUSET:-}"
+  cpu_shares: ${PELICAN_CPU_SHARES:-0}
+
 services:
   mariadb:
+    <<: *cpu
     image: mariadb:11.4
     environment:
       MARIADB_ROOT_PASSWORD: root
@@ -47,6 +53,7 @@ services:
       retries: 60
 
   mysql:
+    <<: *cpu
     image: mysql:8.4
     environment:
       MYSQL_ROOT_PASSWORD: root
@@ -61,6 +68,7 @@ services:
       retries: 60
 
   postgres:
+    <<: *cpu
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: pelican
@@ -76,6 +84,7 @@ services:
       retries: 60
 
   panel-orig:
+    <<: *cpu
     image: pelican-orig:dev
     environment:
       <<: *panel-env

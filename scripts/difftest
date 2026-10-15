@@ -5,6 +5,8 @@
 # dev container with the DNS alias `wings.test` (mock Wings).
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=lib/host.sh
+source "$REPO/scripts/lib/host.sh"
 backend="mariadb"
 if [[ "${1:-}" == "--backend" ]]; then backend="$2"; shift 2; fi
 backends=("$backend"); [[ "$backend" == "all" ]] && backends=(mariadb mysql pgsql sqlite)
@@ -14,7 +16,7 @@ ENV_NAME="${DIFFTEST_ENV:-main}"
 PROJECT="pelican-difftest-$ENV_NAME"
 DATA="$(cd "$REPO/.." && pwd)/.difftest/$ENV_NAME"
 mkdir -p "$DATA/sqlite" && chmod 777 "$DATA/sqlite"
-vm() { limactl shell pelican -- sh -c "cd '$REPO/difftest' && DIFFTEST_DATA='$DATA' docker compose -p '$PROJECT' $1"; }
+vm() { on_host sh -c "cd '$REPO/difftest' && DIFFTEST_DATA='$DATA' docker compose -p '$PROJECT' $1"; }
 vm "up -d mariadb mysql postgres >/dev/null 2>&1"
 rc=0
 for b in "${backends[@]}"; do
@@ -28,7 +30,7 @@ for b in "${backends[@]}"; do
   marker="$DATA/orig-backend"
   if [[ "$(cat "$marker" 2>/dev/null)" != "$b" ]] || ! vm "ps --status running panel-orig | grep -q panel-orig"; then
     echo "== starting panel-orig on $b ($ENV_NAME)"
-    limactl shell pelican -- sh -c "cd '$REPO/difftest' && $envs DIFFTEST_DATA='$DATA' docker compose -p '$PROJECT' up -d --force-recreate panel-orig >/dev/null 2>&1"
+    on_host sh -c "cd '$REPO/difftest' && $envs DIFFTEST_DATA='$DATA' docker compose -p '$PROJECT' up -d --force-recreate panel-orig >/dev/null 2>&1"
     for _ in $(seq 1 90); do
       vm "logs panel-orig 2>&1 | grep -q 'Starting Supervisord'" && break; sleep 2
     done
