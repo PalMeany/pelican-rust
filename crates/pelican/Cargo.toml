@@ -10,6 +10,7 @@ pelican-core = { path = "../pelican-core" }
 pelican-api = { path = "../pelican-api" }
 pelican-web = { path = "../pelican-web" }
 pelican-db = { path = "../pelican-db" }
+pelican-plugins = { path = "../pelican-plugins" }
 anyhow.workspace = true
 tokio.workspace = true
 tracing.workspace = true

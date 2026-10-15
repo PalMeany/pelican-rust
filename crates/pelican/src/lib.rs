@@ -1,6 +1,7 @@
 //! Bootstrapping shared by the binary and the difftest harness.
 
 pub mod logfile;
+pub mod plugins;
 
 use std::net::SocketAddr;
 use std::path::Path;
@@ -47,6 +48,7 @@ fn start_panel(state: AppState) -> axum::Router {
         pelican_api::jobs::spawn_scheduler(live.clone());
     }
     spawn_reloader(live.clone());
+    plugins::start(&live);
     app(live)
 }
 

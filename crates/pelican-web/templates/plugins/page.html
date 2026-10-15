@@ -1,0 +1,7 @@
+{% extends "layouts/panel.html" %}
+{% block content %}
+<div class="stack">
+<div class="page-head"><h1>{{ title }}</h1></div>
+{% if error %}<div class="banner danger">{{ icon('alert-triangle') }}<div><strong>{{ error }}</strong></div></div>{% else %}{{ html | safe }}{% endif %}
+</div>
+{% endblock %}

@@ -209,12 +209,45 @@ impl Admin {
                 count(st, "webhook_configurations").await,
             ));
         }
+        // Plugin pages (ADR-0018): into the named core group, else a group of their own.
+        let mut custom: Vec<(String, Vec<NavItem>)> = Vec::new();
+        for (plugin, n, page) in crate::plugin_pages::nav_items(pelican_plugins::runtime::Panel::Admin) {
+            if page.as_ref().and_then(|p| p.permission.as_deref()).is_some_and(|perm| !self.can(perm)) {
+                continue;
+            }
+            let entry = NavItem {
+                label: crate::plugin_pages::label(st, &plugin, &self.locale(), &n.label),
+                url: format!("/admin/plugins/{plugin}/page/{}", n.page),
+                icon: crate::plugin_pages::icon(n.icon.as_deref()),
+                active: active == format!("plugin:{plugin}:{}", n.page),
+                badge: None,
+                badge_color: None,
+                badge_tooltip: None,
+            };
+            match n.group.as_deref().map(str::to_lowercase).as_deref() {
+                None => top.push(entry),
+                Some("server") => server.push(entry),
+                Some("user") => user.push(entry),
+                Some("advanced") => advanced.push(entry),
+                Some(_) => {
+                    let name =
+                        crate::plugin_pages::label(st, &plugin, &self.locale(), n.group.as_deref().unwrap_or(""));
+                    match custom.iter_mut().find(|(g, _)| *g == name) {
+                        Some((_, items)) => items.push(entry),
+                        None => custom.push((name, vec![entry])),
+                    }
+                }
+            }
+        }
         let mut groups = vec![NavGroup { label: None, items: top }];
         for (label, items) in [
             (t("admin/dashboard.server"), server),
             (t("admin/dashboard.user"), user),
             (t("admin/dashboard.advanced"), advanced),
-        ] {
+        ]
+        .into_iter()
+        .chain(custom)
+        {
             if !items.is_empty() {
                 groups.push(NavGroup { label: Some(label), items });
             }

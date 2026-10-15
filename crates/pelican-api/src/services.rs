@@ -245,6 +245,19 @@ fn has_content(data: &Value) -> bool {
 
 /// `DispatchWebhooks::handleActivityLogged()` + `handleGlobalWebhooks()`.
 pub async fn activity_logged<C: ConnectionTrait>(st: &AppState, db: &C, a: &Activity, _id: i64) -> ApiResult<()> {
+    // Plugins (ADR-0018): the event itself and `App\Events\ActivityLogged` listeners.
+    if let Some(rt) = pelican_plugins::runtime::global() {
+        let (own, all) = (rt.wants(&a.event), rt.wants("App\\Events\\ActivityLogged"));
+        if own || all {
+            let data = activity_payload(db, a).await?;
+            if own {
+                rt.dispatch(&a.event, &data);
+            }
+            if all {
+                rt.dispatch("App\\Events\\ActivityLogged", &data);
+            }
+        }
+    }
     let configs: Vec<webhook_configurations::Model> = webhook_configurations::Entity::find()
         .filter(webhook_configurations::Column::DeletedAt.is_null())
         .all(db)

@@ -8,6 +8,7 @@ description = "Web UI of pelican-rs: SSR (minijinja) + htmx (ADR-0005, ADR-0013)
 [dependencies]
 pelican-core = { path = "../pelican-core" }
 pelican-api = { path = "../pelican-api" }
+pelican-plugins = { path = "../pelican-plugins" }
 pelican-db = { path = "../pelican-db" }
 laravel-compat = { path = "../laravel-compat" }
 pelican-wings = { path = "../pelican-wings" }

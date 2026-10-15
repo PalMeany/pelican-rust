@@ -14,6 +14,7 @@ pub mod json;
 pub mod paginate;
 pub mod passwords;
 pub mod pipeline;
+pub mod plugin_routes;
 pub mod query;
 pub mod remote;
 pub mod resources;

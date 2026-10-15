@@ -33,6 +33,13 @@ pub fn url(path: &str) -> String {
 }
 
 /// Tabler icon SVG (`tabler-user` or `user`) from `assets/icons/`.
+/// The `'static` name of an embedded icon (plugin navigation icons are dynamic strings).
+pub fn icon_key(name: &str) -> Option<&'static str> {
+    let name = name.strip_prefix("tabler-").unwrap_or(name);
+    let (key, _) = INDEX.get_key_value(format!("icons/{name}.svg").as_str())?;
+    key.strip_prefix("icons/")?.strip_suffix(".svg")
+}
+
 pub fn icon_svg(name: &str) -> Option<String> {
     let name = name.strip_prefix("tabler-").unwrap_or(name);
     INDEX.get(format!("icons/{name}.svg").as_str()).map(|a| String::from_utf8_lossy(a.body).into_owned())

@@ -12,6 +12,7 @@ pub mod forms;
 pub mod i18n;
 pub mod installer;
 pub mod models;
+pub mod plugin_pages;
 pub mod server_info;
 pub mod session;
 pub mod table;
@@ -63,6 +64,7 @@ pub fn router(state: AppState) -> Router {
         .route("/password-reset/reset", get(auth::password_reset::reset_form).post(auth::password_reset::reset))
         .route("/installer/complete", get(installer_complete))
         .merge(auth::passkeys::routes())
+        .merge(plugin_pages::routes())
         .merge(app::routes())
         .merge(admin::routes())
         .merge(server::routes())

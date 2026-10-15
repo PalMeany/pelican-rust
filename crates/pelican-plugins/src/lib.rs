@@ -162,3 +162,21 @@ impl Config {
         }
     }
 }
+
+/// `<id>::group.key` from `plugins/<dir>/lang/<locale>/<group>.json` (fallback `en`),
+/// `:name` placeholders replaced. `None` for other keys.
+pub fn trans_line(cfg: &Config, plugin: &str, locale: &str, key: &str, replace: &[(String, String)]) -> Option<String> {
+    let (ns, rest) = key.split_once("::")?;
+    if ns != plugin {
+        return None;
+    }
+    let (group, path) = rest.split_once('.')?;
+    let dir = cfg.find(plugin).ok()?.dir;
+    let root = cfg.root.join(dir).join("lang");
+    let line = [locale, "en"].iter().find_map(|l| {
+        let raw = std::fs::read(root.join(l).join(format!("{group}.json"))).ok()?;
+        let doc: serde_json::Value = serde_json::from_slice(&raw).ok()?;
+        path.split('.').try_fold(&doc, |v, seg| v.get(seg))?.as_str().map(str::to_string)
+    })?;
+    Some(replace.iter().fold(line, |s, (k, v)| s.replace(&format!(":{k}"), v)))
+}

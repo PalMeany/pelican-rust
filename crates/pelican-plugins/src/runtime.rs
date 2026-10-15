@@ -188,6 +188,25 @@ pub struct Loaded {
     inner: tokio::sync::Mutex<(Store<HostState>, Plugin)>,
 }
 
+static GLOBAL: std::sync::OnceLock<Arc<Runtime>> = std::sync::OnceLock::new();
+
+/// The process-wide runtime (none in tests, difftests and safe mode).
+pub fn global() -> Option<Arc<Runtime>> {
+    GLOBAL.get().cloned()
+}
+
+pub fn set_global(rt: Arc<Runtime>) {
+    let _ = GLOBAL.set(rt);
+}
+
+/// Reload the global runtime in the background (plugin enabled/disabled/installed/...).
+pub fn reload_global(cfg: &Config) {
+    if let Some(rt) = global() {
+        let cfg = cfg.clone();
+        tokio::spawn(async move { rt.load_all(&cfg).await });
+    }
+}
+
 /// Per-call time budget (in epoch ticks of 10 ms).
 const CALL_TICKS: u64 = 3000;
 
@@ -197,6 +216,8 @@ pub struct Runtime {
     services: Arc<dyn Services>,
     storage: PathBuf,
     loaded: RwLock<Vec<Arc<Loaded>>>,
+    /// Compiled components by path, invalidated by mtime/size (reloads skip recompiling).
+    compiled: std::sync::Mutex<std::collections::HashMap<PathBuf, (std::time::SystemTime, u64, Component)>>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -224,7 +245,14 @@ impl Runtime {
                 std::thread::sleep(Duration::from_millis(10));
             }
         });
-        Ok(Arc::new(Runtime { engine, linker, services, storage, loaded: RwLock::new(Vec::new()) }))
+        Ok(Arc::new(Runtime {
+            engine,
+            linker,
+            services,
+            storage,
+            loaded: RwLock::new(Vec::new()),
+            compiled: std::sync::Mutex::new(std::collections::HashMap::new()),
+        }))
     }
 
     pub fn loaded(&self) -> Vec<Arc<Loaded>> {
@@ -258,11 +286,27 @@ impl Runtime {
             return Err("invalid component path".into());
         }
         let path = cfg.root.join(&p.dir).join(file);
-        let engine = self.engine.clone();
-        let component = tokio::task::spawn_blocking(move || Component::from_file(&engine, &path))
-            .await
-            .map_err(|e| e.to_string())?
-            .map_err(|e| format!("{e:#}"))?;
+        let meta = std::fs::metadata(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let stamp = (meta.modified().unwrap_or(std::time::UNIX_EPOCH), meta.len());
+        let cached = self
+            .compiled
+            .lock()
+            .ok()
+            .and_then(|c| c.get(&path).filter(|(m, l, _)| (*m, *l) == stamp).map(|(_, _, comp)| comp.clone()));
+        let component = match cached {
+            Some(c) => c,
+            None => {
+                let (engine, p2) = (self.engine.clone(), path.clone());
+                let c = tokio::task::spawn_blocking(move || Component::from_file(&engine, &p2))
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .map_err(|e| format!("{e:#}"))?;
+                if let Ok(mut g) = self.compiled.lock() {
+                    g.insert(path, (stamp.0, stamp.1, c.clone()));
+                }
+                c
+            }
+        };
         let mut store = self.store(p, Capabilities::from_manifest(wasm));
         store.set_epoch_deadline(CALL_TICKS);
         let bindings =
@@ -349,6 +393,11 @@ impl Runtime {
             tracing::error!(plugin = %id, error = %format!("{e:#}"), "plugin call trapped");
             CallError::Trap(format!("{e:#}"))
         })
+    }
+
+    /// Whether any loaded plugin subscribed to `event`.
+    pub fn wants(&self, event: &str) -> bool {
+        self.loaded().iter().any(|l| l.registration.events.iter().any(|e| e == event || e == "*"))
     }
 
     /// Deliver an event to every plugin subscribed to it (in the background).

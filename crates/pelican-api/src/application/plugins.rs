@@ -155,12 +155,27 @@ pub async fn view(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) ->
     Ok(PhpJson::ok(plugin_data(&cfg, &p).await).into_response())
 }
 
+/// A WASM plugin's install/uninstall hook (the PHP plugin's migrations/seeders); a failed
+/// install leaves it `not_installed` with the message, like `installPlugin()`.
+async fn run_hook(cfg: &Config, p: &Plugin, install: bool) -> ApiResult<()> {
+    let Some(rt) = pelican_plugins::runtime::global() else { return Ok(()) };
+    if let Err(e) = rt.lifecycle_hook(cfg, p, install).await {
+        if install {
+            let _ = cfg.set_status(p, Status::NotInstalled, Some(e.clone()));
+        }
+        return Err(service_err(pelican_plugins::Error::Message(e)));
+    }
+    Ok(())
+}
+
 /// After an import: reinstall (without enabling) when the plugin was installed.
-fn reinstall_if_installed(cfg: &Config, id: &str) -> ApiResult<()> {
+async fn reinstall_if_installed(cfg: &Config, id: &str) -> ApiResult<()> {
     if lifecycle::is_installed(cfg, id).map_err(service_err)? {
         let p = cfg.find(id).map_err(service_err)?;
+        run_hook(cfg, &p, true).await?;
         lifecycle::install(cfg, &p, false).map_err(service_err)?;
     }
+    pelican_plugins::runtime::reload_global(cfg);
     Ok(())
 }
 
@@ -189,7 +204,7 @@ pub async fn import_file(
     let result = lifecycle::import_zip(&cfg, &tmp, None);
     let _ = std::fs::remove_file(&tmp);
     let id = result.map_err(service_err)?;
-    reinstall_if_installed(&cfg, &id)?;
+    reinstall_if_installed(&cfg, &id).await?;
     Ok(StatusCode::CREATED.into_response())
 }
 
@@ -207,7 +222,7 @@ pub async fn import_url(
     cfg.refresh_statuses();
     let url = input.get("url").map(pelican_core::php::string).unwrap_or_default();
     let id = lifecycle::import_url(&cfg, &url, None, None).await.map_err(service_err)?;
-    reinstall_if_installed(&cfg, &id)?;
+    reinstall_if_installed(&cfg, &id).await?;
     Ok(StatusCode::CREATED.into_response())
 }
 
@@ -248,7 +263,9 @@ pub async fn install(State(st): State<AppState>, Extension(ctx): Extension<Ctx>)
     if p.status != Status::NotInstalled {
         return Err(panel_exception());
     }
+    run_hook(&cfg, &p, true).await?;
     lifecycle::install(&cfg, &p, true).map_err(service_err)?;
+    pelican_plugins::runtime::reload_global(&cfg);
     respond(&cfg, &p.id).await
 }
 
@@ -261,6 +278,7 @@ pub async fn update(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
         return Err(panel_exception());
     }
     let p = lifecycle::update(&cfg, &p).await.map_err(service_err)?;
+    pelican_plugins::runtime::reload_global(&cfg);
     Ok(PhpJson::ok(plugin_data(&cfg, &p).await).into_response())
 }
 
@@ -280,7 +298,9 @@ pub async fn uninstall(
         return Err(panel_exception());
     }
     let delete = php_boolean(input.get("delete"));
+    run_hook(&cfg, &p, false).await?;
     lifecycle::uninstall(&cfg, &p, delete).map_err(service_err)?;
+    pelican_plugins::runtime::reload_global(&cfg);
     // The response transforms the (stale) model instance, deleted or not.
     let mut after = p.clone();
     after.status = Status::NotInstalled;
@@ -298,6 +318,7 @@ pub async fn enable(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
         return Err(panel_exception());
     }
     lifecycle::enable(&cfg, &p).map_err(service_err)?;
+    pelican_plugins::runtime::reload_global(&cfg);
     respond(&cfg, &p.id).await
 }
 
@@ -310,5 +331,6 @@ pub async fn disable(State(st): State<AppState>, Extension(ctx): Extension<Ctx>)
         return Err(panel_exception());
     }
     lifecycle::disable(&cfg, &p).map_err(service_err)?;
+    pelican_plugins::runtime::reload_global(&cfg);
     respond(&cfg, &p.id).await
 }

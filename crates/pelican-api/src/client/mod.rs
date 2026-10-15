@@ -33,6 +33,11 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route("/account/ssh-keys", p(get(account::ssh_keys_index).post(account::ssh_keys_store)))
         .route("/account/ssh-keys/{fingerprint}", p(delete(account::ssh_keys_delete)))
         .route("/account/activity", p(get(activity::account)))
+        .route("/plugins/{plugin}/{*rest}", p(crate::plugin_routes::all_methods(crate::plugin_routes::client)))
+        .route(
+            "/servers/{server}/plugins/{plugin}/{*rest}",
+            p(crate::plugin_routes::all_methods(crate::plugin_routes::client)),
+        )
         .route("/servers/{server}", p(get(servers::view)))
         .route("/servers/{server}/websocket", p(get(servers::websocket)))
         .route("/servers/{server}/resources", p(get(servers::resources)))

@@ -221,6 +221,20 @@ impl ServerPanel {
                 item.badge = self.webhooks.filter(|n| *n > 0).map(|n| n.to_string());
             }
         }
+        for (plugin, n, page) in crate::plugin_pages::nav_items(pelican_plugins::runtime::Panel::Server) {
+            if page.as_ref().and_then(|p| p.permission.as_deref()).is_some_and(|perm| !self.can(perm)) {
+                continue;
+            }
+            items.push(NavItem {
+                label: crate::plugin_pages::label(&self.st, &plugin, &self.locale(), &n.label),
+                url: format!("{base}/plugins/{plugin}/{}", n.page),
+                icon: crate::plugin_pages::icon(n.icon.as_deref()),
+                active: active == format!("plugin:{plugin}:{}", n.page),
+                badge: None,
+                badge_color: None,
+                badge_tooltip: None,
+            });
+        }
         if self.user.is_admin() && self.user.can_view_server(self.node.id.0) {
             items.push(NavItem {
                 label: self.t("server/console.open_in_admin"),

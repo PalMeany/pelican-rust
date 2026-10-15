@@ -184,6 +184,7 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route("/plugins/{plugin}/uninstall", p(post(plugins::uninstall)))
         .route("/plugins/{plugin}/enable", p(post(plugins::enable)))
         .route("/plugins/{plugin}/disable", p(post(plugins::disable)))
+        .route("/plugins/{plugin}/api/{*rest}", p(crate::plugin_routes::all_methods(crate::plugin_routes::application)))
         .route("/mounts", p(get(mounts::index).post(mounts::store)))
         .route("/mounts/{mount}", p(get(mounts::view).patch(mounts::update).delete(mounts::delete)))
         .route("/mounts/{mount}/eggs", p(get(mounts::get_eggs).post(mounts::add_eggs)))
