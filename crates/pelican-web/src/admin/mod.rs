@@ -347,6 +347,31 @@ impl Admin {
                 }
             }
         }
+        if crate::models::nav_mode(st, &self.user.user) == "topbar" {
+            // With top navigation Eggs, Nodes, Servers and Users have no group and Roles moves to
+            // Advanced (`*Resource::getNavigationGroup()`); ungrouped resources follow the pages by name.
+            let take = |v: &mut Vec<NavItem>, slug: &str| {
+                let url = format!("/admin/{slug}");
+                v.iter().position(|i| i.url == url).map(|p| v.remove(p))
+            };
+            let (eggs, nodes, servers) =
+                (take(&mut server, "eggs"), take(&mut server, "nodes"), take(&mut server, "servers"));
+            let (roles, users) = (take(&mut user, "roles"), take(&mut user, "users"));
+            let at = top.iter().position(|i| i.url == "/admin/plugins").unwrap_or_else(|| {
+                top.iter().rposition(|i| i.url == "/admin" || i.url == "/admin/settings").map_or(0, |p| p + 1)
+            });
+            let plugins = (top.get(at).is_some_and(|i| i.url == "/admin/plugins")).then(|| top.remove(at));
+            let tail = top.split_off(at);
+            top.extend([eggs, nodes, plugins, servers, users].into_iter().flatten());
+            top.extend(tail);
+            if let Some(roles) = roles {
+                let at = advanced
+                    .iter()
+                    .position(|i| i.url == "/admin/webhooks" || i.url == "/admin/logs")
+                    .unwrap_or(advanced.len());
+                advanced.insert(at, roles);
+            }
+        }
         // Groups the panel does not register (plugins') sort with the first registered one.
         let mut groups = vec![NavGroup { label: None, items: top }];
         for (label, items) in std::iter::once((t("admin/dashboard.server"), server))

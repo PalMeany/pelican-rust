@@ -124,13 +124,7 @@ impl Web {
                 avatar_url: crate::models::avatar_url(&self.st, &u.user),
             })
         });
-        // `top_navigation` customization: `sidebar`, `topbar` or `mixed` (old values: true = topbar).
-        let nav_mode =
-            self.user.as_ref().map(|u| match crate::models::customization(&self.st, &u.user).get("top_navigation") {
-                Some(serde_json::Value::Bool(true)) => "topbar".to_string(),
-                Some(serde_json::Value::String(s)) if s == "topbar" || s == "mixed" => s.clone(),
-                _ => "sidebar".to_string(),
-            });
+        let nav_mode = self.user.as_ref().map(|u| crate::models::nav_mode(&self.st, &u.user));
         // `button_style` customization: truthy (the default) shows most actions as bare icon buttons.
         let button_style = self.user.as_ref().is_none_or(|u| {
             match crate::models::customization(&self.st, &u.user).get("button_style") {
@@ -154,6 +148,7 @@ impl Web {
             nav_mode => nav_mode,
             button_style => button_style,
             app_logo => self.st.config.env.string("APP_LOGO").unwrap_or_default(),
+            content_width => content_width(&self.st.config.env.string_or("FILAMENT_WIDTH", "screen-2xl")),
             footer_name => footer_name,
             year => chrono::Utc::now().format("%Y").to_string(),
             app_url => self.st.config.app_url.clone(),
@@ -218,6 +213,37 @@ impl Web {
 
 /// Plugin alert banners for the layout: a known status and an icon we have (the banner's own
 /// Tabler icon, else the status's).
+/// `->maxContentWidth(config('panel.filament.display-width'))`: the CSS max-width of Filament's
+/// `fi-width-*` class for the setting; None for the layout's own (`screen-2xl`, 96rem).
+fn content_width(width: &str) -> Option<&'static str> {
+    Some(match width {
+        "3xs" => "16rem",
+        "2xs" => "18rem",
+        "xs" => "20rem",
+        "sm" => "24rem",
+        "md" => "28rem",
+        "lg" => "32rem",
+        "xl" => "36rem",
+        "2xl" => "42rem",
+        "3xl" => "48rem",
+        "4xl" => "56rem",
+        "5xl" => "64rem",
+        "6xl" => "72rem",
+        "7xl" => "80rem",
+        "none" => "none",
+        "full" => "100%",
+        "min" => "min-content",
+        "max" => "max-content",
+        "fit" => "fit-content",
+        "prose" => "65ch",
+        "screen-sm" => "40rem",
+        "screen-md" => "48rem",
+        "screen-lg" => "64rem",
+        "screen-xl" => "80rem",
+        _ => return None,
+    })
+}
+
 fn banners(list: &[pelican_api::sidecar::Banner]) -> Vec<pelican_api::sidecar::Banner> {
     list.iter()
         .map(|b| {

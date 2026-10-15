@@ -70,6 +70,17 @@ pub fn customization(st: &AppState, user: &users::Model) -> Map<String, Value> {
     out
 }
 
+/// The `top_navigation` customization: `sidebar`, `topbar` or `mixed` (old values: true = topbar),
+/// as `PanelProvider::topNavigation()`/`topbar()` read it.
+pub fn nav_mode(st: &AppState, user: &users::Model) -> &'static str {
+    match customization(st, user).get("top_navigation") {
+        Some(Value::Bool(true)) => "topbar",
+        Some(Value::String(s)) if s == "topbar" => "topbar",
+        Some(Value::String(s)) if s == "mixed" => "mixed",
+        _ => "sidebar",
+    }
+}
+
 fn safe_join(base: &Path, rel: &str) -> Option<PathBuf> {
     let rel = Path::new(rel);
     if rel.components().any(|c| !matches!(c, Component::Normal(_))) {
