@@ -441,6 +441,7 @@ async fn filters(
         label: "Egg".into(),
         options: egg_rows.iter().map(|e| (e.id.0.to_string(), e.name.clone())).collect(),
         value: p.filter("egg").unwrap_or("").into(),
+        searchable: true,
     }];
     if tab != "my" {
         let user_sql = format!(
@@ -452,6 +453,7 @@ async fn filters(
             label: "Owner".into(),
             options: user_rows.iter().map(|u| (u.id.0.to_string(), u.username.clone())).collect(),
             value: p.filter("owner").unwrap_or("").into(),
+            searchable: true,
         });
     }
     Ok(out)

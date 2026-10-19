@@ -174,6 +174,7 @@ async fn index(p: ServerPanel) -> WebResult<Response> {
         label: t("type"),
         options: vec![(api_webhooks::REGULAR.into(), t("regular"))],
         value: type_filter.unwrap_or_default().into(),
+        searchable: false,
     }];
     table.empty_icon = "webhook".into();
     table.empty_heading = t("no_webhooks");

@@ -332,12 +332,19 @@ async fn index(p: ServerPanel) -> WebResult {
     let ev_value = lp.filter("event").unwrap_or("").to_string();
     let actor_value = lp.filter("actor_id").unwrap_or("").to_string();
     table.filters = vec![
-        Filter { name: "event".into(), label: t_event.clone(), options: event_options(&p).await?, value: ev_value },
+        Filter {
+            name: "event".into(),
+            label: t_event.clone(),
+            options: event_options(&p).await?,
+            value: ev_value,
+            searchable: true,
+        },
         Filter {
             name: "actor_id".into(),
             label: t_user.clone(),
             options: actor_options(&p).await?,
             value: actor_value,
+            searchable: true,
         },
     ];
     table.empty_icon = "stack".into();

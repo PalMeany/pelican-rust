@@ -56,10 +56,10 @@
   <summary class="icon-btn filter-btn" aria-label="{{ trans('filament-tables::table.actions.filter.label') }}">{{ icon('filters', 'icon') }}<span class="filter-count">{{ active }}</span></summary>
   <div class="dropdown-menu filters-menu">
     <div class="filters-head"><strong>{{ trans('filament-tables::table.filters.heading') }}</strong>
-      <button type="button" class="btn-link danger" onclick="const f=this.closest('form');f.querySelectorAll('select[name^=filter]').forEach(s=>s.value='');const s=f.querySelector('select[name^=filter]');if(s)htmx.trigger(s,'change')">{{ trans('filament-tables::table.filters.actions.reset.label') }}</button></div>
+      <button type="button" class="btn-link danger" onclick="const f=this.closest('form');f.querySelectorAll('select[name^=filter]').forEach(s=>{s.value='';s.dispatchEvent(new Event('ss-sync'))});const s=f.querySelector('select[name^=filter]');if(s)htmx.trigger(s,'change')">{{ trans('filament-tables::table.filters.actions.reset.label') }}</button></div>
     {% for f in filters %}
     <label class="field"><span class="label">{{ f.label }}</span>
-      <select class="select" id="{{ id }}-filter-{{ f.name }}" name="filter[{{ f.name }}]"
+      <select class="select" id="{{ id }}-filter-{{ f.name }}" name="filter[{{ f.name }}]"{% if f.searchable %} data-searchable{% endif %}
         hx-get="{{ base }}" hx-trigger="change" hx-include="closest form" hx-push-url="true">
         <option value="">{{ trans('filament-tables::table.filters.select.placeholder') }}</option>
         {% for o in f.options %}<option value="{{ o[0] }}"{% if o[0] == f.value %} selected{% endif %}>{{ o[1] }}</option>{% endfor %}

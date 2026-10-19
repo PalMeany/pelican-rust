@@ -292,6 +292,7 @@ async fn index(admin: Admin) -> WebResult {
             ("none".into(), "—".into()),
         ],
         value: group.clone(),
+        searchable: false,
     }];
     table.empty_icon = "brand-docker".into();
     table.empty_heading = t("admin/server.no_servers");

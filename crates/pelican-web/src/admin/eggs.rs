@@ -251,6 +251,7 @@ async fn index(admin: Admin) -> WebResult {
             label: t("admin/egg.tags"),
             options: tags.into_iter().map(|t| (t.clone(), t)).collect(),
             value: p.filter("tag").unwrap_or("").into(),
+            searchable: true,
         }];
     }
     table.empty_icon = "eggs".into();

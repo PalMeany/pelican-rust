@@ -525,6 +525,7 @@
     ul.addEventListener('mousedown', (e) => e.preventDefault());
     ul.addEventListener('click', (e) => { const li = e.target.closest('.ss-opt'); if (li) choose(li); });
     sel.addEventListener('change', render);
+    sel.addEventListener('ss-sync', render); // value set by a script
     // Options or `disabled` changed by other scripts (repeaters, show-if fields).
     new MutationObserver(() => { render(); if (!panel.hidden) fill(); })
       .observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'hidden', 'selected', 'required'] });

@@ -327,6 +327,8 @@ pub struct Filter {
     /// `(value, label)`.
     pub options: Vec<(String, String)>,
     pub value: String,
+    /// `SelectFilter::searchable()`: Filament's JS select with a search field.
+    pub searchable: bool,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]

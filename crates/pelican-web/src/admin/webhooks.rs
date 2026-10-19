@@ -314,12 +314,14 @@ async fn index(admin: Admin) -> WebResult {
             label: t("type"),
             options: vec![(api_webhooks::REGULAR.into(), t("regular"))],
             value: p.filter("type").unwrap_or("").into(),
+            searchable: false,
         },
         Filter {
             name: "server_id".into(),
             label: t("server"),
             options: server_options(&admin).await?,
             value: p.filter("server_id").unwrap_or("").into(),
+            searchable: false,
         },
     ];
     if has_rows || grouped {
@@ -328,6 +330,7 @@ async fn index(admin: Admin) -> WebResult {
             label: admin.t("filament-tables::table.grouping.fields.group.label"),
             options: vec![("server".into(), t("server"))],
             value: if grouped { "server" } else { "" }.into(),
+            searchable: false,
         });
     }
     table.filters = filters;
