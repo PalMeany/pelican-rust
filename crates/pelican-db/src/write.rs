@@ -5,9 +5,23 @@
 
 use sea_orm::sea_query::{Expr, ExprTrait, Query};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ConnectionTrait, DbBackend, DbErr, EntityTrait, Iterable, PrimaryKeyToColumn,
-    PrimaryKeyTrait, TryFromU64, Value,
+    ActiveModelTrait, ActiveValue, ConnectionTrait, DatabaseTransaction, DbBackend, DbErr, EntityTrait, Iterable,
+    PrimaryKeyToColumn, PrimaryKeyTrait, SqliteTransactionMode, TransactionOptions, TransactionTrait, TryFromU64,
+    Value,
 };
+
+/// A transaction that reads before it writes, begun with SQLite's write lock taken up front
+/// (`BEGIN IMMEDIATE`; other databases begin as usual). A deferred one fails at once with
+/// "database is locked" when another connection writes meanwhile (two scheduled backups in the
+/// same minute; the original ran tasks one at a time on its queue), this one waits for the busy
+/// timeout instead.
+pub async fn begin_immediate<C: TransactionTrait<Transaction = DatabaseTransaction>>(
+    db: &C,
+) -> Result<DatabaseTransaction, DbErr> {
+    let opts =
+        TransactionOptions { sqlite_transaction_mode: Some(SqliteTransactionMode::Immediate), ..Default::default() };
+    db.begin_with_options(opts).await
+}
 
 /// PHP `json_encode($value)` (flags 0) of a JSON value.
 pub fn php_json(v: &serde_json::Value) -> String {

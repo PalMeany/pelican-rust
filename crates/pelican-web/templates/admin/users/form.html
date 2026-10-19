@@ -46,8 +46,8 @@
     <fieldset class="card card-body span-full stack" style="margin:0;border:1px solid var(--border)">
       <legend class="row" style="font-weight:600">{{ icon('palette', 'icon-sm') }}{{ trans('profile.tabs.customization') }}</legend>
       <div class="grid grid-2">
-        {{ f.select('timezone', trans('profile.timezone'), timezones, v.timezone, errors, required=true, prefix_icon='clock-pin') }}
-        {{ f.select('language', trans('profile.language'), languages, v.language, errors, required=true, prefix_icon='flag') }}
+        {{ f.select('timezone', trans('profile.timezone'), timezones, v.timezone, errors, required=true, prefix_icon='clock-pin', searchable=true) }}
+        {{ f.select('language', trans('profile.language'), languages, v.language, errors, required=true, prefix_icon='flag', searchable=true) }}
       </div>
       {% if avatar_file %}
       <div class="row" style="gap:0.75rem">

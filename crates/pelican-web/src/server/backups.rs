@@ -451,7 +451,7 @@ async fn create(p: ServerPanel, form: Form) -> WebResult<Response> {
         override_limit: false,
     };
     let result: Result<backups::Model, pelican_api::error::ApiError> = async {
-        let txn = st.db.begin().await?;
+        let txn = pelican_db::write::begin_immediate(&st.db).await?;
         api::lock_server(&txn, server.id.0).await?;
         let backup = api::initiate_backup(&st, &txn, &server, opts).await?;
         ctx.activity("server:backup.start")

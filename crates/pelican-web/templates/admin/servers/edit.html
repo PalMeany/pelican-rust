@@ -44,7 +44,7 @@
       <div class="span-2">{{ f.text('name', trans(S ~ '.name'), s.name, errors, required=true, attrs='maxlength="255"', prefix_icon='server', actions=dice) }}</div>
       <div class="field"><span class="field-label">{{ trans(S ~ '.server_status') }}</span>
         <span class="state-btn {{ condition.color }}">{{ icon(condition.icon, 'icon-sm') }}{{ condition.label }}</span></div>
-      <div class="span-2">{{ f.select('owner_id', trans(S ~ '.owner'), owners, s.owner_id, errors, required=true, prefix_icon='user') }}</div>
+      <div class="span-2">{{ f.select('owner_id', trans(S ~ '.owner'), owners, s.owner_id, errors, required=true, prefix_icon='user', searchable=true) }}</div>
     </div>
   </div>
   <div class="form mt-4">
@@ -149,7 +149,7 @@
     {{ csrf_field() }}<input type="hidden" name="op" value="change-egg">
     <div class="modal-head"><h2>{{ trans(S ~ '.change_egg') }}</h2></div>
     <div class="modal-body">
-      {{ f.select('egg_id', trans(S ~ '.new_egg'), other_eggs, '', {}, required=true) }}
+      {{ f.select('egg_id', trans(S ~ '.new_egg'), other_eggs, '', {}, required=true, searchable=true) }}
       {{ f.toggle('keep_old_variables', trans(S ~ '.keep_old_variables'), true) }}
     </div>
     <div class="modal-foot"><button type="button" class="btn btn-gray" data-modal-close>{{ trans('filament-actions::modal.actions.cancel.label') }}</button>

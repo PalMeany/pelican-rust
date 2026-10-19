@@ -30,7 +30,7 @@
     {{ csrf_field() }}
     <fieldset class="card card-body grid grid-2" style="margin:0;align-content:start"{% if readonly %} disabled{% endif %}>
       {{ f.text('name', trans('admin/backuphost.name'), v.name, errors, required=true, attrs='maxlength="255"') }}
-      {{ f.select('schema', trans('admin/backuphost.schema'), schema_options, v.schema, errors, required=true, attrs=hx_attrs | default('', true) | trim | safe) }}
+      {{ f.select('schema', trans('admin/backuphost.schema'), schema_options, v.schema, errors, required=true, searchable=true, attrs=hx_attrs | default('', true) | trim | safe) }}
       <div class="span-full">{{ f.select('node_ids', trans('admin/backuphost.linked_nodes'), node_options, v.node_ids, errors, multiple=true) }}</div>
     </fieldset>
     {% include "admin/backup_hosts/_configuration.html" %}

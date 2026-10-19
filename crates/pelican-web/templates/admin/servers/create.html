@@ -15,12 +15,12 @@
     <div class="grid grid-2">
       {{ f.text('name', trans(S ~ '.name'), v.name, errors, required=true, attrs='maxlength="255"', prefix_icon='server') }}
       {{ f.text('external_id', trans(S ~ '.external_id'), v.external_id, errors, attrs='maxlength="255"') }}
-      {{ f.select('node_id', trans(S ~ '.node'), nodes, v.node_id, errors, required=true, attrs=refresh, prefix_icon='server-2') }}
+      {{ f.select('node_id', trans(S ~ '.node'), nodes, v.node_id, errors, required=true, attrs=refresh, prefix_icon='server-2', searchable=true) }}
       {# owner_id + its create-option action (CreateServer.php, `createOptionForm`) #}
       <div class="field{% if errors.owner_id %} has-error{% endif %}">
         <label for="f-owner_id">{{ trans(S ~ '.owner') }}<span class="req">*</span></label>
         <div class="row">
-          <select class="select" id="f-owner_id" name="owner_id" required style="flex:1;min-width:0">
+          <select class="select" id="f-owner_id" name="owner_id" required data-searchable style="flex:1;min-width:0">
             {% for o in owners %}<option value="{{ o[0] }}"{% if o[0] == v.owner_id %} selected{% endif %}>{{ o[1] }}</option>{% endfor %}
           </select>
           {% if can_create_user %}<button type="button" class="btn btn-gray btn-sm" data-modal-open="owner-modal" title="{{ create_option_label }}" aria-label="{{ create_option_label }}">{{ icon('plus', 'icon-sm') }}</button>{% endif %}
@@ -31,7 +31,7 @@
       <div class="field{% if errors.allocation_id %} has-error{% endif %}">
         <label for="f-allocation_id">{{ trans(S ~ '.primary_allocation') }}</label>
         <div class="row">
-          <select class="select" id="f-allocation_id" name="allocation_id" style="flex:1;min-width:0">
+          <select class="select" id="f-allocation_id" name="allocation_id" data-searchable style="flex:1;min-width:0">
             <option value="">{{ trans(S ~ '.select_allocation') }}</option>
             {% for a in allocations %}<option value="{{ a[0] }}"{% if a[0] == v.allocation_id %} selected{% endif %}>{{ a[1] }}</option>{% endfor %}
           </select>
@@ -39,14 +39,34 @@
         </div>
         {{ f.error(errors, 'allocation_id') }}
       </div>
-      {{ f.select('allocation_additional', trans(S ~ '.additional_allocations'), allocations, v.allocation_additional, errors, multiple=true) }}
+      {# Repeater::make('allocation_additional')->simple(Select::make('extra_allocations')): one free
+         allocation per row, disabled until the primary allocation is picked. #}
+      {% macro extra_row(allocations, value) %}
+      <li class="simple-repeater-item" data-repeater-item>
+        <div class="input-group"><span class="addon addon-icon">{{ icon('network', 'icon') }}</span>
+          <select class="select" name="allocation_additional[]" data-searchable aria-label="{{ trans(S ~ '.additional_allocations') }}">
+            <option value="">{{ trans(S ~ '.select_additional') }}</option>
+            {% for a in allocations %}<option value="{{ a[0] }}"{% if a[0] == value %} selected{% endif %}>{{ a[1] }}</option>{% endfor %}
+          </select></div>
+        <button type="button" class="icon-btn danger" data-repeater-remove aria-label="{{ trans('filament-forms::components.repeater.actions.delete.label') }}" title="{{ trans('filament-forms::components.repeater.actions.delete.label') }}">{{ icon('trash', 'icon') }}</button>
+      </li>
+      {% endmacro %}
+      <div class="field{% if errors.allocation_additional %} has-error{% endif %}" data-repeater data-repeater-requires="allocation_id">
+        <label>{{ trans(S ~ '.additional_allocations') }}</label>
+        <ul class="simple-repeater" data-repeater-items>
+          {% for a in (v.allocation_additional or ['']) %}{{ extra_row(allocations, a) }}{% endfor %}
+        </ul>
+        <template data-repeater-template>{{ extra_row(allocations, '') }}</template>
+        <div class="simple-repeater-add"><button type="button" class="btn btn-gray btn-sm" data-repeater-add>Add Allocation</button></div>
+        {{ f.error(errors, 'allocation_additional') }}
+      </div>
     </div>
     {{ f.textarea('description', trans(S ~ '.description'), v.description, errors, rows=3) }}
   </section>
 
   <section class="stack" data-wizard-panel hidden>
     <div class="grid grid-3">
-      <div class="span-2">{{ f.select('egg_id', trans(S ~ '.egg'), eggs, v.egg_id, errors, required=true, placeholder='', attrs=refresh, prefix_icon='egg') }}</div>
+      <div class="span-2">{{ f.select('egg_id', trans(S ~ '.egg'), eggs, v.egg_id, errors, required=true, placeholder='', attrs=refresh, prefix_icon='egg', searchable=true) }}</div>
       {{ f.radios('skip_scripts', trans(S ~ '.install_script'), [['0', trans(S ~ '.yes'), 'code', 'primary'], ['1', trans(S ~ '.skip'), 'code-off', 'danger']], v.skip_scripts, errors, inline=true) }}
     </div>
     {{ f.radios('start_on_completion', trans(S ~ '.start_after'), [['1', trans(S ~ '.yes'), 'code', 'primary'], ['0', trans(S ~ '.no'), 'code-off', 'danger']], v.start_on_completion, errors, inline=true) }}

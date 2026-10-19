@@ -12,7 +12,7 @@
   {{ csrf_field() }}
   {% set refresh = 'hx-post="/admin/servers/' ~ server.id ~ '/transfer" hx-trigger="change" hx-include="#transfer-form" hx-vals=\'{"_refresh": "1"}\' hx-select="#transfer-form" hx-target="#transfer-form" hx-swap="outerHTML" hx-push-url="false"' %}
   {{ f.select('node_id', trans(S ~ '.node'), nodes, node_id, errors, required=true, attrs=refresh) }}
-  {{ f.select('allocation_id', trans(S ~ '.primary_allocation'), allocations, allocation_id, errors, required=allocation_enabled, placeholder=trans(S ~ '.select_allocation'), disabled=not allocation_enabled, attrs=refresh) }}
+  {{ f.select('allocation_id', trans(S ~ '.primary_allocation'), allocations, allocation_id, errors, searchable=true, required=allocation_enabled, placeholder=trans(S ~ '.select_allocation'), disabled=not allocation_enabled, attrs=refresh) }}
   {% if additional_enabled %}
   {{ f.select('allocation_additional', trans(S ~ '.additional_allocations'), additional_options, additional, errors, required=true, multiple=true, hint=trans(S ~ '.select_additional') ~ ' (' ~ additional_count ~ ')') }}
   {% endif %}

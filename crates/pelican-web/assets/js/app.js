@@ -368,6 +368,233 @@
     else if (e.key === 'Enter' && document.activeElement === input && links[0]) { e.preventDefault(); links[0].click(); }
   });
 
+  // ----- Filament's JS select (`->searchable()` / `->multiple()`) -----
+  // The native <select> stays in the form (hidden) and keeps the state: a field-like button shows
+  // the choice (badges when multiple, each removable) and opens a dropdown with a search field.
+  // Picking an option updates the select and fires its `change` (htmx refreshes, show-if fields).
+  const SS = 'select[data-searchable], select[multiple]';
+  const ssX = '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z"/></svg>';
+  function ssBuild(sel) {
+    sel.dataset.ssReady = '1';
+    const s = strings();
+    const multiple = sel.multiple;
+    const wrap = document.createElement('div');
+    wrap.className = 'ss' + (multiple ? ' ss-multiple' : '');
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(sel);
+    sel.classList.add('ss-native');
+    sel.tabIndex = -1;
+    sel.setAttribute('aria-hidden', 'true');
+    const btn = document.createElement('div');
+    btn.className = 'select ss-btn';
+    btn.setAttribute('role', 'combobox');
+    btn.setAttribute('aria-haspopup', 'listbox');
+    btn.setAttribute('aria-expanded', 'false');
+    if (sel.id) { const l = document.querySelector('label[for="' + sel.id + '"]'); if (l) { l.id = l.id || sel.id + '-label'; btn.setAttribute('aria-labelledby', l.id); l.addEventListener('click', (e) => { e.preventDefault(); btn.focus(); }); } }
+    const value = document.createElement('span');
+    value.className = 'ss-value';
+    btn.appendChild(value);
+    const panel = document.createElement('div');
+    panel.className = 'ss-panel';
+    panel.hidden = true;
+    const sc = document.createElement('div');
+    sc.className = 'ss-search-ctn';
+    const search = document.createElement('input');
+    search.type = 'text'; search.className = 'input'; search.autocomplete = 'off';
+    search.placeholder = s.select_search || 'Start typing to search';
+    search.setAttribute('aria-label', search.placeholder);
+    sc.appendChild(search);
+    const ul = document.createElement('ul');
+    ul.className = 'ss-list';
+    ul.setAttribute('role', 'listbox');
+    if (multiple) ul.setAttribute('aria-multiselectable', 'true');
+    panel.append(sc, ul);
+    wrap.append(btn, panel);
+    let items = [], active = -1;
+    const placeholderText = () => { const o = [...sel.options].find((x) => x.value === ''); return (o && o.text.trim()) || s.select_placeholder || 'Select an option'; };
+    const fire = () => { sel.dispatchEvent(new Event('input', { bubbles: true })); sel.dispatchEvent(new Event('change', { bubbles: true })); };
+    function render() {
+      value.replaceChildren();
+      wrap.querySelector('.ss-clear')?.remove();
+      wrap.classList.remove('ss-clearable');
+      const chosen = [...sel.options].filter((o) => o.selected && o.value !== '');
+      if (!chosen.length) {
+        const ph = document.createElement('span'); ph.className = 'ss-placeholder'; ph.textContent = placeholderText(); value.appendChild(ph);
+      } else if (multiple) {
+        chosen.forEach((o) => {
+          const b = document.createElement('span'); b.className = 'ss-badge';
+          const t = document.createElement('span'); t.textContent = o.text; b.appendChild(t);
+          if (!sel.disabled) {
+            const x = document.createElement('button'); x.type = 'button'; x.innerHTML = ssX; x.setAttribute('aria-label', s.delete || 'Delete');
+            x.addEventListener('click', (e) => { e.stopPropagation(); o.selected = false; fire(); render(); if (!panel.hidden) { fill(); place(); } });
+            b.appendChild(x);
+          }
+          value.appendChild(b);
+        });
+      } else {
+        value.textContent = chosen[0].text;
+        // A placeholder that can be chosen (an optional field): the clear button picks it.
+        if (!sel.required && !sel.disabled && [...sel.options].some((o) => o.value === '')) {
+          const x = document.createElement('button'); x.type = 'button'; x.className = 'ss-clear'; x.innerHTML = ssX; x.setAttribute('aria-label', s.delete || 'Delete');
+          x.addEventListener('click', (e) => { e.stopPropagation(); sel.value = ''; fire(); render(); });
+          wrap.appendChild(x); wrap.classList.add('ss-clearable');
+        }
+      }
+      btn.classList.toggle('disabled', sel.disabled);
+      btn.tabIndex = sel.disabled ? -1 : 0;
+      btn.setAttribute('aria-disabled', sel.disabled ? 'true' : 'false');
+      if (sel.disabled) close();
+    }
+    function mark(i) {
+      items.forEach((li, k) => li.classList.toggle('active', k === i));
+      active = i;
+      if (items[i]) { items[i].scrollIntoView({ block: 'nearest' }); search.setAttribute('aria-activedescendant', items[i].id); }
+    }
+    function fill() {
+      const q = search.value.trim().toLowerCase();
+      ul.replaceChildren(); items = [];
+      [...sel.options].forEach((o, k) => {
+        if (o.value === '' || o.hidden || (multiple && o.selected)) return;
+        if (q && !o.text.toLowerCase().includes(q)) return;
+        const li = document.createElement('li');
+        li.className = 'ss-opt'; li.id = (sel.id || 'ss') + '-opt-' + k; li.setAttribute('role', 'option'); li.dataset.value = o.value; li.textContent = o.text;
+        if (o.disabled) { li.classList.add('disabled'); li.setAttribute('aria-disabled', 'true'); }
+        if (o.selected) { li.classList.add('selected'); li.setAttribute('aria-selected', 'true'); }
+        ul.appendChild(li); items.push(li);
+      });
+      if (!items.length) {
+        const m = document.createElement('li'); m.className = 'ss-msg';
+        m.textContent = q ? (s.select_no_results || 'No options match your search.') : (s.select_no_options || 'No options available.');
+        ul.appendChild(m);
+      }
+      mark(Math.max(0, items.findIndex((li) => li.classList.contains('selected'))));
+    }
+    // Fixed under the field (above it when there is more room there), so modals do not clip it.
+    function place() {
+      const r = btn.getBoundingClientRect();
+      const below = window.innerHeight - r.bottom, above = r.top;
+      panel.style.left = r.left + 'px';
+      panel.style.width = r.width + 'px';
+      const up = below < 240 && above > below;
+      const room = Math.max(120, (up ? above : below) - 12);
+      panel.style.maxHeight = Math.min(240, room) + 'px';
+      if (up) { panel.style.top = ''; panel.style.bottom = (window.innerHeight - r.top + 4) + 'px'; } else { panel.style.bottom = ''; panel.style.top = (r.bottom + 4) + 'px'; }
+    }
+    function open() {
+      if (sel.disabled || !panel.hidden) return;
+      document.querySelectorAll('.ss.open').forEach((w) => w._ssClose?.());
+      search.value = '';
+      panel.hidden = false;
+      wrap.classList.add('open');
+      btn.setAttribute('aria-expanded', 'true');
+      fill(); place();
+      search.focus({ preventScroll: true });
+    }
+    function close(focus) {
+      if (panel.hidden) return;
+      panel.hidden = true;
+      wrap.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
+      if (focus) btn.focus({ preventScroll: true });
+    }
+    wrap._ssClose = close;
+    wrap._ssPlace = place;
+    function choose(li) {
+      const o = li && [...sel.options].find((x) => x.value === li.dataset.value);
+      if (!o || o.disabled) return;
+      if (multiple) o.selected = true; else sel.value = o.value;
+      fire(); render();
+      if (multiple) { search.value = ''; fill(); place(); search.focus({ preventScroll: true }); } else close(true);
+    }
+    btn.addEventListener('click', () => { if (panel.hidden) open(); else close(); });
+    btn.addEventListener('keydown', (e) => {
+      if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); open(); }
+      else if (e.key === 'Backspace' && multiple && !sel.disabled) {
+        const last = [...sel.options].filter((o) => o.selected && o.value !== '').pop();
+        if (last) { last.selected = false; fire(); render(); }
+      }
+    });
+    search.addEventListener('input', fill);
+    search.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (items.length) mark((active + 1) % items.length); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); if (items.length) mark((active - 1 + items.length) % items.length); }
+      else if (e.key === 'Enter') { e.preventDefault(); choose(items[active]); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(true); }
+      else if (e.key === 'Tab') close();
+    });
+    ul.addEventListener('mousedown', (e) => e.preventDefault());
+    ul.addEventListener('click', (e) => { const li = e.target.closest('.ss-opt'); if (li) choose(li); });
+    sel.addEventListener('change', render);
+    // Options or `disabled` changed by other scripts (repeaters, show-if fields).
+    new MutationObserver(() => { render(); if (!panel.hidden) fill(); })
+      .observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'hidden', 'selected', 'required'] });
+    render();
+  }
+  function ssInit(root) {
+    if (!root || !root.querySelectorAll) return;
+    (root.matches?.(SS) ? [root] : [...root.querySelectorAll(SS)]).forEach((sel) => { if (!sel.dataset.ssReady) ssBuild(sel); });
+  }
+  ssInit(document);
+  new MutationObserver((list) => list.forEach((m) => m.addedNodes.forEach((n) => { if (n.nodeType === 1) ssInit(n); })))
+    .observe(document.documentElement, { childList: true, subtree: true });
+  document.addEventListener('pointerdown', (e) => {
+    document.querySelectorAll('.ss.open').forEach((w) => { if (!w.contains(e.target)) w._ssClose?.(); });
+  });
+  window.addEventListener('resize', () => document.querySelectorAll('.ss.open').forEach((w) => w._ssPlace?.()));
+  document.addEventListener('scroll', (e) => {
+    document.querySelectorAll('.ss.open').forEach((w) => { if (!w.querySelector('.ss-panel').contains(e.target)) w._ssPlace?.(); });
+  }, true);
+
+  // ----- simple Repeater (`->simple(Select)`): [data-repeater] with rows [data-repeater-item] -----
+  // Add clones the row <template>, delete removes a row; a select's options picked in a sibling row
+  // are disabled (`disableOptionsWhenSelectedInSiblingRepeaterItems()`). With
+  // [data-repeater-requires=field] the repeater is disabled until that field has a value, whose
+  // option is left out of the rows' and whose change empties them (the additional allocations).
+  function repeaterSync(rep) {
+    const form = rep.closest('form');
+    const req = rep.dataset.repeaterRequires;
+    const reqValue = req ? controlValue(form, req) : null;
+    const off = req !== undefined && !reqValue;
+    const sels = [...rep.querySelectorAll('[data-repeater-item] select')];
+    const taken = sels.map((x) => x.value).filter(Boolean);
+    sels.forEach((x) => {
+      if (x.disabled !== off) x.disabled = off;
+      [...x.options].forEach((o) => {
+        if (!o.value) return;
+        const hide = reqValue !== null && o.value === reqValue;
+        const dis = !o.selected && taken.includes(o.value);
+        if (o.hidden !== hide) o.hidden = hide;
+        if (o.disabled !== dis) o.disabled = dis;
+      });
+    });
+    rep.querySelectorAll('[data-repeater-add], [data-repeater-remove]').forEach((b) => { b.hidden = off; });
+  }
+  function repeaterInit(root) { (root || document).querySelectorAll('[data-repeater]').forEach(repeaterSync); }
+  document.addEventListener('click', (e) => {
+    const add = e.target.closest('[data-repeater-add]');
+    if (add) {
+      const rep = add.closest('[data-repeater]');
+      const tpl = rep.querySelector('template[data-repeater-template]');
+      const items = rep.querySelector('[data-repeater-items]');
+      if (tpl && items) { items.appendChild(tpl.content.cloneNode(true)); repeaterSync(rep); }
+      return;
+    }
+    const rm = e.target.closest('[data-repeater-remove]');
+    if (rm) { const rep = rm.closest('[data-repeater]'); rm.closest('[data-repeater-item]').remove(); repeaterSync(rep); }
+  });
+  document.addEventListener('change', (e) => {
+    const t = e.target;
+    if (!t.name) return;
+    const inside = t.closest('[data-repeater]');
+    if (inside) { repeaterSync(inside); return; }
+    (t.form || document).querySelectorAll('[data-repeater][data-repeater-requires="' + t.name + '"]').forEach((rep) => {
+      rep.querySelectorAll('[data-repeater-item] select').forEach((x) => { x.value = ''; x.dispatchEvent(new Event('change')); });
+      repeaterSync(rep);
+    });
+  });
+  document.addEventListener('DOMContentLoaded', () => repeaterInit(document));
+  document.addEventListener('htmx:afterSettle', (e) => repeaterInit(e.detail.elt));
+
   // ----- clicks -----
   document.addEventListener('click', (e) => {
     const open = e.target.closest('[data-modal-open]');

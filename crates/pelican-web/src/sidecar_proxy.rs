@@ -5,7 +5,7 @@
 use std::sync::OnceLock;
 use std::time::Duration;
 
-use axum::body::Body;
+use axum::body::{Body, HttpBody};
 use axum::extract::Request;
 use axum::http::{HeaderName, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
@@ -27,6 +27,9 @@ const DROPPED: &[&str] = &[
     "x-forwarded-host",
     "x-forwarded-port",
 ];
+
+/// The most of a request body without a length that is buffered for the sidecar.
+const MAX_BUFFERED_BODY: usize = 64 * 1024 * 1024;
 
 fn client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
@@ -348,7 +351,20 @@ async fn forward(sc: &sidecar::Sidecar, web: &Web, req: Request) -> Result<Respo
     for (k, v) in sc.signature("PROXY", "/", web.user.as_ref().map(|u| u.id()), b"") {
         rb = rb.header(k, v);
     }
-    let upstream = rb.body(reqwest::Body::wrap_stream(body.into_data_stream())).send().await?;
+    // Caddy's php_fastcgi answers 411 to a chunked body over its 4 KiB buffer (a Livewire update
+    // with a big snapshot): the length goes along when the client sent one, else it is buffered.
+    let body = if let Some(len) = parts.headers.get(header::CONTENT_LENGTH) {
+        rb = rb.header(header::CONTENT_LENGTH, len);
+        reqwest::Body::wrap_stream(body.into_data_stream())
+    } else if body.size_hint().exact() == Some(0) {
+        reqwest::Body::from(Vec::new())
+    } else {
+        match axum::body::to_bytes(body, MAX_BUFFERED_BODY).await {
+            Ok(bytes) => reqwest::Body::from(bytes),
+            Err(_) => return Ok(StatusCode::PAYLOAD_TOO_LARGE.into_response()),
+        }
+    };
+    let upstream = rb.body(body).send().await?;
     // A sign-in inside the sidecar (plugin OAuth provider, plugin registration page): the
     // session is pelican-rs's (`auth()->login($user, true)`).
     if let Some(id) = upstream

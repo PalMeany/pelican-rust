@@ -159,7 +159,7 @@ pub async fn store(State(st): State<AppState>, Extension(ctx): Extension<Ctx>, I
         .map(str::to_string)
         .collect();
     let is_locked = if ctx.can(&st, "backup.delete").await? { php_boolean(input.get("is_locked")) } else { false };
-    let txn = st.db.begin().await?;
+    let txn = pelican_db::write::begin_immediate(&st.db).await?;
     lock_server(&txn, server.id.0).await?;
     let opts = InitiateBackup {
         name: input.get("name").map(pelican_core::php::string),
@@ -495,7 +495,7 @@ pub async fn delete(State(st): State<AppState>, Extension(ctx): Extension<Ctx>) 
 
 /// `DeleteBackupService::handle`.
 pub async fn delete_backup(st: &AppState, server: &servers::Model, backup: &backups::Model) -> ApiResult<()> {
-    let txn = st.db.begin().await?;
+    let txn = pelican_db::write::begin_immediate(&st.db).await?;
     delete_backup_in(st, &txn, server, backup).await?;
     txn.commit().await?;
     // DeleteBackupService::handle(): $backup->delete() (panel-web callers share this wrapper).

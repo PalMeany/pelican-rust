@@ -43,11 +43,11 @@
 {% endmacro %}
 
 {# options: list of [value, label] pairs #}
-{% macro select(name, label, options, value='', errors={}, required=false, hint='', placeholder=none, multiple=false, disabled=false, attrs='', prefix_icon='') %}
+{% macro select(name, label, options, value='', errors={}, required=false, hint='', placeholder=none, multiple=false, disabled=false, attrs='', prefix_icon='', searchable=false) %}
 <div class="field{% if errors[name] %} has-error{% endif %}">
   {% if label %}<label for="f-{{ name }}">{{ label }}{% if required %}<span class="req">*</span>{% endif %}</label>{% endif %}
   {% if prefix_icon %}<div class="input-group"><span class="addon addon-icon">{{ icon(prefix_icon, 'icon') }}</span>{% endif %}
-  <select class="select" id="f-{{ name }}" name="{{ name }}{% if multiple %}[]{% endif %}"{% if multiple %} multiple{% endif %}{% if required %} required{% endif %}{% if disabled %} disabled{% endif %} {{ attrs | safe }}>
+  <select class="select" id="f-{{ name }}" name="{{ name }}{% if multiple %}[]{% endif %}"{% if multiple %} multiple{% endif %}{% if required %} required{% endif %}{% if disabled %} disabled{% endif %}{% if searchable %} data-searchable{% endif %} {{ attrs | safe }}>
     {% if placeholder is not none %}<option value="">{{ placeholder }}</option>{% endif %}
     {% for opt in options %}
     {% set v = opt[0] | string %}

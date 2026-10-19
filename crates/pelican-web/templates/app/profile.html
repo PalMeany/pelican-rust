@@ -37,7 +37,7 @@
     {{ f.password('password', trans('profile.password'), errors, autocomplete='new-password', prefix_icon='password') }}
     {{ f.password('passwordConfirmation', trans('profile.password_confirmation'), errors, autocomplete='new-password', prefix_icon='password-fingerprint') }}
     {% endif %}
-    {{ f.select('timezone', trans('profile.timezone'), timezones, v.timezone, errors, required=true, prefix_icon='clock-pin') }}
+    {{ f.select('timezone', trans('profile.timezone'), timezones, v.timezone, errors, required=true, prefix_icon='clock-pin', searchable=true) }}
     {{ f.select('language', trans('profile.language'), languages, v.language, errors, required=true, hint=language_help or '', prefix_icon='flag') }}
   </section>
   <section class="stack" data-tab-panel="customization"{% if tab != 'customization' %} hidden{% endif %}>

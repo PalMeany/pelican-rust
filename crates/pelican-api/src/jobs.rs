@@ -323,7 +323,7 @@ async fn run_action(st: &AppState, server: &servers::Model, task: &tasks::Model)
         "power" => st.wings.power(&conn()?, &server.uuid, &task.payload).await.map_err(wings_err),
         "backup" => {
             let ignored: Vec<String> = task.payload.split('\n').filter(|s| !s.is_empty()).map(str::to_string).collect();
-            let txn = st.db.begin().await?;
+            let txn = pelican_db::write::begin_immediate(&st.db).await?;
             let opts =
                 InitiateBackup { name: None, ignored, is_locked: false, is_scheduled: true, override_limit: true };
             let created = initiate_backup(st, &txn, server, opts).await?;
